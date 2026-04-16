@@ -414,14 +414,25 @@ function buildTrialBalance(transactions, coa, hideZeros) {
       }
     }
 
+    const IS_TYPES = new Set(['income', 'cost_of_sales', 'expense']);
+    const BS_TYPES = new Set(['asset', 'liability', 'equity']);
+
+    const sort = arr => arr.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+
     const filtered = hideZeros
       ? lines.filter(l => l.debit !== 0 || l.credit !== 0)
       : lines;
 
-    filtered.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+    const isLines = sort(filtered.filter(l => IS_TYPES.has(l.type)));
+    const bsLines = sort(filtered.filter(l => BS_TYPES.has(l.type)));
 
-    const totalDebits  = r2(filtered.reduce((s, l) => s + l.debit,  0));
-    const totalCredits = r2(filtered.reduce((s, l) => s + l.credit, 0));
+    const isDebit  = r2(isLines.reduce((s, l) => s + l.debit,  0));
+    const isCredit = r2(isLines.reduce((s, l) => s + l.credit, 0));
+    const bsDebit  = r2(bsLines.reduce((s, l) => s + l.debit,  0));
+    const bsCredit = r2(bsLines.reduce((s, l) => s + l.credit, 0));
+
+    const totalDebits  = r2(isDebit  + bsDebit);
+    const totalCredits = r2(isCredit + bsCredit);
     const balanced     = Math.abs(totalDebits - totalCredits) <= 0.02;
     const diff         = r2(Math.abs(totalDebits - totalCredits));
 
@@ -429,7 +440,14 @@ function buildTrialBalance(transactions, coa, hideZeros) {
       ok: true,
       balanced,
       diff,
-      data: { lines: filtered, totalDebits, totalCredits },
+      data: {
+        isLines, bsLines,
+        isDebit, isCredit,
+        bsDebit, bsCredit,
+        totalDebits, totalCredits,
+        // Flat list kept for CSV export compatibility
+        lines: [...isLines, ...bsLines],
+      },
     };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -693,31 +711,60 @@ function renderCF(data) {
 }
 
 function renderTB(data) {
-  const { lines, totalDebits, totalCredits, balanced, diff } = { ...data, balanced: true };
+  const { isLines, bsLines, isDebit, isCredit, bsDebit, bsCredit, totalDebits, totalCredits } = data;
 
-  let html = `<div class="statement-wrap">
-    <div class="stmt-col-heads"><span>Account</span><span style="text-align:right">Debit</span><span style="text-align:right">Credit</span></div>
-    <table class="stmt-table">
-    <colgroup><col style="width:55%"><col style="width:22%"><col style="width:23%"></colgroup>`;
+  const colgroup = `<colgroup><col style="width:55%"><col style="width:22%"><col style="width:23%"></colgroup>`;
+  const thead    = `<thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
+    <th class="label" style="padding:6px 10px;">Account</th>
+    <th class="amt"   style="padding:6px 10px;">Debit</th>
+    <th class="amt"   style="padding:6px 10px;">Credit</th>
+  </tr></thead>`;
 
-  lines.forEach(l => {
-    html += `<tr>
-      <td class="label">${l.code} — ${l.name}</td>
-      <td class="amt">${l.debit  ? fmt(l.debit)  : '—'}</td>
-      <td class="amt">${l.credit ? fmt(l.credit) : '—'}</td>
-    </tr>`;
-  });
+  const lineRow = l => `<tr>
+    <td class="label indent">${l.code} — ${escHtml(l.name)}</td>
+    <td class="amt">${l.debit  ? fmt(l.debit)  : '—'}</td>
+    <td class="amt">${l.credit ? fmt(l.credit) : '—'}</td>
+  </tr>`;
 
-  const balClass = Math.abs(totalDebits - totalCredits) <= 0.02 ? 'total profit' : 'total loss';
-  html += `<tr class="${balClass}">
-    <td class="label">TOTALS</td>
+  const secHead  = label => `<tr class="section-head"><td colspan="3">${label}</td></tr>`;
+  const subtotal = (label, dr, cr, cls = 'subtotal') => `<tr class="${cls}">
+    <td class="label">${label}</td>
+    <td class="amt">${fmt(dr)}</td>
+    <td class="amt">${fmt(cr)}</td>
+  </tr>`;
+
+  let html = `<div class="statement-wrap"><table class="stmt-table">${colgroup}${thead}`;
+
+  // ── Section 1: Income Statement Accounts ─────────────────────
+  html += secHead('Section 1 — Income Statement Accounts');
+  if (isLines.length) {
+    isLines.forEach(l => { html += lineRow(l); });
+  } else {
+    html += `<tr><td colspan="3" class="label" style="color:var(--muted);padding:8px 10px;">No income statement transactions for this year.</td></tr>`;
+  }
+  html += subtotal('Total Income Statement', isDebit, isCredit);
+
+  // ── Section 2: Balance Sheet Accounts ────────────────────────
+  html += secHead('Section 2 — Balance Sheet Accounts');
+  if (bsLines.length) {
+    bsLines.forEach(l => { html += lineRow(l); });
+  } else {
+    html += `<tr><td colspan="3" class="label" style="color:var(--muted);padding:8px 10px;">No balance sheet transactions for this year.</td></tr>`;
+  }
+  html += subtotal('Total Balance Sheet', bsDebit, bsCredit);
+
+  // ── Grand Total ───────────────────────────────────────────────
+  const balOk    = Math.abs(totalDebits - totalCredits) <= 0.02;
+  const totCls   = balOk ? 'total profit' : 'total loss';
+  html += `<tr class="${totCls}">
+    <td class="label">Grand Total</td>
     <td class="amt">${fmt(totalDebits)}</td>
     <td class="amt">${fmt(totalCredits)}</td>
   </tr>`;
 
-  if (Math.abs(totalDebits - totalCredits) > 0.02) {
+  if (!balOk) {
     html += `<tr><td colspan="3" style="color:var(--red);padding:8px 10px;font-size:0.8rem;">
-      ⚠ Trial balance is out by ${fmt(Math.abs(totalDebits - totalCredits))} — check unclassified transactions.
+      &#9888; Trial balance is out by ${fmt(Math.abs(totalDebits - totalCredits))} — check for unclassified transactions.
     </td></tr>`;
   }
 

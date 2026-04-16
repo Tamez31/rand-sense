@@ -258,19 +258,28 @@ function exportCFCSV(data, clientName, financialYear) {
 }
 
 function exportTBCSV(data, clientName, financialYear) {
-  const { lines, totalDebits, totalCredits } = data;
+  const { isLines, bsLines, isDebit, isCredit, bsDebit, bsCredit, totalDebits, totalCredits } = data;
+
+  const header = ['Account Code', 'Account Name', 'Debit (R)', 'Credit (R)'];
+  const lineRow = l => [l.code, l.name, l.debit ? fmtNum(l.debit) : '', l.credit ? fmtNum(l.credit) : ''];
 
   const rows = [
     [`${clientName} — Trial Balance — FY${financialYear} — Generated ${todayDMY()}`],
     [],
-    ['Account Code', 'Account Name', 'Debit (R)', 'Credit (R)'],
+    header,
+    ['', 'SECTION 1 — INCOME STATEMENT ACCOUNTS', '', ''],
   ];
 
-  lines.forEach(l => {
-    rows.push([l.code, l.name, l.debit ? fmtNum(l.debit) : '', l.credit ? fmtNum(l.credit) : '']);
-  });
+  isLines.forEach(l => rows.push(lineRow(l)));
+  rows.push(['', 'Total Income Statement', fmtNum(isDebit), fmtNum(isCredit)]);
+
   rows.push([]);
-  rows.push(['', 'TOTALS', fmtNum(totalDebits), fmtNum(totalCredits)]);
+  rows.push(['', 'SECTION 2 — BALANCE SHEET ACCOUNTS', '', '']);
+  bsLines.forEach(l => rows.push(lineRow(l)));
+  rows.push(['', 'Total Balance Sheet', fmtNum(bsDebit), fmtNum(bsCredit)]);
+
+  rows.push([]);
+  rows.push(['', 'GRAND TOTAL', fmtNum(totalDebits), fmtNum(totalCredits)]);
 
   downloadFile(toCSV(rows), `TB_${safeFilename(clientName)}_FY${financialYear}.csv`, 'text/csv');
 }
@@ -431,9 +440,17 @@ function exportFullPackCSV(pack, clientName, financialYear) {
 
   if (TB && TB.ok) {
     buildSection('TRIAL BALANCE', () => {
+      const d = TB.data;
       rows.push(['Account Code', 'Account Name', 'Debit (R)', 'Credit (R)']);
-      TB.data.lines.forEach(l => rows.push([l.code, l.name, l.debit ? fmtNum(l.debit) : '', l.credit ? fmtNum(l.credit) : '']));
-      rows.push(['', 'TOTALS', fmtNum(TB.data.totalDebits), fmtNum(TB.data.totalCredits)]);
+      rows.push(['', 'SECTION 1 — INCOME STATEMENT ACCOUNTS', '', '']);
+      d.isLines.forEach(l => rows.push([l.code, l.name, l.debit ? fmtNum(l.debit) : '', l.credit ? fmtNum(l.credit) : '']));
+      rows.push(['', 'Total Income Statement', fmtNum(d.isDebit), fmtNum(d.isCredit)]);
+      rows.push([]);
+      rows.push(['', 'SECTION 2 — BALANCE SHEET ACCOUNTS', '', '']);
+      d.bsLines.forEach(l => rows.push([l.code, l.name, l.debit ? fmtNum(l.debit) : '', l.credit ? fmtNum(l.credit) : '']));
+      rows.push(['', 'Total Balance Sheet', fmtNum(d.bsDebit), fmtNum(d.bsCredit)]);
+      rows.push([]);
+      rows.push(['', 'GRAND TOTAL', fmtNum(d.totalDebits), fmtNum(d.totalCredits)]);
     });
   }
 
