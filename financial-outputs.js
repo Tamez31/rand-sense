@@ -332,51 +332,104 @@ function buildCashFlow(transactions, coa, openingBalances) {
 // ============================================================
 // 4. TRIAL BALANCE
 // ============================================================
-// Lists every account with its net debit or credit balance.
-// Sum of all debits must equal sum of all credits.
+// Implements proper double-entry bookkeeping.
 //
-// Convention:
-//   Assets + Expenses:          net > 0 = Debit,  net < 0 = Credit
-//   Income + Liabilities + Equity: net > 0 = Credit, net < 0 = Debit
+// Every transaction produces two ledger entries:
+//   Money IN  (amount > 0):  DR Bank  /  CR classified account
+//   Money OUT (amount < 0):  DR classified account  /  CR Bank
+//
+// This guarantees total debits = total credits (TB always balances).
+//
+// Normal balances:
+//   Debit  — asset, expense, cost_of_sales
+//   Credit — income, liability, equity
 function buildTrialBalance(transactions, coa, hideZeros) {
   try {
-    const txMap  = netByAccount(transactions);
-    const merged = mergeWithCOA(coa, txMap, null);
+    // COA lookup: code → { account_name, account_type }
+    const coaByCode = new Map(coa.map(a => [a.account_code, a]));
 
-    // Classify debit/credit per account type
-    const DEBIT_NORMAL  = new Set(['asset', 'expense', 'cost_of_sales']);
-    const CREDIT_NORMAL = new Set(['income', 'liability', 'equity']);
+    // Identify the bank account (first active asset whose code is 1001
+    // or whose name contains "bank").
+    const bankCOA  = coa.find(a =>
+      a.is_active &&
+      a.account_type === 'asset' &&
+      (a.account_code === '1001' || a.account_name.toLowerCase().includes('bank'))
+    );
+    const bankCode = bankCOA?.account_code || '1001';
+    const bankName = bankCOA?.account_name || 'Bank Account';
 
-    const lines = merged
-      .map(a => {
-        const net = r2(a.net);
-        let debit = 0, credit = 0;
+    // Double-entry ledger: code → { code, name, type, debit, credit }
+    const ledger = new Map();
 
-        if (DEBIT_NORMAL.has(a.type)) {
-          if (net >= 0) debit  = net;
-          else          credit = Math.abs(net);
-        } else if (CREDIT_NORMAL.has(a.type)) {
-          if (net <= 0) debit  = Math.abs(net);
-          else          credit = net;
+    const post = (code, name, type, dr, cr) => {
+      if (!ledger.has(code)) {
+        ledger.set(code, { code, name, type: type || 'asset', debit: 0, credit: 0 });
+      }
+      const e    = ledger.get(code);
+      e.debit    = r2(e.debit  + dr);
+      e.credit   = r2(e.credit + cr);
+    };
+
+    for (const t of transactions) {
+      if (!t.account_code) continue;          // unclassified — skip
+      const abs = Math.abs(t.amount || 0);
+      if (abs === 0) continue;
+
+      const coaEntry = coaByCode.get(t.account_code);
+      const accName  = coaEntry?.account_name || t.account_name || t.account_code;
+      const accType  = coaEntry?.account_type || 'expense';
+
+      if ((t.amount || 0) > 0) {
+        // Money IN: DR Bank, CR classified account (income / asset / equity credit)
+        post(bankCode,       bankName, 'asset',  abs, 0  );
+        post(t.account_code, accName,  accType,  0,   abs);
+      } else {
+        // Money OUT: DR classified account (expense / asset debit), CR Bank
+        post(t.account_code, accName,  accType,  abs, 0  );
+        post(bankCode,       bankName, 'asset',  0,   abs);
+      }
+    }
+
+    // Compute net balance per account and assign to debit or credit side.
+    // net > 0 → debit balance (normal for assets, expenses)
+    // net < 0 → credit balance (normal for income, liabilities, equity)
+    const lines = [];
+    for (const e of ledger.values()) {
+      const net = r2(e.debit - e.credit);
+      lines.push({
+        code:   e.code,
+        name:   e.name,
+        type:   e.type,
+        debit:  net > 0 ? net         : 0,
+        credit: net < 0 ? Math.abs(net) : 0,
+      });
+    }
+
+    // Include zero-balance COA accounts when hideZeros is off
+    if (!hideZeros) {
+      for (const a of coa.filter(a => a.is_active)) {
+        if (!ledger.has(a.account_code)) {
+          lines.push({ code: a.account_code, name: a.account_name, type: a.account_type, debit: 0, credit: 0 });
         }
+      }
+    }
 
-        return { ...a, net, debit: r2(debit), credit: r2(credit) };
-      })
-      .filter(a => !hideZeros || a.debit !== 0 || a.credit !== 0);
+    const filtered = hideZeros
+      ? lines.filter(l => l.debit !== 0 || l.credit !== 0)
+      : lines;
 
-    const totalDebits  = r2(lines.reduce((s, l) => s + l.debit,  0));
-    const totalCredits = r2(lines.reduce((s, l) => s + l.credit, 0));
+    filtered.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+
+    const totalDebits  = r2(filtered.reduce((s, l) => s + l.debit,  0));
+    const totalCredits = r2(filtered.reduce((s, l) => s + l.credit, 0));
     const balanced     = Math.abs(totalDebits - totalCredits) <= 0.02;
     const diff         = r2(Math.abs(totalDebits - totalCredits));
-
-    // Sort by account code ascending
-    lines.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 
     return {
       ok: true,
       balanced,
       diff,
-      data: { lines, totalDebits, totalCredits },
+      data: { lines: filtered, totalDebits, totalCredits },
     };
   } catch (err) {
     return { ok: false, error: err.message };
