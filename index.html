@@ -218,14 +218,6 @@
           <option value="">— Select account —</option>
         </select>
       </div>
-      <div class="form-group" id="cm-vat-row" style="display:none;margin-bottom:14px;">
-        <label class="form-label">VAT</label>
-        <select class="form-control" id="cm-vattype">
-          <option value="none">No VAT</option>
-          <option value="output">Output VAT (15%)</option>
-          <option value="input">Input VAT (15%)</option>
-        </select>
-      </div>
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;">
         <label class="toggle-row" style="margin-bottom:10px;">
           <input type="checkbox" id="cm-save-rule" checked/>
@@ -729,7 +721,6 @@ function openClassifyModal(txId) {
     sel.innerHTML += `<optgroup label="Expenses">` +
       ITR12_CATEGORIES.expenses.map(cat => `<option value="${cat.code}|${escH(cat.name)}">${escH(cat.name)}</option>`).join('') +
       `</optgroup>`;
-    document.getElementById('cm-vat-row').style.display = 'none';
     document.getElementById('cm-save-rule').parentElement.style.display = 'none';
     document.getElementById('cm-keyword-row').style.display = 'none';
   } else {
@@ -741,7 +732,6 @@ function openClassifyModal(txId) {
         items.map(a => `<option value="${a.account_code}|${escH(a.account_name)}">${a.account_code} — ${escH(a.account_name)}</option>`).join('') +
         `</optgroup>`;
     });
-    document.getElementById('cm-vat-row').style.display = c.vat_active ? '' : 'none';
     document.getElementById('cm-save-rule').parentElement.style.display = '';
     document.getElementById('cm-keyword-row').style.display = '';
     // Suggest keyword
@@ -763,8 +753,6 @@ async function confirmClassify() {
   if (!val) { toast('Please select an account.','warning'); return; }
 
   const [code, name] = val.split('|');
-  const vatType      = document.getElementById('cm-vattype')?.value || 'none';
-  const vatAmount    = vatType !== 'none' ? window.VAT.extractVAT(tx.amount) : 0;
   const keyword      = document.getElementById('cm-keyword')?.value?.trim() || '';
   const saveRule     = document.getElementById('cm-save-rule')?.checked ?? false;
 
@@ -775,8 +763,8 @@ async function confirmClassify() {
       clientId:        state.currentClient.id,
       accountCode:     code,
       accountName:     name,
-      vatType,
-      vatAmount,
+      vatType:         'none',
+      vatAmount:       0,
       keyword,
       saveAsRule:      saveRule,
       existingRules:   state.rules,
