@@ -44,13 +44,21 @@ No PIN required — Tax Tjom loads directly.
 5. For VAT clients: choose whether this import is Output VAT or Input VAT
 6. Click **Import Transactions**
 
-#### CSV export instructions per bank
-| Bank | Where to find it |
-|------|-----------------|
-| ABSA | Internet Banking → Statements → Download → CSV |
-| Standard Bank | Online Banking → Account → Download Statement → CSV |
-| Capitec | Business Banking → Transactions → Export |
-| Nedbank | Online Banking → Statement → Export → CSV |
+#### CSV column structure (all banks)
+
+All bank statement CSV files must use this exact column structure:
+
+| Column | Required | Notes |
+|--------|----------|-------|
+| Date | Yes | DD/MM/YYYY, YYYY/MM/DD, or DD Mon YYYY |
+| Description | Yes | Transaction description |
+| Category | No | Ignored — may be left blank |
+| Money In | Yes* | Positive number. Leave blank if money out |
+| Money Out | Yes* | Positive number. Leave blank if money in |
+| Fee | No | Ignored — fees appear as their own rows |
+| Balance | No | Running balance after transaction |
+
+*At least one of Money In or Money Out must be present per row.
 
 ### Classifying transactions (companies)
 - After import, any transactions not matched by existing rules appear in the **classification queue** (red badge on Transactions tab)

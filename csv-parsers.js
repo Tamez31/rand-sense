@@ -1,7 +1,15 @@
 // ============================================================
-// csv-parsers.js — Bank statement CSV adapters
-// Each parser normalises its bank's format into a standard
-// transaction array before anything touches the database.
+// csv-parsers.js — Universal bank statement CSV parser
+//
+// All banks (ABSA, Standard Bank, Capitec, Nedbank) use the
+// same standard column structure:
+//
+//   Date | Description | Category | Money In | Money Out | Fee | Balance
+//
+// Category and Fee are optional columns — parsed but not stored.
+// Money In and Money Out are both positive numbers.
+// amount = Money In (positive) or Money Out (negative).
+// If both are present on a row, Money In takes precedence.
 //
 // Standard output row:
 // {
@@ -96,19 +104,11 @@ function parseAmount(str) {
 }
 
 // ── Description cleaner ───────────────────────────────────────
-// Collapse multiple spaces; strip leading/trailing whitespace.
-// Capitec-specific: remove long numeric reference prefixes.
-function cleanDesc(str, stripRefs) {
-  let s = String(str || '').replace(/\s+/g, ' ').trim();
-  if (stripRefs) {
-    // Remove patterns like "REF 1234567890 " or "123456789 " at the start
-    s = s.replace(/^(REF\s+)?[\d]{6,}\s+/i, '').trim();
-  }
-  return s || 'No description';
+function cleanDesc(str) {
+  return String(str || '').replace(/\s+/g, ' ').trim() || 'No description';
 }
 
 // ── Header index helper ───────────────────────────────────────
-// Find column index by lowercase partial match in a header row.
 function colIdx(headers, ...candidates) {
   for (const cand of candidates) {
     const idx = headers.findIndex(h => h.toLowerCase().includes(cand.toLowerCase()));
@@ -117,180 +117,54 @@ function colIdx(headers, ...candidates) {
   return -1;
 }
 
-// ── Validation helper ─────────────────────────────────────────
-function parseError(msg) {
-  return { ok: false, error: msg, rows: [] };
-}
-function parseOk(rows) {
-  return { ok: true, error: null, rows };
-}
+// ── Result helpers ────────────────────────────────────────────
+function parseError(msg) { return { ok: false, error: msg, rows: [] }; }
+function parseOk(rows)   { return { ok: true,  error: null, rows }; }
 
 // ============================================================
-// ABSA PARSER
-// Expected columns: Date, Description, Amount (signed), Balance
-// Date format: DD/MM/YYYY
-// Amount: single column, negative = debit, positive = credit
+// UNIVERSAL PARSER
+// Standard column structure (all four banks):
+//   Date | Description | Category | Money In | Money Out | Fee | Balance
+//
+// - Category is informational — not stored.
+// - Fee is informational — not stored (fees appear as their own rows).
+// - Money In and Money Out are both positive numbers.
+// - If a row has Money In, amount = +MoneyIn.
+//   If a row has Money Out, amount = -MoneyOut.
 // ============================================================
-function parseABSA(text) {
+function parseUniversal(text, bankLabel) {
   const lines = tokeniseCSV(text);
   if (lines.length < 2) return parseError('File is empty or has no data rows.');
 
-  // Find the header row (first row with "date" in it)
-  let headerIdx = lines.findIndex(row =>
-    row.some(c => c.toLowerCase().includes('date'))
+  // Find the header row — first row containing "date"
+  const headerIdx = lines.findIndex(row =>
+    row.some(c => c.toLowerCase().trim() === 'date')
   );
-  if (headerIdx === -1) return parseError('Could not find a header row. Expected columns: Date, Description, Amount, Balance.');
-
-  const headers = lines[headerIdx];
-  const iDate   = colIdx(headers, 'date');
-  const iDesc   = colIdx(headers, 'description', 'narration', 'detail', 'reference');
-  const iAmt    = colIdx(headers, 'amount', 'transaction amount');
-  const iBal    = colIdx(headers, 'balance', 'running balance');
-
-  if (iDate === -1) return parseError('Missing "Date" column. ABSA export should have: Date, Description, Amount, Balance.');
-  if (iDesc === -1) return parseError('Missing "Description" column.');
-  if (iAmt  === -1) return parseError('Missing "Amount" column. ABSA uses a single signed amount column.');
-
-  const rows = [];
-  const errors = [];
-
-  for (let i = headerIdx + 1; i < lines.length; i++) {
-    const row = lines[i];
-    if (row.every(c => c === '')) continue; // blank line
-
-    const rawDate = row[iDate]  || '';
-    const rawDesc = row[iDesc]  || '';
-    const rawAmt  = row[iAmt]   || '';
-    const rawBal  = iBal !== -1 ? (row[iBal] || '') : '';
-
-    const date = parseDate(rawDate);
-    if (!date) {
-      errors.push(`Row ${i + 1}: unrecognised date "${rawDate}" — skipped.`);
-      continue;
-    }
-
-    const amount = parseAmount(rawAmt);
-    if (amount === null) {
-      errors.push(`Row ${i + 1}: unrecognised amount "${rawAmt}" — skipped.`);
-      continue;
-    }
-
-    rows.push({
-      date,
-      description: cleanDesc(rawDesc, false),
-      amount,
-      balance: parseAmount(rawBal),
-    });
+  if (headerIdx === -1) {
+    return parseError(
+      'Could not find a header row. ' +
+      'The first row must contain: Date, Description, Category, Money In, Money Out, Fee, Balance'
+    );
   }
 
-  if (rows.length === 0) return parseError('No valid transactions found. ' + errors.join(' '));
-  return { ...parseOk(rows), warnings: errors };
-}
-
-// ============================================================
-// STANDARD BANK PARSER
-// Expected columns: Date, Description, Debit, Credit, Balance
-// Date format: DD/MM/YYYY
-// Debit column: positive number (money out) → converted to negative
-// Credit column: positive number (money in) → kept positive
-// ============================================================
-function parseStandardBank(text) {
-  const lines = tokeniseCSV(text);
-  if (lines.length < 2) return parseError('File is empty or has no data rows.');
-
-  let headerIdx = lines.findIndex(row =>
-    row.some(c => c.toLowerCase().includes('date'))
-  );
-  if (headerIdx === -1) return parseError('Could not find a header row. Expected: Date, Description, Debit, Credit, Balance.');
-
   const headers = lines[headerIdx];
   const iDate   = colIdx(headers, 'date');
-  const iDesc   = colIdx(headers, 'description', 'transaction details', 'narration', 'detail');
-  const iDebit  = colIdx(headers, 'debit');
-  const iCredit = colIdx(headers, 'credit');
-  const iBal    = colIdx(headers, 'balance', 'running balance');
+  const iDesc   = colIdx(headers, 'description');
+  const iIn     = colIdx(headers, 'money in');
+  const iOut    = colIdx(headers, 'money out');
+  const iBal    = colIdx(headers, 'balance');
+  // Category and Fee are parsed but not stored
+  // iCat and iFee could be added if needed in future
 
-  if (iDate   === -1) return parseError('Missing "Date" column.');
-  if (iDesc   === -1) return parseError('Missing "Description" column.');
-  if (iDebit  === -1 && iCredit === -1)
-    return parseError('Missing both "Debit" and "Credit" columns. Standard Bank export should have separate Debit and Credit columns.');
-
-  const rows   = [];
-  const errors = [];
-
-  for (let i = headerIdx + 1; i < lines.length; i++) {
-    const row = lines[i];
-    if (row.every(c => c === '')) continue;
-
-    const rawDate   = row[iDate]              || '';
-    const rawDesc   = row[iDesc]              || '';
-    const rawDebit  = iDebit  !== -1 ? (row[iDebit]  || '') : '';
-    const rawCredit = iCredit !== -1 ? (row[iCredit] || '') : '';
-    const rawBal    = iBal    !== -1 ? (row[iBal]    || '') : '';
-
-    const date = parseDate(rawDate);
-    if (!date) {
-      errors.push(`Row ${i + 1}: unrecognised date "${rawDate}" — skipped.`);
-      continue;
-    }
-
-    const debit  = parseAmount(rawDebit);
-    const credit = parseAmount(rawCredit);
-
-    // One of debit or credit must be present
-    if (debit === null && credit === null) {
-      errors.push(`Row ${i + 1}: no amount in Debit or Credit columns — skipped.`);
-      continue;
-    }
-
-    // Normalise: credit positive, debit negative
-    let amount;
-    if (credit !== null && credit !== 0) {
-      amount = Math.abs(credit);
-    } else if (debit !== null && debit !== 0) {
-      amount = -Math.abs(debit);
-    } else {
-      // Both zero — skip
-      continue;
-    }
-
-    rows.push({
-      date,
-      description: cleanDesc(rawDesc, false),
-      amount,
-      balance: parseAmount(rawBal),
-    });
-  }
-
-  if (rows.length === 0) return parseError('No valid transactions found. ' + errors.join(' '));
-  return { ...parseOk(rows), warnings: errors };
-}
-
-// ============================================================
-// CAPITEC PARSER
-// Expected columns: Date, Transaction Description, Money In, Money Out, Balance
-// Date format: YYYY/MM/DD (or YYYY-MM-DD)
-// Description: may contain numeric reference prefixes — strip them
-// ============================================================
-function parseCapitec(text) {
-  const lines = tokeniseCSV(text);
-  if (lines.length < 2) return parseError('File is empty or has no data rows.');
-
-  let headerIdx = lines.findIndex(row =>
-    row.some(c => c.toLowerCase().includes('date'))
+  if (iDate === -1) return parseError(
+    'Missing "Date" column. Required columns: Date, Description, Category, Money In, Money Out, Fee, Balance'
   );
-  if (headerIdx === -1) return parseError('Could not find a header row. Expected: Date, Transaction Description, Money In, Money Out, Balance.');
-
-  const headers = lines[headerIdx];
-  const iDate   = colIdx(headers, 'date');
-  const iDesc   = colIdx(headers, 'description', 'transaction description', 'details', 'narration');
-  const iIn     = colIdx(headers, 'money in', 'credit', 'in');
-  const iOut    = colIdx(headers, 'money out', 'debit', 'out');
-  const iBal    = colIdx(headers, 'balance', 'available balance', 'closing');
-
-  if (iDate === -1) return parseError('Missing "Date" column.');
-  if (iDesc === -1) return parseError('Missing "Description" / "Transaction Description" column.');
-  if (iIn  === -1 && iOut === -1) return parseError('Missing "Money In" and "Money Out" columns.');
+  if (iDesc === -1) return parseError(
+    'Missing "Description" column. Required columns: Date, Description, Category, Money In, Money Out, Fee, Balance'
+  );
+  if (iIn === -1 && iOut === -1) return parseError(
+    'Missing "Money In" and "Money Out" columns. Required columns: Date, Description, Category, Money In, Money Out, Fee, Balance'
+  );
 
   const rows   = [];
   const errors = [];
@@ -315,7 +189,7 @@ function parseCapitec(text) {
     const moneyOut = parseAmount(rawOut);
 
     if (moneyIn === null && moneyOut === null) {
-      errors.push(`Row ${i + 1}: no amount found — skipped.`);
+      errors.push(`Row ${i + 1}: no amount in Money In or Money Out — skipped.`);
       continue;
     }
 
@@ -325,137 +199,39 @@ function parseCapitec(text) {
     } else if (moneyOut !== null && moneyOut !== 0) {
       amount = -Math.abs(moneyOut);
     } else {
+      // Both zero — skip (e.g. a pure balance row)
       continue;
     }
 
     rows.push({
       date,
-      description: cleanDesc(rawDesc, true), // strip reference numbers
+      description: cleanDesc(rawDesc),
       amount,
       balance: parseAmount(rawBal),
     });
   }
 
-  if (rows.length === 0) return parseError('No valid transactions found. ' + errors.join(' '));
+  if (rows.length === 0) {
+    return parseError('No valid transactions found. ' + errors.join(' '));
+  }
   return { ...parseOk(rows), warnings: errors };
 }
 
 // ============================================================
-// NEDBANK PARSER
-// Nedbank exports have several metadata/header rows before the
-// actual data. We scan forward until we find a row that looks
-// like a real column header (contains "date" and an amount column).
-// ============================================================
-function parseNedbank(text) {
-  const lines = tokeniseCSV(text);
-  if (lines.length < 2) return parseError('File is empty or has no data rows.');
-
-  // Scan for the actual column header row
-  let headerIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const row = lines[i];
-    const hasDate   = row.some(c => c.toLowerCase().trim() === 'date' || c.toLowerCase().includes('transaction date'));
-    const hasAmount = row.some(c =>
-      c.toLowerCase().includes('debit') ||
-      c.toLowerCase().includes('credit') ||
-      c.toLowerCase().includes('amount')
-    );
-    if (hasDate && hasAmount) { headerIdx = i; break; }
-  }
-
-  if (headerIdx === -1) {
-    return parseError(
-      'Could not locate the data column header row. ' +
-      'Nedbank exports typically have account details before the transaction table. ' +
-      'Expected a row containing "Date" and "Debit"/"Credit"/"Amount".'
-    );
-  }
-
-  const headers = lines[headerIdx];
-  const iDate   = colIdx(headers, 'transaction date', 'date');
-  const iDesc   = colIdx(headers, 'description', 'transaction details', 'narration', 'detail');
-  const iDebit  = colIdx(headers, 'debit');
-  const iCredit = colIdx(headers, 'credit');
-  const iAmt    = (iDebit === -1 && iCredit === -1) ? colIdx(headers, 'amount') : -1;
-  const iBal    = colIdx(headers, 'balance', 'running balance', 'closing balance');
-
-  if (iDate === -1) return parseError('Found header row but could not identify a "Date" column.');
-  if (iDesc === -1) return parseError('Found header row but could not identify a "Description" column.');
-  if (iDebit === -1 && iCredit === -1 && iAmt === -1)
-    return parseError('Found header row but could not identify amount columns (Debit/Credit or Amount).');
-
-  const rows   = [];
-  const errors = [];
-
-  for (let i = headerIdx + 1; i < lines.length; i++) {
-    const row = lines[i];
-    if (row.every(c => c === '')) continue;
-
-    // Some Nedbank exports have a summary/footer after a blank separator
-    // If we find a row that is entirely non-numeric in date position, stop.
-    const rawDate = row[iDate] || '';
-    if (!rawDate && i > headerIdx + 2) continue;
-
-    const date = parseDate(rawDate);
-    if (!date) {
-      errors.push(`Row ${i + 1}: unrecognised date "${rawDate}" — skipped.`);
-      continue;
-    }
-
-    const rawDesc   = row[iDesc]              || '';
-    const rawDebit  = iDebit  !== -1 ? (row[iDebit]  || '') : '';
-    const rawCredit = iCredit !== -1 ? (row[iCredit] || '') : '';
-    const rawAmt    = iAmt    !== -1 ? (row[iAmt]    || '') : '';
-    const rawBal    = iBal    !== -1 ? (row[iBal]    || '') : '';
-
-    let amount;
-    if (iAmt !== -1) {
-      // Single signed amount column
-      amount = parseAmount(rawAmt);
-      if (amount === null) {
-        errors.push(`Row ${i + 1}: unrecognised amount "${rawAmt}" — skipped.`);
-        continue;
-      }
-    } else {
-      const debit  = parseAmount(rawDebit);
-      const credit = parseAmount(rawCredit);
-      if (debit === null && credit === null) {
-        errors.push(`Row ${i + 1}: no amount in Debit or Credit columns — skipped.`);
-        continue;
-      }
-      if (credit !== null && credit !== 0) {
-        amount = Math.abs(credit);
-      } else if (debit !== null && debit !== 0) {
-        amount = -Math.abs(debit);
-      } else {
-        continue;
-      }
-    }
-
-    rows.push({
-      date,
-      description: cleanDesc(rawDesc, false),
-      amount,
-      balance: parseAmount(rawBal),
-    });
-  }
-
-  if (rows.length === 0) return parseError('No valid transactions found after the header row. ' + errors.join(' '));
-  return { ...parseOk(rows), warnings: errors };
-}
-
-// ============================================================
-// DISPATCHER — call the right parser by bank key
+// DISPATCHER — all banks now use the universal parser
+// The bank parameter is kept for compatibility with the import
+// flow (it becomes the source_bank label on each transaction).
 // ============================================================
 function parseCSV(bank, text) {
   const t = (text || '').trim();
   if (!t) return parseError('File is empty.');
 
   switch (bank) {
-    case 'absa':          return parseABSA(t);
-    case 'standard_bank': return parseStandardBank(t);
-    case 'capitec':       return parseCapitec(t);
-    case 'nedbank':       return parseNedbank(t);
+    case 'absa':
+    case 'standard_bank':
+    case 'capitec':
+    case 'nedbank':
+      return parseUniversal(t, bank);
     default:
       return parseError(`Unknown bank "${bank}". Must be one of: absa, standard_bank, capitec, nedbank.`);
   }
@@ -515,7 +291,6 @@ function parseOpeningBalancesCSV(text) {
       }
       totalDebits  += d;
       totalCredits += c;
-      // Debit = positive (asset/expense side), Credit = negative (liability/equity/income side)
       amount = d > 0 ? d : -c;
     }
 
@@ -524,7 +299,6 @@ function parseOpeningBalancesCSV(text) {
 
   if (rows.length === 0) return parseError('No valid rows found. ' + errors.join(' '));
 
-  // Validate that trial balance is in balance (debits = credits)
   const diff = Math.abs(totalDebits - totalCredits);
   if (diff > 0.01) {
     return parseError(
@@ -544,10 +318,7 @@ function parseOpeningBalancesCSV(text) {
 // ============================================================
 window.Parsers = {
   parseCSV,
-  parseABSA,
-  parseStandardBank,
-  parseCapitec,
-  parseNedbank,
+  parseUniversal,
   parseOpeningBalancesCSV,
   // Expose helpers for testing
   _parseDate:   parseDate,
