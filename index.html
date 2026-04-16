@@ -183,7 +183,7 @@
     </div>
     <div class="modal-body">
       <div class="info-box blue">
-        <strong>What this does:</strong> Imports prior year closing balances as the opening balance comparative for Balance Sheet and Income Statement.
+        <strong>What this does:</strong> Imports prior year closing balances as the comparative for the Balance Sheet. Income Statement comparatives are pulled automatically from the prior year's transactions.
       </div>
       <div class="form-group" style="margin-bottom:16px;">
         <label class="form-label">Financial year these balances open <span class="req">*</span></label>
@@ -1004,11 +1004,17 @@ async function generateReport() {
 
     // Company reports
     if (rt === 'IS') {
-      const r = F.buildIncomeStatement(txs, coa, ob, hz);
-      el.innerHTML = r.ok ? F.renderIS(r.data, c.financial_year_end + ' ' + (parseInt(state.currentYear)-1), hz) : `<div class="info-box red">${escH(r.error)}</div>`;
+      const priorYear = String(parseInt(state.currentYear, 10) - 1);
+      let priorTxs = [];
+      try {
+        const rawPrior = await DB.Transactions.listByYear(state.currentClient.id, priorYear);
+        priorTxs = rawPrior.filter(t => t.account_code);
+      } catch (_) { /* no prior year data — comparative shows zero */ }
+      const r = F.buildIncomeStatement(txs, coa, priorTxs, hz);
+      el.innerHTML = r.ok ? F.renderIS(r.data, c.financial_year_end + ' ' + priorYear, hz) : `<div class="info-box red">${escH(r.error)}</div>`;
       state._IS = r.ok ? r.data : null;
     } else if (rt === 'BS') {
-      const isR  = F.buildIncomeStatement(txs, coa, ob, false);
+      const isR  = F.buildIncomeStatement(txs, coa, [], false);
       const np   = isR.ok ? isR.data.netProfit : 0;
       const r    = F.buildBalanceSheet(txs, coa, ob, np, hz);
       let html   = r.ok ? F.renderBS(r.data, c.financial_year_end + ' ' + (parseInt(state.currentYear)-1)) : `<div class="info-box red">${escH(r.error)}</div>`;

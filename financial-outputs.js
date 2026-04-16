@@ -82,38 +82,47 @@ function buildOpeningMap(openingBalances) {
 // Returns { ok, error, data }
 // data = { income, costOfSales, expenses, grossProfit, netProfit,
 //          revenue, totalExpenses, lines, comparativeAvailable }
-function buildIncomeStatement(transactions, coa, openingBalances, hideZeros) {
+function buildIncomeStatement(transactions, coa, priorYearTransactions, hideZeros) {
   try {
-    const txMap  = netByAccount(transactions);
-    const obMap  = buildOpeningMap(openingBalances);
-    const merged = mergeWithCOA(coa, txMap, obMap);
+    const txMap    = netByAccount(transactions);
+    const priorMap = netByAccount(priorYearTransactions || []);
+    const merged   = mergeWithCOA(coa, txMap, null);
 
     const incomeLines = merged
       .filter(a => a.type === 'income')
-      .map(a => ({
-        ...a,
-        current:     r2(a.net),
-        comparative: r2(a.openingBalance),
-      }))
+      .map(a => {
+        const prior = priorMap.get(a.code);
+        return {
+          ...a,
+          current:     r2(a.net),
+          comparative: prior ? r2(prior.net) : 0,
+        };
+      })
       .filter(a => !hideZeros || a.current !== 0 || a.comparative !== 0);
 
     const cosLines = merged
       .filter(a => a.type === 'cost_of_sales')
-      .map(a => ({
-        ...a,
-        // Cost of sales: money paid out (negative amounts) shown as positive expense
-        current:     r2(-a.net),
-        comparative: r2(-a.openingBalance),
-      }))
+      .map(a => {
+        const prior = priorMap.get(a.code);
+        return {
+          ...a,
+          // Cost of sales: money paid out (negative amounts) shown as positive expense
+          current:     r2(-a.net),
+          comparative: prior ? r2(-prior.net) : 0,
+        };
+      })
       .filter(a => !hideZeros || a.current !== 0 || a.comparative !== 0);
 
     const expLines = merged
       .filter(a => a.type === 'expense')
-      .map(a => ({
-        ...a,
-        current:     r2(-a.net),
-        comparative: r2(-a.openingBalance),
-      }))
+      .map(a => {
+        const prior = priorMap.get(a.code);
+        return {
+          ...a,
+          current:     r2(-a.net),
+          comparative: prior ? r2(-prior.net) : 0,
+        };
+      })
       .filter(a => !hideZeros || a.current !== 0 || a.comparative !== 0);
 
     const revenue        = r2(incomeLines.reduce((s, l) => s + l.current, 0));
@@ -131,7 +140,8 @@ function buildIncomeStatement(transactions, coa, openingBalances, hideZeros) {
     const netProfit      = r2(grossProfit - totalExpenses);
     const netProfitCom   = r2(grossProfitCom - expCom);
 
-    const comparativeAvailable = (openingBalances || []).length > 0;
+    // Comparative is available when prior year has at least one classified transaction
+    const comparativeAvailable = (priorYearTransactions || []).some(t => t.account_code);
 
     return {
       ok: true,
@@ -572,14 +582,17 @@ function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOp
 // ============================================================
 async function buildFullPack(clientId, financialYear, coa, hideZeros) {
   try {
-    const [transactions, openingBalances] = await Promise.all([
+    const priorYear = String(parseInt(financialYear, 10) - 1);
+    const [transactions, openingBalances, priorTransactionsRaw] = await Promise.all([
       window.DB.Transactions.listByYear(clientId, financialYear),
       window.DB.OpeningBalances.list(clientId, financialYear),
+      window.DB.Transactions.listByYear(clientId, priorYear).catch(() => []),
     ]);
 
-    const classified = transactions.filter(t => t.account_code);
+    const classified      = transactions.filter(t => t.account_code);
+    const priorClassified = (priorTransactionsRaw || []).filter(t => t.account_code);
 
-    const IS  = buildIncomeStatement(classified, coa, openingBalances, hideZeros);
+    const IS  = buildIncomeStatement(classified, coa, priorClassified, hideZeros);
     const netProfit = IS.ok ? IS.data.netProfit : 0;
     const BS  = buildBalanceSheet(classified, coa, openingBalances, netProfit, hideZeros);
     const CF  = buildCashFlow(classified, coa, openingBalances);
