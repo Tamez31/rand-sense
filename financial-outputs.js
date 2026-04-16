@@ -414,25 +414,43 @@ function buildTrialBalance(transactions, coa, hideZeros) {
       }
     }
 
-    const IS_TYPES = new Set(['income', 'cost_of_sales', 'expense']);
-    const BS_TYPES = new Set(['asset', 'liability', 'equity']);
-
     const sort = arr => arr.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 
     const filtered = hideZeros
       ? lines.filter(l => l.debit !== 0 || l.credit !== 0)
       : lines;
 
-    const isLines = sort(filtered.filter(l => IS_TYPES.has(l.type)));
-    const bsLines = sort(filtered.filter(l => BS_TYPES.has(l.type)));
+    // ── IS sub-groups ─────────────────────────────────────────
+    const incomeLines = sort(filtered.filter(l => l.type === 'income'));
+    const cosLines    = sort(filtered.filter(l => l.type === 'cost_of_sales'));
+    const expLines    = sort(filtered.filter(l => l.type === 'expense'));
 
-    const isDebit  = r2(isLines.reduce((s, l) => s + l.debit,  0));
-    const isCredit = r2(isLines.reduce((s, l) => s + l.credit, 0));
-    const bsDebit  = r2(bsLines.reduce((s, l) => s + l.debit,  0));
-    const bsCredit = r2(bsLines.reduce((s, l) => s + l.credit, 0));
+    // IS derived values (net amounts for each sub-group)
+    // Income is credit-normal → credit - debit gives the credit balance
+    // CoS/Expense are debit-normal → debit - credit gives the debit balance
+    const grossIncome   = r2(incomeLines.reduce((s, l) => s + l.credit - l.debit, 0));
+    const totalCOS      = r2(cosLines.reduce((s, l)    => s + l.debit  - l.credit, 0));
+    const grossProfit   = r2(grossIncome - totalCOS);
+    const totalExpenses = r2(expLines.reduce((s, l)    => s + l.debit  - l.credit, 0));
+    const netProfit     = r2(grossProfit - totalExpenses);
 
-    const totalDebits  = r2(isDebit  + bsDebit);
-    const totalCredits = r2(isCredit + bsCredit);
+    // ── BS sub-groups ─────────────────────────────────────────
+    const assetLines  = sort(filtered.filter(l => l.type === 'asset'));
+    const liabLines   = sort(filtered.filter(l => l.type === 'liability'));
+    const equityLines = sort(filtered.filter(l => l.type === 'equity'));
+
+    // BS derived values
+    const totalAssets      = r2(assetLines.reduce((s, l)  => s + l.debit  - l.credit, 0));
+    const totalLiabilities = r2(liabLines.reduce((s, l)   => s + l.credit - l.debit,  0));
+    const totalEquity      = r2(equityLines.reduce((s, l) => s + l.credit - l.debit,  0));
+    // Balance Effect = Assets − (Liabilities + Equity). Zero when BS balances.
+    const balanceEffect    = r2(totalAssets - totalLiabilities - totalEquity);
+
+    // ── Grand totals ──────────────────────────────────────────
+    const allLines     = [...incomeLines, ...cosLines, ...expLines,
+                          ...assetLines,  ...liabLines, ...equityLines];
+    const totalDebits  = r2(allLines.reduce((s, l) => s + l.debit,  0));
+    const totalCredits = r2(allLines.reduce((s, l) => s + l.credit, 0));
     const balanced     = Math.abs(totalDebits - totalCredits) <= 0.02;
     const diff         = r2(Math.abs(totalDebits - totalCredits));
 
@@ -441,12 +459,16 @@ function buildTrialBalance(transactions, coa, hideZeros) {
       balanced,
       diff,
       data: {
-        isLines, bsLines,
-        isDebit, isCredit,
-        bsDebit, bsCredit,
+        // IS sub-groups
+        incomeLines, cosLines, expLines,
+        grossIncome, totalCOS, grossProfit, totalExpenses, netProfit,
+        // BS sub-groups
+        assetLines, liabLines, equityLines,
+        totalAssets, totalLiabilities, totalEquity, balanceEffect,
+        // Grand totals
         totalDebits, totalCredits,
-        // Flat list kept for CSV export compatibility
-        lines: [...isLines, ...bsLines],
+        // Flat list for CSV/print iteration
+        lines: allLines,
       },
     };
   } catch (err) {
@@ -711,7 +733,13 @@ function renderCF(data) {
 }
 
 function renderTB(data) {
-  const { isLines, bsLines, isDebit, isCredit, bsDebit, bsCredit, totalDebits, totalCredits } = data;
+  const {
+    incomeLines, cosLines, expLines,
+    grossIncome, totalCOS, grossProfit, totalExpenses, netProfit,
+    assetLines, liabLines, equityLines,
+    totalAssets, totalLiabilities, totalEquity, balanceEffect,
+    totalDebits, totalCredits,
+  } = data;
 
   const colgroup = `<colgroup><col style="width:55%"><col style="width:22%"><col style="width:23%"></colgroup>`;
   const thead    = `<thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
@@ -720,49 +748,115 @@ function renderTB(data) {
     <th class="amt"   style="padding:6px 10px;">Credit</th>
   </tr></thead>`;
 
+  // Individual account line
   const lineRow = l => `<tr>
     <td class="label indent">${l.code} — ${escHtml(l.name)}</td>
     <td class="amt">${l.debit  ? fmt(l.debit)  : '—'}</td>
     <td class="amt">${l.credit ? fmt(l.credit) : '—'}</td>
   </tr>`;
 
-  const secHead  = label => `<tr class="section-head"><td colspan="3">${label}</td></tr>`;
-  const subtotal = (label, dr, cr, cls = 'subtotal') => `<tr class="${cls}">
+  // Empty sub-group placeholder
+  const emptyRow = msg =>
+    `<tr><td colspan="3" class="label" style="color:var(--muted);padding:6px 10px;font-size:0.82rem;">${msg}</td></tr>`;
+
+  // Section heading (large separator)
+  const secHead = label => `<tr class="section-head"><td colspan="3">${label}</td></tr>`;
+
+  // Sub-group heading (smaller, indented style)
+  const grpHead = label =>
+    `<tr style="background:var(--surface-2);"><td colspan="3" style="padding:5px 10px;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);">${label}</td></tr>`;
+
+  // Subtotal row — amount goes in the correct column based on sign
+  // drAmt / crAmt are pre-computed positive values; pass null to leave blank
+  const subtotalRow = (label, drAmt, crAmt, cls = 'subtotal') => `<tr class="${cls}">
     <td class="label">${label}</td>
-    <td class="amt">${fmt(dr)}</td>
-    <td class="amt">${fmt(cr)}</td>
+    <td class="amt">${drAmt !== null ? fmt(drAmt) : ''}</td>
+    <td class="amt">${crAmt !== null ? fmt(crAmt) : ''}</td>
   </tr>`;
+
+  // Derived value row — amount lands in credit if ≥ 0, debit if < 0
+  const derivedRow = (label, amount, cls = 'subtotal') =>
+    amount >= 0
+      ? subtotalRow(label, null,              amount,              cls)
+      : subtotalRow(label, Math.abs(amount),  null,                cls);
 
   let html = `<div class="statement-wrap"><table class="stmt-table">${colgroup}${thead}`;
 
-  // ── Section 1: Income Statement Accounts ─────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // SECTION 1 — Income Statement Accounts
+  // ══════════════════════════════════════════════════════════════
   html += secHead('Section 1 — Income Statement Accounts');
-  if (isLines.length) {
-    isLines.forEach(l => { html += lineRow(l); });
-  } else {
-    html += `<tr><td colspan="3" class="label" style="color:var(--muted);padding:8px 10px;">No income statement transactions for this year.</td></tr>`;
-  }
-  html += subtotal('Total Income Statement', isDebit, isCredit);
 
-  // ── Section 2: Balance Sheet Accounts ────────────────────────
+  // Income
+  html += grpHead('Income');
+  incomeLines.length
+    ? incomeLines.forEach(l => { html += lineRow(l); })
+    : html += emptyRow('No income transactions classified.');
+  // grossIncome is a credit total → credit column
+  html += subtotalRow('Gross Income', null, grossIncome);
+
+  // Cost of Sales
+  html += grpHead('Cost of Sales');
+  cosLines.length
+    ? cosLines.forEach(l => { html += lineRow(l); })
+    : html += emptyRow('No cost of sales transactions classified.');
+  // grossProfit can be positive (credit) or negative/loss (debit)
+  html += derivedRow(grossProfit >= 0 ? 'Gross Profit' : 'Gross Loss', grossProfit);
+
+  // Expenses
+  html += grpHead('Expenses');
+  expLines.length
+    ? expLines.forEach(l => { html += lineRow(l); })
+    : html += emptyRow('No expense transactions classified.');
+  html += derivedRow(netProfit >= 0 ? 'Net Profit' : 'Net Loss', netProfit, 'total ' + (netProfit >= 0 ? 'profit' : 'loss'));
+
+  // ══════════════════════════════════════════════════════════════
+  // SECTION 2 — Balance Sheet Accounts
+  // ══════════════════════════════════════════════════════════════
   html += secHead('Section 2 — Balance Sheet Accounts');
-  if (bsLines.length) {
-    bsLines.forEach(l => { html += lineRow(l); });
-  } else {
-    html += `<tr><td colspan="3" class="label" style="color:var(--muted);padding:8px 10px;">No balance sheet transactions for this year.</td></tr>`;
-  }
-  html += subtotal('Total Balance Sheet', bsDebit, bsCredit);
 
-  // ── Grand Total ───────────────────────────────────────────────
-  const balOk    = Math.abs(totalDebits - totalCredits) <= 0.02;
-  const totCls   = balOk ? 'total profit' : 'total loss';
-  html += `<tr class="${totCls}">
+  // Assets
+  html += grpHead('Assets (including Bank)');
+  assetLines.length
+    ? assetLines.forEach(l => { html += lineRow(l); })
+    : html += emptyRow('No asset transactions classified.');
+  // Assets are debit-normal → debit column
+  html += subtotalRow('Total Assets', totalAssets, null);
+
+  // Liabilities
+  html += grpHead('Liabilities');
+  liabLines.length
+    ? liabLines.forEach(l => { html += lineRow(l); })
+    : html += emptyRow('No liability transactions classified.');
+  html += subtotalRow('Total Liabilities', null, totalLiabilities);
+
+  // Equity
+  html += grpHead('Equity');
+  equityLines.length
+    ? equityLines.forEach(l => { html += lineRow(l); })
+    : html += emptyRow('No equity transactions classified.');
+  html += subtotalRow('Total Equity', null, totalEquity);
+
+  // Balance Effect
+  const beOk  = Math.abs(balanceEffect) <= 0.02;
+  const beCls = beOk ? 'subtotal' : 'total loss';
+  const beLabel = beOk
+    ? 'Balance Effect — Balance Sheet balances ✓'
+    : `Balance Effect — out by ${fmt(Math.abs(balanceEffect))} (check equity / opening balances)`;
+  html += derivedRow(beLabel, beOk ? 0 : balanceEffect, beCls);
+
+  // ══════════════════════════════════════════════════════════════
+  // Grand Total
+  // ══════════════════════════════════════════════════════════════
+  const gtOk  = Math.abs(totalDebits - totalCredits) <= 0.02;
+  const gtCls = gtOk ? 'total profit' : 'total loss';
+  html += `<tr class="${gtCls}">
     <td class="label">Grand Total</td>
     <td class="amt">${fmt(totalDebits)}</td>
     <td class="amt">${fmt(totalCredits)}</td>
   </tr>`;
 
-  if (!balOk) {
+  if (!gtOk) {
     html += `<tr><td colspan="3" style="color:var(--red);padding:8px 10px;font-size:0.8rem;">
       &#9888; Trial balance is out by ${fmt(Math.abs(totalDebits - totalCredits))} — check for unclassified transactions.
     </td></tr>`;

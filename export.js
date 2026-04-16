@@ -258,25 +258,53 @@ function exportCFCSV(data, clientName, financialYear) {
 }
 
 function exportTBCSV(data, clientName, financialYear) {
-  const { isLines, bsLines, isDebit, isCredit, bsDebit, bsCredit, totalDebits, totalCredits } = data;
+  const {
+    incomeLines, cosLines, expLines,
+    grossIncome, totalCOS, grossProfit, totalExpenses, netProfit,
+    assetLines, liabLines, equityLines,
+    totalAssets, totalLiabilities, totalEquity, balanceEffect,
+    totalDebits, totalCredits,
+  } = data;
 
-  const header = ['Account Code', 'Account Name', 'Debit (R)', 'Credit (R)'];
-  const lineRow = l => [l.code, l.name, l.debit ? fmtNum(l.debit) : '', l.credit ? fmtNum(l.credit) : ''];
+  const lr  = l  => [l.code, l.name, l.debit ? fmtNum(l.debit) : '', l.credit ? fmtNum(l.credit) : ''];
+  const dr  = (lbl, amt) => ['', lbl, amt >= 0 ? '' : fmtNum(Math.abs(amt)), amt >= 0 ? fmtNum(amt) : ''];
+  const sub = (lbl, drAmt, crAmt) => ['', lbl, drAmt != null ? fmtNum(drAmt) : '', crAmt != null ? fmtNum(crAmt) : ''];
 
   const rows = [
     [`${clientName} — Trial Balance — FY${financialYear} — Generated ${todayDMY()}`],
     [],
-    header,
+    ['Account Code', 'Account Name', 'Debit (R)', 'Credit (R)'],
+    [],
     ['', 'SECTION 1 — INCOME STATEMENT ACCOUNTS', '', ''],
+    ['', 'Income', '', ''],
   ];
+  incomeLines.forEach(l => rows.push(lr(l)));
+  rows.push(sub('Gross Income', null, grossIncome));
 
-  isLines.forEach(l => rows.push(lineRow(l)));
-  rows.push(['', 'Total Income Statement', fmtNum(isDebit), fmtNum(isCredit)]);
+  rows.push(['', 'Cost of Sales', '', '']);
+  cosLines.forEach(l => rows.push(lr(l)));
+  rows.push(dr(grossProfit >= 0 ? 'Gross Profit' : 'Gross Loss', grossProfit));
+
+  rows.push(['', 'Expenses', '', '']);
+  expLines.forEach(l => rows.push(lr(l)));
+  rows.push(dr(netProfit >= 0 ? 'Net Profit' : 'Net Loss', netProfit));
 
   rows.push([]);
   rows.push(['', 'SECTION 2 — BALANCE SHEET ACCOUNTS', '', '']);
-  bsLines.forEach(l => rows.push(lineRow(l)));
-  rows.push(['', 'Total Balance Sheet', fmtNum(bsDebit), fmtNum(bsCredit)]);
+  rows.push(['', 'Assets (including Bank)', '', '']);
+  assetLines.forEach(l => rows.push(lr(l)));
+  rows.push(sub('Total Assets', totalAssets, null));
+
+  rows.push(['', 'Liabilities', '', '']);
+  liabLines.forEach(l => rows.push(lr(l)));
+  rows.push(sub('Total Liabilities', null, totalLiabilities));
+
+  rows.push(['', 'Equity', '', '']);
+  equityLines.forEach(l => rows.push(lr(l)));
+  rows.push(sub('Total Equity', null, totalEquity));
+
+  const beOk = Math.abs(balanceEffect) <= 0.02;
+  rows.push(dr(beOk ? 'Balance Effect — Balance Sheet balances' : 'Balance Effect — IMBALANCE', beOk ? 0 : balanceEffect));
 
   rows.push([]);
   rows.push(['', 'GRAND TOTAL', fmtNum(totalDebits), fmtNum(totalCredits)]);
@@ -440,15 +468,35 @@ function exportFullPackCSV(pack, clientName, financialYear) {
 
   if (TB && TB.ok) {
     buildSection('TRIAL BALANCE', () => {
-      const d = TB.data;
+      const d  = TB.data;
+      const lr = l  => [l.code, l.name, l.debit ? fmtNum(l.debit) : '', l.credit ? fmtNum(l.credit) : ''];
+      const dr = (lbl, amt) => ['', lbl, amt >= 0 ? '' : fmtNum(Math.abs(amt)), amt >= 0 ? fmtNum(amt) : ''];
+      const sb = (lbl, drA, crA) => ['', lbl, drA != null ? fmtNum(drA) : '', crA != null ? fmtNum(crA) : ''];
+
       rows.push(['Account Code', 'Account Name', 'Debit (R)', 'Credit (R)']);
       rows.push(['', 'SECTION 1 — INCOME STATEMENT ACCOUNTS', '', '']);
-      d.isLines.forEach(l => rows.push([l.code, l.name, l.debit ? fmtNum(l.debit) : '', l.credit ? fmtNum(l.credit) : '']));
-      rows.push(['', 'Total Income Statement', fmtNum(d.isDebit), fmtNum(d.isCredit)]);
+      rows.push(['', 'Income', '', '']);
+      d.incomeLines.forEach(l => rows.push(lr(l)));
+      rows.push(sb('Gross Income', null, d.grossIncome));
+      rows.push(['', 'Cost of Sales', '', '']);
+      d.cosLines.forEach(l => rows.push(lr(l)));
+      rows.push(dr(d.grossProfit >= 0 ? 'Gross Profit' : 'Gross Loss', d.grossProfit));
+      rows.push(['', 'Expenses', '', '']);
+      d.expLines.forEach(l => rows.push(lr(l)));
+      rows.push(dr(d.netProfit >= 0 ? 'Net Profit' : 'Net Loss', d.netProfit));
       rows.push([]);
       rows.push(['', 'SECTION 2 — BALANCE SHEET ACCOUNTS', '', '']);
-      d.bsLines.forEach(l => rows.push([l.code, l.name, l.debit ? fmtNum(l.debit) : '', l.credit ? fmtNum(l.credit) : '']));
-      rows.push(['', 'Total Balance Sheet', fmtNum(d.bsDebit), fmtNum(d.bsCredit)]);
+      rows.push(['', 'Assets', '', '']);
+      d.assetLines.forEach(l => rows.push(lr(l)));
+      rows.push(sb('Total Assets', d.totalAssets, null));
+      rows.push(['', 'Liabilities', '', '']);
+      d.liabLines.forEach(l => rows.push(lr(l)));
+      rows.push(sb('Total Liabilities', null, d.totalLiabilities));
+      rows.push(['', 'Equity', '', '']);
+      d.equityLines.forEach(l => rows.push(lr(l)));
+      rows.push(sb('Total Equity', null, d.totalEquity));
+      const beOk = Math.abs(d.balanceEffect) <= 0.02;
+      rows.push(dr(beOk ? 'Balance Effect — balances' : 'Balance Effect — IMBALANCE', beOk ? 0 : d.balanceEffect));
       rows.push([]);
       rows.push(['', 'GRAND TOTAL', fmtNum(d.totalDebits), fmtNum(d.totalCredits)]);
     });
