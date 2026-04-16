@@ -732,10 +732,11 @@ function openClassifyModal(txId) {
         items.map(a => `<option value="${a.account_code}|${escH(a.account_name)}">${a.account_code} — ${escH(a.account_name)}</option>`).join('') +
         `</optgroup>`;
     });
+    // Always reset the rule controls to their default state on each open
+    document.getElementById('cm-save-rule').checked = true;
     document.getElementById('cm-save-rule').parentElement.style.display = '';
-    document.getElementById('cm-keyword-row').style.display = '';
-    // Suggest keyword
     document.getElementById('cm-keyword').value = window.RulesEngine.suggestKeyword(tx.description);
+    document.getElementById('cm-keyword-row').style.display = '';
   }
 
   openModal('classify-modal');
