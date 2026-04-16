@@ -780,6 +780,98 @@ function renderVATReport(vat201) {
 }
 
 // ============================================================
+// ENHANCED VAT REPORT RENDERER
+// Renders a full line-by-line VAT report from buildEnhancedVATReport output.
+// ============================================================
+function renderEnhancedVATReport(data) {
+  const {
+    incomeLines, expenseLines,
+    totalIncomeInclusive, totalOutputVAT, totalIncomeExclusive,
+    totalExpensesInclusive, totalInputVAT, totalExpensesExclusive,
+    netVAT, isRefund,
+  } = data;
+
+  const secHead = l => `<tr class="section-head"><td colspan="4">${l}</td></tr>`;
+  const colHead = `
+    <div class="stmt-col-heads" style="grid-template-columns:1fr repeat(3,120px);">
+      <span>Description</span>
+      <span style="text-align:right;">Inclusive (R)</span>
+      <span style="text-align:right;">VAT (R)</span>
+      <span style="text-align:right;">Exclusive (R)</span>
+    </div>`;
+
+  const lineRow = l => `<tr>
+    <td class="label indent" style="font-size:0.82rem;">${fmtDate(l.date)} &mdash; ${escHtml(l.description)}</td>
+    <td class="amt">${fmt(l.inclusive)}</td>
+    <td class="amt">${fmt(l.vatAmount)}</td>
+    <td class="amt">${fmt(l.exclusive)}</td>
+  </tr>`;
+
+  const subtotalRow = (label, inc, vat, exc, cls = 'subtotal') => `
+    <tr class="${cls}">
+      <td class="label">${label}</td>
+      <td class="amt">${fmt(inc)}</td>
+      <td class="amt">${fmt(vat)}</td>
+      <td class="amt">${fmt(exc)}</td>
+    </tr>`;
+
+  let html = `<div class="statement-wrap">
+    <table class="stmt-table">
+    <colgroup><col style="width:46%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup>
+    <thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
+      <th class="label" style="padding:6px 10px;">Description</th>
+      <th class="amt" style="padding:6px 10px;">Inclusive</th>
+      <th class="amt" style="padding:6px 10px;">VAT</th>
+      <th class="amt" style="padding:6px 10px;">Exclusive</th>
+    </tr></thead>`;
+
+  // Section 1 — Income / Output VAT
+  html += secHead('Section 1 — Income (Output VAT)');
+  if (incomeLines.length) {
+    incomeLines.forEach(l => { html += lineRow(l); });
+  } else {
+    html += `<tr><td colspan="4" class="label" style="color:var(--muted);padding:8px 10px;">No output VAT transactions for this period.</td></tr>`;
+  }
+  html += subtotalRow('Total Income', totalIncomeInclusive, totalOutputVAT, totalIncomeExclusive);
+
+  // Section 2 — Expenses / Input VAT
+  html += secHead('Section 2 — Expenses (Input VAT)');
+  if (expenseLines.length) {
+    expenseLines.forEach(l => { html += lineRow(l); });
+  } else {
+    html += `<tr><td colspan="4" class="label" style="color:var(--muted);padding:8px 10px;">No input VAT transactions for this period.</td></tr>`;
+  }
+  html += subtotalRow('Total Expenses', totalExpensesInclusive, totalInputVAT, totalExpensesExclusive);
+
+  // Summary
+  html += secHead('VAT Summary');
+  html += `<tr><td class="label indent">Output VAT (Section 1)</td><td class="amt"></td><td class="amt">${fmt(totalOutputVAT)}</td><td class="amt"></td></tr>`;
+  html += `<tr><td class="label indent">Less: Input VAT (Section 2)</td><td class="amt"></td><td class="amt">(${fmt(totalInputVAT)})</td><td class="amt"></td></tr>`;
+
+  const netCls = `total ${isRefund ? 'profit' : 'loss'}`;
+  const netLabel = isRefund ? 'VAT Refund Due from SARS' : 'Net VAT Payable to SARS';
+  html += `<tr class="${netCls}">
+    <td class="label">${netLabel}</td>
+    <td class="amt"></td>
+    <td class="amt">${fmt(Math.abs(netVAT))}</td>
+    <td class="amt"></td>
+  </tr>`;
+
+  html += '</table></div>';
+  return html;
+}
+
+// Helper used inside renderEnhancedVATReport
+function fmtDate(isoDate) {
+  if (!isoDate) return '';
+  const [y, m, d] = String(isoDate).split('-');
+  return `${d}/${m}/${y}`;
+}
+function escHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ============================================================
 // EXPORTS
 // ============================================================
 window.FinancialOutputs = {
@@ -795,6 +887,7 @@ window.FinancialOutputs = {
   renderTB,
   renderCommissionIS,
   renderVATReport,
+  renderEnhancedVATReport,
   // Utilities
   fmt,
   r2,

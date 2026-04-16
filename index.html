@@ -97,17 +97,20 @@
         </div>
         <div class="form-group" id="vat-group" style="display:none;">
           <label class="form-label">VAT number</label>
-          <input class="form-control" id="cf-vat" placeholder="4123456789" maxlength="10"/>
+          <input class="form-control" id="cf-vat" placeholder="4123456789" maxlength="10" oninput="onVATNumberInput(this.value)"/>
           <div class="form-hint">10 digits, starts with 4. Leave blank if not VAT registered.</div>
         </div>
+        <div class="form-group" id="vat-regdate-group" style="display:none;">
+          <label class="form-label">VAT registration date</label>
+          <input class="form-control" id="cf-vatregdate" placeholder="DD/MM/YYYY" maxlength="10"/>
+          <div class="form-hint">Date your client registered for VAT with SARS.</div>
+        </div>
         <div class="form-group" id="vat-period-group" style="display:none;">
-          <label class="form-label">VAT filing period</label>
+          <label class="form-label">VAT return period</label>
           <select class="form-control" id="cf-vatperiod">
             <option value="">— Select —</option>
             <option value="monthly">Monthly</option>
-            <option value="two_month_odd">2 Month Period (Odd) — Jan/Mar/May/Jul/Sep/Nov</option>
-            <option value="two_month_even">2 Month Period (Even) — Feb/Apr/Jun/Aug/Oct/Dec</option>
-            <option value="two_month_odd_or_even">2 Month Period (Odd or Even) — custom registration months</option>
+            <option value="2monthly">2 Monthly</option>
             <option value="yearly">Yearly</option>
           </select>
         </div>
@@ -289,6 +292,9 @@ const state = {
   cmIncomeOverride: { active: false, amount: '' },
   // Commission earner home office split
   cmHomeOffice: { active: false, businessPct: '' },
+  // VAT report period filter
+  _vatPeriodFilter:    null,
+  _vatAvailablePeriods: [],
 };
 
 // ============================================================
@@ -880,6 +886,19 @@ function renderReportsTab() {
       </div>
     </div>` : '';
 
+  // VAT period filter bar — shown only on VAT tab for VAT-active companies
+  const vatPeriods   = state._vatAvailablePeriods || [];
+  const vatFilter    = state._vatPeriodFilter;
+  const vatFilterBar = (!isC && c.vat_active && rt === 'VAT') ? `
+    <div style="background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span style="font-size:0.8rem;font-weight:700;color:var(--text-light);white-space:nowrap;">Filing period</span>
+      <select class="form-control" style="width:auto;min-width:160px;" onchange="setVATPeriodFilter(this.value)">
+        <option value="">Full year</option>
+        ${vatPeriods.map(p => `<option value="${escH(p)}" ${vatFilter===p?'selected':''}>${escH(p)}</option>`).join('')}
+      </select>
+      ${vatFilter ? `<button class="btn btn-ghost btn-xs" onclick="setVATPeriodFilter('')">&#10005; Clear filter</button>` : ''}
+    </div>` : '';
+
   const content = `<div id="report-body"><div class="empty-state">
     <div class="empty-state-icon">&#128202;</div>
     <div class="empty-state-title">Loading…</div>
@@ -888,7 +907,7 @@ function renderReportsTab() {
   // Auto-generate on tab render
   setTimeout(() => generateReport(), 50);
 
-  return `<div>${toolbar}${incomeOverrideBar}${homeOfficeBar}<div class="card">${content}</div></div>`;
+  return `<div>${toolbar}${incomeOverrideBar}${homeOfficeBar}${vatFilterBar}<div class="card">${content}</div></div>`;
 }
 
 function toggleIncomeOverride(active) {
@@ -927,6 +946,13 @@ function setHomeOfficePct(val) {
 
 function setReportType(type) {
   state.reportType = type;
+  // Reset VAT period filter when switching away from VAT tab
+  if (type !== 'VAT') state._vatPeriodFilter = null;
+  setClientTab('reports');
+}
+
+function setVATPeriodFilter(val) {
+  state._vatPeriodFilter = val || null;
   setClientTab('reports');
 }
 
@@ -992,10 +1018,23 @@ async function generateReport() {
       state._TB = r.ok ? r.data : null;
     } else if (rt === 'VAT') {
       const allTx  = state.transactions;
-      const vatR   = window.VAT.buildVATReport(allTx, null);
-      const vat201 = window.VAT.buildVAT201(vatR, c.name, state.currentYear, null);
-      el.innerHTML = window.FinancialOutputs.renderVATReport(vat201);
-      state._VAT = vat201;
+      const vatPeriodSetting = c.vat_period || 'monthly';
+      const r = window.VAT.buildEnhancedVATReport(allTx, vatPeriodSetting, state._vatPeriodFilter || null);
+      // Update available periods for the filter selector
+      state._vatAvailablePeriods = r.availablePeriods || [];
+      // If the current filter is no longer valid, clear it
+      if (state._vatPeriodFilter && !state._vatAvailablePeriods.includes(state._vatPeriodFilter)) {
+        state._vatPeriodFilter = null;
+      }
+      el.innerHTML = r.ok ? window.FinancialOutputs.renderEnhancedVATReport(r) : `<div class="info-box red">${escH(r.error || 'No VAT data found.')}</div>`;
+      state._VAT = r.ok ? r : null;
+      // Update the period selector dropdown if it exists in the DOM
+      const periodSel = document.querySelector('#report-body').closest('div')?.querySelector('select[onchange*="setVATPeriodFilter"]');
+      if (periodSel && r.ok) {
+        const cur = state._vatPeriodFilter || '';
+        periodSel.innerHTML = `<option value="">Full year</option>` +
+          r.availablePeriods.map(p => `<option value="${escH(p)}"${cur===p?' selected':''}>${escH(p)}</option>`).join('');
+      }
     }
   } catch(e) {
     el.innerHTML = `<div class="info-box red">Error: ${escH(e.message)}</div>`;
@@ -1038,7 +1077,7 @@ function printReport() {
   else if (rt==='BS' && state._BS) html = F.renderBS(state._BS, null);
   else if (rt==='CF' && state._CF) html = F.renderCF(state._CF);
   else if (rt==='TB' && state._TB) html = F.renderTB(state._TB);
-  else if (rt==='VAT' && state._VAT) html = F.renderVATReport(state._VAT);
+  else if (rt==='VAT' && state._VAT) html = F.renderEnhancedVATReport(state._VAT);
   else { toast('Generate the report first.', 'warning'); return; }
 
   window.Export.printStatement(title, c.name, state.currentYear, null, html);
@@ -1055,7 +1094,7 @@ function csvReport() {
   if (rt==='BS' && state._BS) { window.Export.exportBSCSV(state._BS, c.name, fy); return; }
   if (rt==='CF' && state._CF) { window.Export.exportCFCSV(state._CF, c.name, fy); return; }
   if (rt==='TB' && state._TB) { window.Export.exportTBCSV(state._TB, c.name, fy); return; }
-  if (rt==='VAT' && state._VAT) { window.Export.exportVATCSV(state._VAT, c.name, fy); return; }
+  if (rt==='VAT' && state._VAT) { window.Export.exportEnhancedVATCSV(state._VAT, c.name, fy); return; }
   toast('Generate the report first.', 'warning');
 }
 
@@ -1079,11 +1118,16 @@ function renderSettingsTab() {
     </div>`;
   }).join('');
 
+  const vatPeriodLabel = {'monthly':'Monthly','2monthly':'2 Monthly','yearly':'Yearly'};
   const vatSection = c.entity_type !== 'commission_earner' ? `
     <div class="card">
       <div class="card-title">VAT Settings</div>
       ${c.vat_active
-        ? `<div class="info-box green"><strong>VAT active</strong> — ${escH(c.vat_number)} · ${escH({'monthly':'Monthly','two_month_odd':'2 Month (Odd)','two_month_even':'2 Month (Even)','two_month_odd_or_even':'2 Month (Odd or Even)','yearly':'Yearly'}[c.vat_period] || c.vat_period)} filing</div>
+        ? `<div class="info-box green">
+             <strong>VAT active</strong> — ${escH(c.vat_number)}
+             · ${escH(vatPeriodLabel[c.vat_period] || c.vat_period || '')} filing
+             ${c.vat_registration_date ? ` · Registered ${escH(c.vat_registration_date)}` : ''}
+           </div>
            <button class="btn btn-ghost btn-sm" onclick="deactivateVAT()">Deactivate VAT</button>`
         : `<div class="form-grid">
              <div class="form-group">
@@ -1091,15 +1135,18 @@ function renderSettingsTab() {
                <input class="form-control" id="set-vat-num" placeholder="4123456789"/>
              </div>
              <div class="form-group">
-               <label class="form-label">Filing period</label>
+               <label class="form-label">VAT return period</label>
                <select class="form-control" id="set-vat-period">
                  <option value="">— Select —</option>
                  <option value="monthly">Monthly</option>
-                 <option value="two_month_odd">2 Month Period (Odd) — Jan/Mar/May/Jul/Sep/Nov</option>
-                 <option value="two_month_even">2 Month Period (Even) — Feb/Apr/Jun/Aug/Oct/Dec</option>
-                 <option value="two_month_odd_or_even">2 Month Period (Odd or Even) — custom registration months</option>
+                 <option value="2monthly">2 Monthly</option>
                  <option value="yearly">Yearly</option>
                </select>
+             </div>
+             <div class="form-group">
+               <label class="form-label">VAT registration date</label>
+               <input class="form-control" id="set-vat-regdate" placeholder="DD/MM/YYYY" maxlength="10"/>
+               <div class="form-hint">Optional — date the client registered for VAT with SARS.</div>
              </div>
            </div>
            <div style="margin-top:12px;">
@@ -1185,7 +1232,7 @@ async function confirmClearAllData() {
 function newClient() {
   state._editingClientId = null;
   document.getElementById('client-modal-title').textContent = 'New Client';
-  ['cf-name','cf-vat','cf-vatperiod'].forEach(id => {
+  ['cf-name','cf-vat','cf-vatregdate','cf-vatperiod'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -1205,17 +1252,32 @@ async function editClient(id) {
   document.getElementById('cf-type').value    = c.entity_type;
   document.getElementById('cf-yearend').value = c.financial_year_end;
   document.getElementById('cf-bank').value    = c.bank;
-  document.getElementById('cf-vat').value     = c.vat_number  || '';
-  document.getElementById('cf-vatperiod').value = c.vat_period || '';
+  document.getElementById('cf-vat').value         = c.vat_number           || '';
+  document.getElementById('cf-vatregdate').value  = c.vat_registration_date || '';
+  document.getElementById('cf-vatperiod').value   = c.vat_period            || '';
   onEntityTypeChange();
   openModal('client-modal');
 }
 
 function onEntityTypeChange() {
-  const type = document.getElementById('cf-type').value;
+  const type   = document.getElementById('cf-type').value;
   const isComp = type === 'company_cc' || type === 'company_pty';
-  document.getElementById('vat-group').style.display        = isComp ? '' : 'none';
-  document.getElementById('vat-period-group').style.display = isComp ? '' : 'none';
+  document.getElementById('vat-group').style.display = isComp ? '' : 'none';
+  if (!isComp) {
+    document.getElementById('vat-regdate-group').style.display = 'none';
+    document.getElementById('vat-period-group').style.display  = 'none';
+  } else {
+    // Show regdate/period only if a VAT number is already filled in
+    const hasVat = !!(document.getElementById('cf-vat').value.trim());
+    document.getElementById('vat-regdate-group').style.display = hasVat ? '' : 'none';
+    document.getElementById('vat-period-group').style.display  = hasVat ? '' : 'none';
+  }
+}
+
+function onVATNumberInput(val) {
+  const hasVat = val.trim().length > 0;
+  document.getElementById('vat-regdate-group').style.display = hasVat ? '' : 'none';
+  document.getElementById('vat-period-group').style.display  = hasVat ? '' : 'none';
 }
 
 async function saveClient() {
@@ -1223,8 +1285,9 @@ async function saveClient() {
   const type    = document.getElementById('cf-type').value;
   const yearend = document.getElementById('cf-yearend').value;
   const bank    = document.getElementById('cf-bank').value;
-  const vatNum  = document.getElementById('cf-vat').value.trim();
-  const vatPer  = document.getElementById('cf-vatperiod').value;
+  const vatNum     = document.getElementById('cf-vat').value.trim();
+  const vatRegDate = document.getElementById('cf-vatregdate')?.value?.trim() || '';
+  const vatPer     = document.getElementById('cf-vatperiod').value;
 
   if (!name)    { toast('Client name is required.','warning'); return; }
   if (!type)    { toast('Entity type is required.','warning'); return; }
@@ -1233,16 +1296,17 @@ async function saveClient() {
 
   let vatActive = false;
   if (vatNum) {
-    const v = window.VAT.activateVAT(vatNum, vatPer);
+    const v = window.VAT.activateVAT(vatNum, vatPer, vatRegDate || null);
     if (!v.ok) { toast(v.error, 'warning'); return; }
     vatActive = true;
   }
 
   const payload = {
     name, entity_type: type, financial_year_end: yearend, bank,
-    vat_number: vatNum || null,
-    vat_active: vatActive,
-    vat_period: vatPer || null,
+    vat_number:            vatNum    || null,
+    vat_active:            vatActive,
+    vat_period:            vatPer    || null,
+    vat_registration_date: vatNum && vatRegDate ? vatRegDate : null,
   };
 
   showLoading('Saving…');
@@ -1637,9 +1701,10 @@ function downloadOBTemplate() {
 // VAT SETTINGS
 // ============================================================
 async function activateVAT() {
-  const vatNum = document.getElementById('set-vat-num')?.value?.trim() || '';
-  const vatPer = document.getElementById('set-vat-period')?.value || '';
-  const result = window.VAT.activateVAT(vatNum, vatPer);
+  const vatNum    = document.getElementById('set-vat-num')?.value?.trim() || '';
+  const vatPer    = document.getElementById('set-vat-period')?.value || '';
+  const vatRegDate = document.getElementById('set-vat-regdate')?.value?.trim() || '';
+  const result = window.VAT.activateVAT(vatNum, vatPer, vatRegDate || null);
   if (!result.ok) { toast(result.error,'warning'); return; }
   showLoading('Saving…');
   try {
@@ -1655,7 +1720,7 @@ async function deactivateVAT() {
   if (!confirm('Deactivate VAT for this client? VAT amounts on existing transactions will be retained.')) return;
   showLoading('Saving…');
   try {
-    await DB.Clients.update(state.currentClient.id, {vat_active:false,vat_number:null,vat_period:null});
+    await DB.Clients.update(state.currentClient.id, {vat_active:false,vat_number:null,vat_period:null,vat_registration_date:null});
     state.currentClient = await DB.Clients.get(state.currentClient.id);
     toast('VAT deactivated.');
     renderClientDetail();

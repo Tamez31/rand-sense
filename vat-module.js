@@ -187,39 +187,20 @@ function _twoMonthLabel(m1, y1, m2, y2) {
 }
 
 // Map a single period string to its 2-month filing group key.
-//   two_month_odd         → periods close on odd months  (Jan,Mar,May,Jul,Sep,Nov)
-//                           pairs: Dec→Jan | Feb→Mar | Apr→May | Jun→Jul | Aug→Sep | Oct→Nov
-//   two_month_even        → periods close on even months (Feb,Apr,Jun,Aug,Oct,Dec)
-//                           pairs: Jan→Feb | Mar→Apr | May→Jun | Jul→Aug | Sep→Oct | Nov→Dec
-//   two_month_odd_or_even → same grouping as two_month_odd (odd close months by default)
+// '2monthly' groups consecutive pairs: Jan-Feb, Mar-Apr, May-Jun, Jul-Aug, Sep-Oct, Nov-Dec.
 function _filingGroupKey(period, vatPeriod) {
   const month = _monthFromPeriod(period);
   const year  = _yearFromPeriod(period);
   if (!month || !year) return period;
 
-  if (vatPeriod === 'two_month_odd' || vatPeriod === 'two_month_odd_or_even') {
-    // Close month is odd; pair = (even, odd)
+  if (vatPeriod === '2monthly') {
+    // Odd months open a pair, even months close it
     if (month % 2 === 1) {
-      // This is the closing month — pair with previous (even) month
-      const pm = month === 1 ? 12 : month - 1;
-      const py = month === 1 ? year - 1 : year;
-      return _twoMonthLabel(pm, py, month, year);
-    } else {
-      // This is the opening month — pair with next (odd) month
+      // Opening month — pair with the next (even) month
       return _twoMonthLabel(month, year, month + 1, year);
-    }
-  }
-
-  if (vatPeriod === 'two_month_even') {
-    // Close month is even; pair = (odd, even)
-    if (month % 2 === 0) {
-      // Closing month — pair with previous (odd) month
-      return _twoMonthLabel(month - 1, year, month, year);
     } else {
-      // Opening month — pair with next (even) month
-      const nm = month + 1;
-      const ny = nm > 12 ? year + 1 : year;
-      return _twoMonthLabel(month, year, nm > 12 ? 1 : nm, ny);
+      // Closing month — pair with the previous (odd) month
+      return _twoMonthLabel(month - 1, year, month, year);
     }
   }
 
@@ -231,21 +212,94 @@ function getVATPeriods(vatReport) {
   return Object.keys(vatReport.byPeriod).sort();
 }
 
-// vatPeriod: 'monthly' | 'two_month_odd' | 'two_month_even' | 'two_month_odd_or_even' | 'yearly'
-// Returns the distinct filing period labels (already de-duped and sorted) that
-// the VAT module should generate a VAT201 for.
+// vatPeriod: 'monthly' | '2monthly' | 'yearly'
+// Returns the distinct filing period labels (de-duped, sorted) for the VAT report selector.
 function getFilingPeriods(allPeriods, vatPeriod) {
   if (vatPeriod === 'monthly') return allPeriods;
   if (vatPeriod === 'yearly')  return allPeriods.length > 0 ? ['Annual'] : [];
 
-  // 2-month variants — collapse pairs into one label each
-  const seen = new Set();
+  // 2monthly — collapse consecutive-month pairs
+  const seen   = new Set();
   const result = [];
   for (const p of allPeriods) {
     const key = _filingGroupKey(p, vatPeriod);
     if (!seen.has(key)) { seen.add(key); result.push(key); }
   }
   return result;
+}
+
+// ── Enhanced VAT report ───────────────────────────────────────
+// Builds a full line-by-line VAT report for the enhanced report view.
+// transactions: all transactions for the client/year (already loaded)
+// vatPeriod:    'monthly' | '2monthly' | 'yearly'
+// periodFilter: null = full year, or a filing period label string
+//
+// Returns:
+// {
+//   ok, periodFilter, availablePeriods,
+//   incomeLines, expenseLines,
+//   totalIncomeInclusive, totalOutputVAT, totalIncomeExclusive,
+//   totalExpensesInclusive, totalInputVAT, totalExpensesExclusive,
+//   netVAT, isRefund
+// }
+function buildEnhancedVATReport(transactions, vatPeriod, periodFilter) {
+  // Only transactions with VAT amounts
+  const vatTxs = (transactions || []).filter(
+    t => t.vat_type !== 'none' && (t.vat_amount || 0) > 0
+  );
+
+  // Assign each VAT transaction its filing group
+  const withGroup = vatTxs.map(t => ({
+    ...t,
+    _group: vatPeriod === 'monthly' ? (t.period || '')
+          : vatPeriod === 'yearly'  ? 'Annual'
+          : _filingGroupKey(t.period || '', '2monthly'),
+  }));
+
+  // Distinct filing periods available (for the selector)
+  const seen = new Set();
+  const availablePeriods = [];
+  for (const t of withGroup) {
+    if (!seen.has(t._group)) { seen.add(t._group); availablePeriods.push(t._group); }
+  }
+  availablePeriods.sort();
+
+  // Filter to the chosen period
+  const filtered = periodFilter
+    ? withGroup.filter(t => t._group === periodFilter)
+    : withGroup;
+
+  const outputTxs = filtered.filter(t => t.vat_type === 'output');
+  const inputTxs  = filtered.filter(t => t.vat_type === 'input');
+
+  const mkLine = t => ({
+    date:        t.date,
+    description: t.description,
+    inclusive:   round2(Math.abs(t.amount)),
+    vatAmount:   round2(t.vat_amount || 0),
+    exclusive:   round2(Math.abs(t.amount) - (t.vat_amount || 0)),
+  });
+
+  const incomeLines  = outputTxs.map(mkLine);
+  const expenseLines = inputTxs.map(mkLine);
+
+  const totalIncomeInclusive   = round2(incomeLines.reduce((s, l) => s + l.inclusive, 0));
+  const totalOutputVAT         = round2(incomeLines.reduce((s, l) => s + l.vatAmount, 0));
+  const totalIncomeExclusive   = round2(incomeLines.reduce((s, l) => s + l.exclusive, 0));
+  const totalExpensesInclusive = round2(expenseLines.reduce((s, l) => s + l.inclusive, 0));
+  const totalInputVAT          = round2(expenseLines.reduce((s, l) => s + l.vatAmount, 0));
+  const totalExpensesExclusive = round2(expenseLines.reduce((s, l) => s + l.exclusive, 0));
+  const netVAT                 = round2(totalOutputVAT - totalInputVAT);
+
+  return {
+    ok: true,
+    periodFilter: periodFilter || null,
+    availablePeriods,
+    incomeLines,  expenseLines,
+    totalIncomeInclusive,  totalOutputVAT,  totalIncomeExclusive,
+    totalExpensesInclusive, totalInputVAT,  totalExpensesExclusive,
+    netVAT, isRefund: netVAT < 0,
+  };
 }
 
 // ── VAT number validator ──────────────────────────────────────
@@ -261,13 +315,18 @@ function validateVATNumber(vatNumber) {
 // ── VAT activation flow ───────────────────────────────────────
 // Called when user enters a VAT number on a client.
 // Returns the update payload for DB.Clients.update().
-function activateVAT(vatNumber, vatPeriod) {
+function activateVAT(vatNumber, vatPeriod, vatRegDate) {
   const validation = validateVATNumber(vatNumber);
   if (!validation.valid) return { ok: false, error: validation.error };
   if (!vatPeriod) return { ok: false, error: 'Please select a VAT filing period.' };
   return {
     ok:     true,
-    update: { vat_number: vatNumber.replace(/\s/g, ''), vat_active: true, vat_period: vatPeriod },
+    update: {
+      vat_number:            vatNumber.replace(/\s/g, ''),
+      vat_active:            true,
+      vat_period:            vatPeriod,
+      vat_registration_date: vatRegDate || null,
+    },
   };
 }
 
@@ -294,6 +353,7 @@ window.VAT = {
   applyVATToBatch,
   buildVATReport,
   buildVAT201,
+  buildEnhancedVATReport,
   getVATPeriods,
   getFilingPeriods,
   validateVATNumber,

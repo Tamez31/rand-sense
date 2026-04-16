@@ -474,6 +474,40 @@ function exportTransactionsCSV(transactions, clientName, financialYear) {
   );
 }
 
+function exportEnhancedVATCSV(data, clientName, financialYear) {
+  const {
+    incomeLines, expenseLines,
+    totalIncomeInclusive, totalOutputVAT, totalIncomeExclusive,
+    totalExpensesInclusive, totalInputVAT, totalExpensesExclusive,
+    netVAT, isRefund, periodFilter,
+  } = data;
+
+  const periodLabel = periodFilter || 'Full year';
+  const rows = [
+    [`${clientName} — VAT Report — FY${financialYear} — ${periodLabel} — Generated ${todayDMY()}`],
+    [],
+    ['SECTION 1 — INCOME (OUTPUT VAT)', '', '', ''],
+    ['Date', 'Description', 'Inclusive (R)', 'VAT (R)', 'Exclusive (R)'],
+  ];
+
+  incomeLines.forEach(l => rows.push([l.date, l.description, fmtNum(l.inclusive), fmtNum(l.vatAmount), fmtNum(l.exclusive)]));
+  rows.push(['', 'TOTAL INCOME', fmtNum(totalIncomeInclusive), fmtNum(totalOutputVAT), fmtNum(totalIncomeExclusive)]);
+
+  rows.push([]);
+  rows.push(['SECTION 2 — EXPENSES (INPUT VAT)', '', '', '']);
+  rows.push(['Date', 'Description', 'Inclusive (R)', 'VAT (R)', 'Exclusive (R)']);
+  expenseLines.forEach(l => rows.push([l.date, l.description, fmtNum(l.inclusive), fmtNum(l.vatAmount), fmtNum(l.exclusive)]));
+  rows.push(['', 'TOTAL EXPENSES', fmtNum(totalExpensesInclusive), fmtNum(totalInputVAT), fmtNum(totalExpensesExclusive)]);
+
+  rows.push([]);
+  rows.push(['VAT SUMMARY', '', '', '']);
+  rows.push(['Output VAT (Section 1)', '', fmtNum(totalOutputVAT), '']);
+  rows.push(['Less: Input VAT (Section 2)', '', fmtNum(totalInputVAT), '']);
+  rows.push([isRefund ? 'VAT Refund Due from SARS' : 'Net VAT Payable to SARS', '', fmtNum(Math.abs(netVAT)), '']);
+
+  downloadFile(toCSV(rows), `VAT_${safeFilename(clientName)}_FY${financialYear}_${safeFilename(periodLabel)}.csv`, 'text/csv');
+}
+
 // ── Tax Tjom handoff CSV ──────────────────────────────────────
 // Column structure matches Tax Tjom's import expectations.
 // Exports commission earner IS in Tax Tjom-compatible format.
@@ -527,6 +561,7 @@ window.Export = {
   exportTBCSV,
   exportVATCSV,
   exportCommissionISCSV,
+  exportEnhancedVATCSV,
   exportFullPackCSV,
   exportTransactionsCSV,
   exportTaxTjomHandoff,
