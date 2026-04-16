@@ -131,14 +131,21 @@
       <button class="modal-close" onclick="closeModal('import-modal')">&#10005;</button>
     </div>
     <div class="modal-body">
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 14px;margin-bottom:14px;font-size:0.85rem;color:var(--text-muted);">
+        Importing for: <strong id="imp-client-name" style="color:var(--text);"></strong>
+      </div>
       <div class="import-meta">
         <div class="form-group">
           <label class="form-label">Financial year <span class="req">*</span></label>
-          <input class="form-control" id="imp-year" placeholder="e.g. 2025"/>
+          <select class="form-control" id="imp-year" onchange="onImpYearChange()">
+            <option value="">— Select year —</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">Period (month) <span class="req">*</span></label>
-          <input class="form-control" id="imp-period" placeholder="e.g. March 2024"/>
+          <select class="form-control" id="imp-period">
+            <option value="">— Select period —</option>
+          </select>
         </div>
       </div>
       <div class="form-group" id="imp-vat-row" style="display:none;margin-top:12px;">
@@ -1359,18 +1366,95 @@ function _impBankSelectHTML(idx, selectedVal) {
   return `<select class="form-control" style="min-width:140px;" onchange="updateImportFileBank(${idx}, this.value)">${opts}</select>`;
 }
 
+// ── Financial year helpers for import modal ───────────────────
+
+// The financial year is labelled by the calendar year in which it ENDS.
+// e.g. year end = February → FY 2025 runs March 2024 – February 2025.
+const _FY_MONTHS = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+];
+
+// Return the financial year number that contains today.
+function _currentFY(yearEndMonthName) {
+  const endIdx = _FY_MONTHS.indexOf(yearEndMonthName); // 0-based
+  if (endIdx < 0) return new Date().getFullYear();      // fallback
+  const today    = new Date();
+  const todayIdx = today.getMonth();          // 0-based
+  const todayYear= today.getFullYear();
+  // December year end: FY = calendar year
+  if (endIdx === 11) return todayYear;
+  // For all other year ends: if we're past the end month, we've rolled into next FY
+  return todayIdx > endIdx ? todayYear + 1 : todayYear;
+}
+
+// Return the 12 period strings (e.g. "March 2024") that belong to a given FY.
+function _fyPeriods(financialYear, yearEndMonthName) {
+  const endIdx = _FY_MONTHS.indexOf(yearEndMonthName);
+  if (endIdx < 0) return _FY_MONTHS.map(m => `${m} ${financialYear}`);
+  const fy = parseInt(financialYear, 10);
+  if (endIdx === 11) {
+    // December year end: all 12 months in fy
+    return _FY_MONTHS.map(m => `${m} ${fy}`);
+  }
+  // Non-December: months after year-end belong to the previous calendar year,
+  // months up to and including year-end belong to fy.
+  const periods = [];
+  for (let m = endIdx + 1; m <= 11; m++) periods.push(`${_FY_MONTHS[m]} ${fy - 1}`);
+  for (let m = 0; m <= endIdx; m++)      periods.push(`${_FY_MONTHS[m]} ${fy}`);
+  return periods;
+}
+
 function openImportModal() {
+  const c = state.currentClient;
   state.impFileList = [];
   document.getElementById('imp-file').value = '';
-  document.getElementById('imp-year').value = state.currentYear || '';
-  document.getElementById('imp-period').value = '';
   document.getElementById('imp-file-list').style.display = 'none';
   document.getElementById('imp-file-list').innerHTML = '';
   document.getElementById('imp-error').style.display = 'none';
   document.getElementById('imp-confirm-btn').disabled = true;
-  document.getElementById('imp-vat-row').style.display =
-    state.currentClient?.vat_active ? '' : 'none';
+  document.getElementById('imp-vat-row').style.display = c?.vat_active ? '' : 'none';
+
+  // Client name banner
+  document.getElementById('imp-client-name').textContent = c?.name || '';
+
+  // Build year dropdown (current FY and 5 prior years)
+  const yearEndMonth = c?.financial_year_end || 'December';
+  const curFY        = _currentFY(yearEndMonth);
+  const yearSel      = document.getElementById('imp-year');
+  yearSel.innerHTML  = '<option value="">— Select year —</option>';
+  for (let y = curFY - 5; y <= curFY; y++) {
+    const opt = document.createElement('option');
+    opt.value = String(y);
+    opt.textContent = String(y);
+    if (String(y) === state.currentYear) opt.selected = true;
+    yearSel.appendChild(opt);
+  }
+  // If nothing was pre-selected, default to the current FY
+  if (!yearSel.value) yearSel.value = String(curFY);
+
+  // Build period dropdown for the selected year
+  _populateImpPeriods(yearSel.value, yearEndMonth);
+
   openModal('import-modal');
+}
+
+// Rebuild the period dropdown whenever the year selection changes.
+function onImpYearChange() {
+  const yearEndMonth = state.currentClient?.financial_year_end || 'December';
+  _populateImpPeriods(document.getElementById('imp-year').value, yearEndMonth);
+}
+
+function _populateImpPeriods(financialYear, yearEndMonth) {
+  const sel = document.getElementById('imp-period');
+  sel.innerHTML = '<option value="">— Select period —</option>';
+  if (!financialYear) return;
+  _fyPeriods(financialYear, yearEndMonth).forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    sel.appendChild(opt);
+  });
 }
 
 function onImportFilesSelected(input) {
