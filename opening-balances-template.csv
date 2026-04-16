@@ -1,0 +1,17 @@
+account_code,account_name,debit,credit
+4001,Sales / Revenue,,150000.00
+4002,Other Income,,5000.00
+6001,Accounting Fees,3500.00,
+6004,Bank Charges,420.00,
+6008,Insurance,2400.00,
+6011,Motor Vehicle Expenses,8500.00,
+6016,Salaries & Wages,72000.00,
+6021,Other Expenses,1200.00,
+1001,Bank Account,45000.00,
+1100,Trade Debtors,18000.00,
+1500,Property Plant & Equipment,35000.00,
+1600,Accumulated Depreciation,,7000.00,
+2001,Trade Creditors,,12000.00,
+2100,Loans Payable,,50000.00,
+3001,Owner Equity / Share Capital,,100000.00,
+3002,Retained Earnings,,10120.00,

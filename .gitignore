@@ -1,0 +1,21 @@
+# Environment and secrets — never commit these
+.env
+.env.*
+*.env
+
+# Any file that might accidentally contain keys
+secrets.*
+credentials.*
+
+# Node
+node_modules/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

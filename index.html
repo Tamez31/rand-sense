@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Rand Sense — Cashbook & Financial Statements</title>
+  <link rel="stylesheet" href="styles.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- ── PIN Screen ───────────────────────────────────────────── -->
+<div id="pin-screen">
+  <div class="pin-box">
+    <div class="pin-logo">Rand Sense</div>
+    <div class="pin-sub" id="pin-label">Enter your PIN</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="pd0"></div>
+      <div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div>
+      <div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-pad">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key clear" onclick="pinClear()">Clear</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key del" onclick="pinDel()">&#9003;</button>
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+    <div class="pin-setup-hint" id="pin-hint"></div>
+  </div>
+</div>
+
+<!-- ── App Shell ────────────────────────────────────────────── -->
+<div id="app">
+  <nav class="topnav">
+    <div class="topnav-brand">Rand Sense <span>by Tax Tjom</span></div>
+    <div class="topnav-spacer"></div>
+    <button class="topnav-lock" onclick="lockApp()">&#128274; Lock</button>
+  </nav>
+  <div class="main-wrap">
+    <div id="main-content"></div>
+  </div>
+</div>
+
+<!-- ── Modals ────────────────────────────────────────────────── -->
+
+<!-- Client Form Modal -->
+<div class="modal-overlay" id="client-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="client-modal-title">New Client</div>
+      <button class="modal-close" onclick="closeModal('client-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group span-2">
+          <label class="form-label">Client name <span class="req">*</span></label>
+          <input class="form-control" id="cf-name" placeholder="e.g. Smith Trading CC"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Entity type <span class="req">*</span></label>
+          <select class="form-control" id="cf-type" onchange="onEntityTypeChange()">
+            <option value="">— Select —</option>
+            <option value="company_cc">Company (CC)</option>
+            <option value="company_pty">Company (Pty Ltd)</option>
+            <option value="commission_earner">Commission Earner</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Financial year end <span class="req">*</span></label>
+          <select class="form-control" id="cf-yearend">
+            <option value="">— Select month —</option>
+            <option>January</option><option>February</option><option>March</option>
+            <option>April</option><option>May</option><option>June</option>
+            <option>July</option><option>August</option><option>September</option>
+            <option>October</option><option>November</option><option>December</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Primary bank <span class="req">*</span></label>
+          <select class="form-control" id="cf-bank">
+            <option value="">— Select bank —</option>
+            <option value="absa">ABSA</option>
+            <option value="standard_bank">Standard Bank</option>
+            <option value="capitec">Capitec</option>
+            <option value="nedbank">Nedbank</option>
+          </select>
+        </div>
+        <div class="form-group" id="vat-group" style="display:none;">
+          <label class="form-label">VAT number</label>
+          <input class="form-control" id="cf-vat" placeholder="4123456789" maxlength="10"/>
+          <div class="form-hint">10 digits, starts with 4. Leave blank if not VAT registered.</div>
+        </div>
+        <div class="form-group" id="vat-period-group" style="display:none;">
+          <label class="form-label">VAT filing period</label>
+          <select class="form-control" id="cf-vatperiod">
+            <option value="">— Select —</option>
+            <option value="monthly">Monthly</option>
+            <option value="two_month_odd">2 Month Period (Odd) — Jan/Mar/May/Jul/Sep/Nov</option>
+            <option value="two_month_even">2 Month Period (Even) — Feb/Apr/Jun/Aug/Oct/Dec</option>
+            <option value="two_month_odd_or_even">2 Month Period (Odd or Even) — custom registration months</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('client-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveClient()">Save Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal wide">
+    <div class="modal-header">
+      <div class="modal-title">Import Bank Statements</div>
+      <button class="modal-close" onclick="closeModal('import-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="import-meta">
+        <div class="form-group">
+          <label class="form-label">Financial year <span class="req">*</span></label>
+          <input class="form-control" id="imp-year" placeholder="e.g. 2025"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Period (month) <span class="req">*</span></label>
+          <input class="form-control" id="imp-period" placeholder="e.g. March 2024"/>
+        </div>
+      </div>
+      <div class="form-group" id="imp-vat-row" style="display:none;margin-top:12px;">
+        <label class="form-label">VAT on these transactions</label>
+        <select class="form-control" id="imp-vattype" style="max-width:260px;">
+          <option value="none">No VAT on this import</option>
+          <option value="output">Output VAT (sales — money in)</option>
+          <option value="input">Input VAT (purchases — money out)</option>
+        </select>
+      </div>
+      <div style="margin-top:18px;">
+        <div class="import-zone" id="import-zone" onclick="document.getElementById('imp-file').click()">
+          <div class="import-zone-icon">&#128196;</div>
+          <div class="import-zone-label">Click to select CSV files, or drag and drop</div>
+          <div class="import-zone-hint">Up to 10 files · ABSA · Standard Bank · Capitec · Nedbank</div>
+        </div>
+        <input type="file" id="imp-file" accept=".csv" multiple style="display:none;" onchange="onImportFilesSelected(this)"/>
+      </div>
+      <div id="imp-file-list" style="display:none;margin-top:16px;"></div>
+      <div class="info-box red" id="imp-error" style="display:none;margin-top:12px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('import-modal')">Cancel</button>
+      <button class="btn btn-primary" id="imp-confirm-btn" disabled onclick="confirmImport()">Import Transactions</button>
+    </div>
+  </div>
+</div>
+
+<!-- Opening Balances Modal -->
+<div class="modal-overlay" id="ob-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Import Opening Balances</div>
+      <button class="modal-close" onclick="closeModal('ob-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-box blue">
+        <strong>What this does:</strong> Imports prior year closing balances as the opening balance comparative for Balance Sheet and Income Statement.
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="form-label">Financial year these balances open <span class="req">*</span></label>
+        <input class="form-control" id="ob-year" placeholder="e.g. 2025"/>
+      </div>
+      <div class="import-zone" id="ob-zone" onclick="document.getElementById('ob-file').click()">
+        <div class="import-zone-icon">&#128196;</div>
+        <div class="import-zone-label">Click to select opening balances CSV</div>
+        <div class="import-zone-hint">Format: account_code, account_name, debit, credit</div>
+      </div>
+      <input type="file" id="ob-file" accept=".csv" style="display:none;" onchange="onOBFileSelected(this)"/>
+      <div id="ob-preview" style="display:none;margin-top:12px;"></div>
+      <div class="info-box red" id="ob-error" style="display:none;margin-top:12px;"></div>
+      <div style="margin-top:14px;">
+        <a href="#" onclick="Export.exportTransactionsCSV([],'\u00a0',''); downloadOBTemplate(); return false;" style="font-size:0.8rem;">
+          &#8595; Download opening balances template
+        </a>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('ob-modal')">Cancel</button>
+      <button class="btn btn-primary" id="ob-confirm-btn" disabled onclick="confirmOBImport()">Save Opening Balances</button>
+    </div>
+  </div>
+</div>
+
+<!-- Classify Transaction Modal -->
+<div class="modal-overlay" id="classify-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Classify Transaction</div>
+      <button class="modal-close" onclick="closeModal('classify-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:16px;font-size:0.87rem;">
+        <div style="font-weight:700;" id="cm-desc"></div>
+        <div style="color:var(--muted);margin-top:3px;font-size:0.8rem;" id="cm-meta"></div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label class="form-label">Account <span class="req">*</span></label>
+        <select class="form-control" id="cm-account" onchange="onCMAccountChange()">
+          <option value="">— Select account —</option>
+        </select>
+      </div>
+      <div class="form-group" id="cm-vat-row" style="display:none;margin-bottom:14px;">
+        <label class="form-label">VAT</label>
+        <select class="form-control" id="cm-vattype">
+          <option value="none">No VAT</option>
+          <option value="output">Output VAT (15%)</option>
+          <option value="input">Input VAT (15%)</option>
+        </select>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;">
+        <label class="toggle-row" style="margin-bottom:10px;">
+          <input type="checkbox" id="cm-save-rule" checked/>
+          Save as a bank rule (auto-classify future transactions)
+        </label>
+        <div class="form-group" id="cm-keyword-row">
+          <label class="form-label">Rule keyword</label>
+          <input class="form-control" id="cm-keyword" placeholder="e.g. woolworths"/>
+          <div class="form-hint">Any transaction description containing this word will be auto-classified to the same account.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('classify-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmClassify()">Save Classification</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Print target (hidden except during print) -->
+<div id="print-target" style="display:none;"></div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <span id="loading-msg">Loading…</span>
+</div>
+
+<!-- ── Scripts ───────────────────────────────────────────────── -->
+<script src="supabase-client.js"></script>
+<script src="csv-parsers.js"></script>
+<script src="rules-engine.js"></script>
+<script src="vat-module.js"></script>
+<script src="financial-outputs.js"></script>
+<script src="export.js"></script>
+
+<script>
+'use strict';
+
+// ============================================================
+// APP STATE
+// ============================================================
+const state = {
+  pin:            null,
+  isSetup:        false,
+  activeTab:      'companies',   // 'companies' | 'commission'
+  currentClient:  null,
+  currentYear:    null,
+  clientTab:      'transactions', // 'transactions' | 'reports' | 'settings'
+  reportType:     'IS',
+  hideZeros:      false,
+  clients:        [],
+  transactions:   [],
+  coa:            [],
+  rules:          [],
+  unclassified:   [],
+  openingBalances:[],
+  pack:           null,          // last built financial pack
+  // Import flow state
+  impFileList:    [],
+  // Opening balances flow state
+  obRows:         null,
+  // Classify flow state
+  cmTx:           null,
+  // Commission earner income override
+  cmIncomeOverride: { active: false, amount: '' },
+  // Commission earner home office split
+  cmHomeOffice: { active: false, businessPct: '' },
+};
+
+// ============================================================
+// PIN MANAGEMENT
+// ============================================================
+const PIN_KEY = 'rs_pin';
+let pinBuffer = '';
+
+function initPIN() {
+  const stored = localStorage.getItem(PIN_KEY);
+  if (!stored) {
+    state.isSetup = true;
+    document.getElementById('pin-label').textContent = 'Set a 4-digit PIN';
+    document.getElementById('pin-hint').textContent  = 'Choose a PIN to protect this app.';
+  } else {
+    state.isSetup = false;
+    document.getElementById('pin-label').textContent = 'Enter your PIN';
+    document.getElementById('pin-hint').textContent  = '';
+  }
+}
+
+function pinKey(digit) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += digit;
+  updatePinDots();
+  if (pinBuffer.length === 4) {
+    setTimeout(checkPIN, 120);
+  }
+}
+
+function pinDel() {
+  pinBuffer = pinBuffer.slice(0, -1);
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function pinClear() {
+  pinBuffer = '';
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function updatePinDots(error) {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById('pd' + i);
+    dot.classList.toggle('filled', i < pinBuffer.length);
+    dot.classList.toggle('error', !!error);
+  }
+}
+
+function checkPIN() {
+  const stored = localStorage.getItem(PIN_KEY);
+  if (state.isSetup) {
+    // First time — save the PIN
+    localStorage.setItem(PIN_KEY, pinBuffer);
+    state.pin = pinBuffer;
+    unlockApp();
+  } else {
+    if (pinBuffer === stored) {
+      state.pin = pinBuffer;
+      unlockApp();
+    } else {
+      document.getElementById('pin-error').textContent = 'Incorrect PIN. Try again.';
+      updatePinDots(true);
+      setTimeout(() => {
+        pinBuffer = '';
+        updatePinDots(false);
+        document.getElementById('pin-error').textContent = '';
+      }, 700);
+    }
+  }
+  pinBuffer = '';
+}
+
+function unlockApp() {
+  document.getElementById('pin-screen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+  loadDashboard();
+  // Run localStorage migration silently on first unlock
+  DB.migrateLocalStorageToSupabase().catch(() => {});
+}
+
+function lockApp() {
+  document.getElementById('pin-screen').style.display = 'flex';
+  document.getElementById('app').classList.remove('visible');
+  pinBuffer = '';
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+  initPIN();
+}
+
+// Keyboard support for PIN
+document.addEventListener('keydown', e => {
+  if (document.getElementById('pin-screen').style.display === 'none') return;
+  if (e.key >= '0' && e.key <= '9') pinKey(e.key);
+  else if (e.key === 'Backspace') pinDel();
+  else if (e.key === 'Escape') pinClear();
+});
+
+// ============================================================
+// LOADING & TOAST
+// ============================================================
+function showLoading(msg) {
+  document.getElementById('loading-msg').textContent = msg || 'Loading…';
+  document.getElementById('loading-overlay').classList.add('visible');
+}
+function hideLoading() {
+  document.getElementById('loading-overlay').classList.remove('visible');
+}
+
+let _toastId = 0;
+function toast(msg, type = 'success') {
+  const id  = ++_toastId;
+  const el  = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${escH(msg)}</span>`;
+  el.onclick   = () => el.remove();
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function setContent(html) {
+  document.getElementById('main-content').innerHTML = html;
+}
+
+async function loadDashboard() {
+  showLoading('Loading clients…');
+  try {
+    state.clients = await DB.Clients.list();
+  } catch(e) {
+    toast('Could not load clients: ' + e.message, 'error');
+    state.clients = [];
+  }
+  hideLoading();
+  renderDashboard();
+}
+
+function renderDashboard() {
+  const tab     = state.activeTab;
+  const isComp  = tab === 'companies';
+  const types   = isComp
+    ? ['company_cc','company_pty']
+    : ['commission_earner'];
+  const filtered = state.clients.filter(c => types.includes(c.entity_type));
+
+  const tabsHTML = `
+    <div class="section-tabs">
+      <button class="section-tab ${tab==='companies'?'active':''}" onclick="switchTab('companies')">Companies</button>
+      <button class="section-tab ${tab==='commission'?'active':''}" onclick="switchTab('commission')">Commission Earners</button>
+    </div>`;
+
+  const cardsHTML = filtered.map(c => `
+    <div class="client-card" onclick="openClient('${c.id}')">
+      <div class="client-card-actions">
+        <button class="icon-btn" title="Edit" onclick="event.stopPropagation();editClient('${c.id}')">&#9998;</button>
+        <button class="icon-btn danger" title="Delete" onclick="event.stopPropagation();deleteClient('${c.id}')">&#128465;</button>
+      </div>
+      <div class="client-card-name">${escH(c.name)}</div>
+      <div class="client-card-meta">
+        <span class="tag">${entityLabel(c.entity_type)}</span>
+        <span class="tag">FYE: ${escH(c.financial_year_end)}</span>
+        <span class="tag">${bankLabel(c.bank)}</span>
+        ${c.vat_active ? `<span class="tag vat">VAT</span>` : ''}
+      </div>
+    </div>`).join('');
+
+  const addCard = `
+    <button class="add-client-card" onclick="newClient()">
+      &#43; Add ${isComp ? 'Company' : 'Commission Earner'}
+    </button>`;
+
+  setContent(`
+    ${tabsHTML}
+    <div class="page-header">
+      <div class="page-title">${isComp ? 'Companies' : 'Commission Earners'}
+        <small>${filtered.length} client${filtered.length!==1?'s':''}</small>
+      </div>
+    </div>
+    <div class="client-grid">
+      ${cardsHTML}
+      ${addCard}
+    </div>`);
+}
+
+function switchTab(tab) {
+  state.activeTab = tab;
+  renderDashboard();
+}
+
+// ============================================================
+// CLIENT DETAIL
+// ============================================================
+async function openClient(id) {
+  showLoading('Loading client…');
+  try {
+    state.currentClient = await DB.Clients.get(id);
+    if (!state.currentClient) { toast('Client not found.','error'); hideLoading(); return; }
+
+    const years = await DB.Transactions.listYears(id);
+    if (!state.currentYear || !years.includes(state.currentYear)) {
+      state.currentYear = years[0] || String(new Date().getFullYear());
+    }
+    state.coa            = await DB.COA.list(id);
+    state.rules          = await DB.Rules.list(id);
+    state.unclassified   = await DB.Transactions.listUnclassified(id);
+    state.openingBalances = state.currentYear
+      ? await DB.OpeningBalances.list(id, state.currentYear)
+      : [];
+    state.transactions   = state.currentYear
+      ? await DB.Transactions.listByYear(id, state.currentYear)
+      : [];
+  } catch(e) {
+    toast('Error loading client: ' + e.message, 'error');
+    hideLoading();
+    return;
+  }
+  hideLoading();
+  state.clientTab = 'transactions';
+  renderClientDetail();
+}
+
+function renderClientDetail() {
+  const c      = state.currentClient;
+  const isComp = c.entity_type !== 'commission_earner';
+  const tab    = state.clientTab;
+  const unreadCount = state.unclassified.length;
+
+  const subNav = `
+    <div class="subnav">
+      <button class="subnav-tab ${tab==='transactions'?'active':''}" onclick="setClientTab('transactions')">
+        Transactions${unreadCount>0?`<span class="subnav-count">${unreadCount}</span>`:''}
+      </button>
+      <button class="subnav-tab ${tab==='reports'?'active':''}" onclick="setClientTab('reports')">Reports</button>
+      <button class="subnav-tab ${tab==='settings'?'active':''}" onclick="setClientTab('settings')">Settings</button>
+    </div>`;
+
+  const yearOptions = (() => {
+    const years = [];
+    const thisYear = new Date().getFullYear();
+    for (let y = thisYear + 1; y >= thisYear - 5; y--) years.push(String(y));
+    return years.map(y => `<option value="${y}" ${y===state.currentYear?'selected':''}>${y}</option>`).join('');
+  })();
+
+  const actionBar = `
+    <div class="btn-row" style="margin-bottom:18px;">
+      <select class="form-control" style="width:auto;" onchange="onYearChange(this.value)">${yearOptions}</select>
+      <button class="btn btn-primary btn-sm" onclick="openImportModal()">&#8593; Import Statement</button>
+      ${isComp ? `<button class="btn btn-ghost btn-sm" onclick="openOBModal()">Opening Balances</button>` : ''}
+    </div>`;
+
+  let tabContent = '';
+  if      (tab === 'transactions') tabContent = renderTransactionsList();
+  else if (tab === 'reports')      tabContent = renderReportsTab();
+  else if (tab === 'settings')     tabContent = renderSettingsTab();
+
+  setContent(`
+    <div>
+      <button class="back-btn" onclick="loadDashboard()">&#8592; All clients</button>
+      <div class="page-header" style="margin-top:8px;">
+        <div class="page-title">${escH(c.name)}
+          <small>${entityLabel(c.entity_type)}${c.vat_active?' · VAT':''}</small>
+        </div>
+      </div>
+      ${subNav}
+      ${tab !== 'settings' ? actionBar : ''}
+      ${tabContent}
+    </div>`);
+}
+
+function setClientTab(tab) {
+  state.clientTab = tab;
+  renderClientDetail();
+}
+
+async function onYearChange(year) {
+  state.currentYear = year;
+  showLoading('Loading year…');
+  try {
+    state.transactions    = await DB.Transactions.listByYear(state.currentClient.id, year);
+    state.unclassified    = await DB.Transactions.listUnclassified(state.currentClient.id);
+    state.openingBalances = await DB.OpeningBalances.list(state.currentClient.id, year);
+  } catch(e) { toast(e.message,'error'); }
+  hideLoading();
+  renderClientDetail();
+}
+
+// ── Transactions list ─────────────────────────────────────────
+function renderTransactionsList() {
+  const all  = state.transactions;
+  const unc  = state.unclassified;
+
+  if (unc.length > 0) {
+    return `
+      <div class="info-box amber">
+        <strong>${unc.length} transaction${unc.length>1?'s':''} need classification.</strong>
+        Review and assign account codes before generating reports.
+      </div>
+      <div class="btn-row" style="margin-bottom:16px;">
+        <button class="btn btn-dark btn-sm" onclick="openClassifyQueue()">Classify Now &#8594;</button>
+      </div>
+      ${renderTxTable(all)}`;
+  }
+
+  if (all.length === 0) {
+    return `<div class="empty-state">
+      <div class="empty-state-icon">&#128196;</div>
+      <div class="empty-state-title">No transactions yet</div>
+      <div class="empty-state-sub">Import a bank statement to get started.</div>
+    </div>`;
+  }
+
+  return renderTxTable(all);
+}
+
+function renderTxTable(txs) {
+  if (!txs.length) return '<div class="empty-state"><div class="empty-state-sub">No transactions for this year.</div></div>';
+
+  // Only show the Source column if more than one distinct source_bank exists
+  const sources = [...new Set(txs.map(t => t.source_bank).filter(Boolean))];
+  const showSource = sources.length > 1;
+
+  const rows = txs.slice(0,200).map(t => {
+    const amt = t.amount || 0;
+    const amtClass = amt >= 0 ? 'pos' : 'neg';
+    const amtStr = (amt >= 0 ? 'R ' : '(R ') + Math.abs(amt).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2}) + (amt<0?')':'');
+    const sourceCell = showSource
+      ? `<td class="muted" style="font-size:0.78rem;white-space:nowrap;">${escH(t.source_bank||'—')}</td>`
+      : '';
+    return `<tr>
+      <td class="muted">${fmtDate(t.date)}</td>
+      <td>${escH(t.description)}</td>
+      <td class="num ${amtClass}">${amtStr}</td>
+      <td class="muted">${escH(t.account_name||'—')}</td>
+      <td class="muted">${escH(t.period||'')}</td>
+      ${sourceCell}
+    </tr>`;
+  }).join('');
+
+  const note = txs.length > 200 ? `<div style="font-size:0.78rem;color:var(--muted);text-align:center;padding:10px;">Showing 200 of ${txs.length} transactions.</div>` : '';
+  const sourceHeader = showSource ? '<th>Source account</th>' : '';
+
+  return `<div class="table-wrap">
+    <table class="data-table">
+      <thead><tr>
+        <th>Date</th><th>Description</th><th class="num">Amount</th>
+        <th>Account</th><th>Period</th>${sourceHeader}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>${note}`;
+}
+
+// ── Classification queue ──────────────────────────────────────
+function openClassifyQueue() {
+  state.clientTab = 'classify';
+  renderClassifyQueue();
+}
+
+function renderClassifyQueue() {
+  const unc = state.unclassified;
+  const c   = state.currentClient;
+  const isCommission = c.entity_type === 'commission_earner';
+
+  if (unc.length === 0) {
+    state.clientTab = 'transactions';
+    renderClientDetail();
+    return;
+  }
+
+  const rows = unc.slice(0, 50).map(t => {
+    const amt     = t.amount || 0;
+    const amtStr  = (amt>=0?'R ':'(R ') + Math.abs(amt).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2}) + (amt<0?')':'');
+    const amtCls  = amt>=0?'pos':'neg';
+    return `<div class="classify-row">
+      <div class="classify-date">${fmtDate(t.date)}</div>
+      <div class="classify-desc">${escH(t.description)}</div>
+      <div class="classify-amount ${amtCls}">${amtStr}</div>
+      <div>
+        <button class="btn btn-primary btn-xs" onclick="openClassifyModal('${t.id}')">Classify</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const note = unc.length > 50 ? `<div class="form-hint" style="margin-top:8px;">Showing 50 of ${unc.length}. Classify these first, then reload.</div>` : '';
+
+  setContent(`
+    <div>
+      <button class="back-btn" onclick="setClientTab('transactions')">&#8592; Back to transactions</button>
+      <div class="page-header" style="margin-top:8px;">
+        <div class="page-title">Classify Transactions
+          <small>${unc.length} remaining</small>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Unclassified transactions</div>
+        ${rows}
+        ${note}
+      </div>
+    </div>`);
+}
+
+function openClassifyModal(txId) {
+  const tx = state.unclassified.find(t => t.id === txId);
+  if (!tx) return;
+  state.cmTx = tx;
+
+  const c = state.currentClient;
+  const isCommission = c.entity_type === 'commission_earner';
+
+  document.getElementById('cm-desc').textContent = tx.description;
+  document.getElementById('cm-meta').textContent =
+    `${fmtDate(tx.date)} · ${tx.amount>=0?'+':''} R ${Math.abs(tx.amount||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})} · ${tx.period}`;
+
+  // Populate account dropdown
+  const sel = document.getElementById('cm-account');
+  sel.innerHTML = '<option value="">— Select account —</option>';
+
+  if (isCommission) {
+    const { ITR12_CATEGORIES } = window.RulesEngine;
+    sel.innerHTML += `<optgroup label="Income">` +
+      ITR12_CATEGORIES.income.map(cat => `<option value="${cat.code}|${escH(cat.name)}">${escH(cat.name)}</option>`).join('') +
+      `</optgroup>`;
+    sel.innerHTML += `<optgroup label="Expenses">` +
+      ITR12_CATEGORIES.expenses.map(cat => `<option value="${cat.code}|${escH(cat.name)}">${escH(cat.name)}</option>`).join('') +
+      `</optgroup>`;
+    document.getElementById('cm-vat-row').style.display = 'none';
+    document.getElementById('cm-save-rule').parentElement.style.display = 'none';
+    document.getElementById('cm-keyword-row').style.display = 'none';
+  } else {
+    const groups = ['income','cost_of_sales','expense','asset','liability','equity'];
+    groups.forEach(grp => {
+      const items = state.coa.filter(a => a.account_type === grp);
+      if (!items.length) return;
+      sel.innerHTML += `<optgroup label="${grp.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}">` +
+        items.map(a => `<option value="${a.account_code}|${escH(a.account_name)}">${a.account_code} — ${escH(a.account_name)}</option>`).join('') +
+        `</optgroup>`;
+    });
+    document.getElementById('cm-vat-row').style.display = c.vat_active ? '' : 'none';
+    document.getElementById('cm-save-rule').parentElement.style.display = '';
+    document.getElementById('cm-keyword-row').style.display = '';
+    // Suggest keyword
+    document.getElementById('cm-keyword').value = window.RulesEngine.suggestKeyword(tx.description);
+  }
+
+  openModal('classify-modal');
+}
+
+function onCMAccountChange() {
+  const hasAccount = !!document.getElementById('cm-account').value;
+  const ruleRow = document.getElementById('cm-keyword-row');
+  if (ruleRow) ruleRow.style.display = hasAccount ? '' : 'none';
+}
+
+async function confirmClassify() {
+  const tx  = state.cmTx;
+  const val = document.getElementById('cm-account').value;
+  if (!val) { toast('Please select an account.','warning'); return; }
+
+  const [code, name] = val.split('|');
+  const vatType      = document.getElementById('cm-vattype')?.value || 'none';
+  const vatAmount    = vatType !== 'none' ? window.VAT.extractVAT(tx.amount) : 0;
+  const keyword      = document.getElementById('cm-keyword')?.value?.trim() || '';
+  const saveRule     = document.getElementById('cm-save-rule')?.checked ?? false;
+
+  showLoading('Classifying…');
+  try {
+    const result = await window.RulesEngine.classifyAndSaveRule({
+      transactionId:   tx.id,
+      clientId:        state.currentClient.id,
+      accountCode:     code,
+      accountName:     name,
+      vatType,
+      vatAmount,
+      keyword,
+      saveAsRule:      saveRule,
+      existingRules:   state.rules,
+      allUnclassified: state.unclassified,  // retroactive scan
+    });
+
+    // Refresh state after all DB writes complete
+    state.unclassified  = await DB.Transactions.listUnclassified(state.currentClient.id);
+    state.rules         = await DB.Rules.list(state.currentClient.id);
+    state.transactions  = await DB.Transactions.listByYear(state.currentClient.id, state.currentYear);
+
+    closeModal('classify-modal');
+
+    // Build a meaningful feedback message
+    let msg = `Classified → ${name}.`;
+    if (result.autoCount > 0) {
+      msg = `"${keyword}" rule applied to ${result.autoCount + 1} transaction${result.autoCount + 1 !== 1 ? 's' : ''} (${result.autoCount} auto-classified).`;
+    } else if (result.ruleCreated) {
+      msg = `Classified and rule saved: "${keyword}" → ${name}.`;
+    } else if (result.ruleReused) {
+      msg = `Classified. Rule "${keyword}" already exists.`;
+    }
+    toast(msg, result.autoCount > 0 ? 'success' : 'success');
+
+    renderClassifyQueue();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+  hideLoading();
+}
+
+// ── Reports tab ───────────────────────────────────────────────
+function renderReportsTab() {
+  const c   = state.currentClient;
+  const isC = c.entity_type === 'commission_earner';
+  const rt  = state.reportType;
+
+  const tabs = isC
+    ? [['IS','Income Statement'],['TB','Trial Balance']]
+    : [['IS','Inc. Statement'],['BS','Balance Sheet'],['CF','Cash Flow'],['TB','Trial Balance'],
+       ...(c.vat_active ? [['VAT','VAT Report']] : [])];
+
+  const tabHTML = tabs.map(([k,l]) =>
+    `<button class="report-tab ${rt===k?'active':''}" onclick="setReportType('${k}')">${l}</button>`
+  ).join('');
+
+  const toolbar = `
+    <div class="report-toolbar">
+      <div class="report-type-tabs">${tabHTML}</div>
+      <label class="toggle-row">
+        <input type="checkbox" ${state.hideZeros?'checked':''} onchange="toggleHideZeros(this.checked)"/>
+        Hide zero lines
+      </label>
+      <div class="topnav-spacer"></div>
+      <button class="btn btn-ghost btn-sm" onclick="printReport()">&#128424; PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="csvReport()">&#8595; CSV</button>
+      ${!isC ? `<button class="btn btn-dark btn-sm" onclick="generateFullPack()">Full Pack</button>` : ''}
+    </div>`;
+
+  // Income override bar — only shown for commission earners on the IS tab
+  const ovActive        = state.cmIncomeOverride.active;
+  const ovAmount        = state.cmIncomeOverride.amount || '';
+  const incomeOverrideBar = (isC && rt === 'IS') ? `
+    <div style="background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:14px;">
+      <div style="font-size:0.78rem;font-weight:700;color:var(--text-light);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.04em;">Income Source</div>
+      <div style="display:flex;gap:0;border:1.5px solid var(--border);border-radius:6px;overflow:hidden;width:fit-content;">
+        <label data-income-src="bank" style="display:flex;align-items:center;gap:7px;padding:8px 16px;cursor:pointer;background:${!ovActive ? 'var(--accent)' : 'var(--surface-1)'};color:${!ovActive ? '#fff' : 'var(--text)'};font-weight:600;font-size:0.84rem;transition:background 0.15s;">
+          <input type="radio" name="income-source" value="bank" ${!ovActive ? 'checked' : ''} onchange="toggleIncomeOverride(false)" style="display:none;"/>
+          &#128197; Use bank statement income
+        </label>
+        <label data-income-src="manual" style="display:flex;align-items:center;gap:7px;padding:8px 16px;cursor:pointer;background:${ovActive ? 'var(--amber)' : 'var(--surface-1)'};color:${ovActive ? '#fff' : 'var(--text)'};font-weight:600;font-size:0.84rem;border-left:1.5px solid var(--border);transition:background 0.15s;">
+          <input type="radio" name="income-source" value="manual" ${ovActive ? 'checked' : ''} onchange="toggleIncomeOverride(true)" style="display:none;"/>
+          &#9997; Enter income manually
+        </label>
+      </div>
+      <div id="income-override-input" style="margin-top:12px;display:${ovActive ? 'flex' : 'none'};align-items:center;gap:10px;flex-wrap:wrap;">
+        <label style="font-size:0.82rem;font-weight:600;color:var(--text-light);white-space:nowrap;">Income amount (R)</label>
+        <div class="r-wrap" style="width:220px;">
+          <span class="r-pre">R</span>
+          <input class="form-control" type="number" min="0" step="0.01"
+            id="income-override-amount"
+            value="${ovAmount}"
+            placeholder="0.00"
+            oninput="setOverrideAmount(this.value)"/>
+        </div>
+        <span style="font-size:0.78rem;color:var(--muted);">This amount replaces the bank-derived income total on the statement.</span>
+      </div>
+    </div>` : '';
+
+  // Home office split bar — only shown for commission earners on the IS tab
+  const hoChecked      = state.cmHomeOffice.active ? 'checked' : '';
+  const hoPct          = state.cmHomeOffice.businessPct || '';
+  const hoPctVisible   = state.cmHomeOffice.active ? 'flex' : 'none';
+  const homeOfficeBar  = (isC && rt === 'IS') ? `
+    <div style="background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:14px;">
+      <label class="toggle-row">
+        <input type="checkbox" id="ho-split-toggle" ${hoChecked} onchange="toggleHomeOfficeSplit(this.checked)"/>
+        <span style="font-weight:600;">Apply home office business % split (ITR12 4011)</span>
+      </label>
+      <div id="ho-split-input" style="margin-top:12px;display:${hoPctVisible};align-items:center;gap:10px;flex-wrap:wrap;">
+        <label style="font-size:0.82rem;font-weight:600;color:var(--text-light);white-space:nowrap;">Business use</label>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input class="form-control" type="number" min="0" max="100" step="1"
+            id="ho-split-pct"
+            value="${hoPct}"
+            placeholder="e.g. 20"
+            style="width:90px;"
+            oninput="setHomeOfficePct(this.value)"/>
+          <span style="font-size:0.9rem;font-weight:700;">%</span>
+        </div>
+        <span style="font-size:0.78rem;color:var(--muted);">Only the business portion of home office expenses will appear on the statement. The personal portion is excluded and a breakdown is shown for verification.</span>
+      </div>
+    </div>` : '';
+
+  const content = `<div id="report-body"><div class="empty-state">
+    <div class="empty-state-icon">&#128202;</div>
+    <div class="empty-state-title">Loading…</div>
+  </div></div>`;
+
+  // Auto-generate on tab render
+  setTimeout(() => generateReport(), 50);
+
+  return `<div>${toolbar}${incomeOverrideBar}${homeOfficeBar}<div class="card">${content}</div></div>`;
+}
+
+function toggleIncomeOverride(active) {
+  state.cmIncomeOverride.active = active;
+  // Show/hide the amount input
+  const inp = document.getElementById('income-override-input');
+  if (inp) inp.style.display = active ? 'flex' : 'none';
+  // Update pill button visuals without a full re-render
+  const labels = document.querySelectorAll('label[data-income-src]');
+  labels.forEach(lbl => {
+    const isActive = lbl.dataset.incomeSrc === (active ? 'manual' : 'bank');
+    lbl.style.background = isActive
+      ? (active ? 'var(--amber)' : 'var(--accent)')
+      : 'var(--surface-1)';
+    lbl.style.color = isActive ? '#fff' : 'var(--text)';
+  });
+  generateReport();
+}
+
+function setOverrideAmount(val) {
+  state.cmIncomeOverride.amount = val;
+  generateReport();
+}
+
+function toggleHomeOfficeSplit(active) {
+  state.cmHomeOffice.active = active;
+  const inp = document.getElementById('ho-split-input');
+  if (inp) inp.style.display = active ? 'flex' : 'none';
+  generateReport();
+}
+
+function setHomeOfficePct(val) {
+  state.cmHomeOffice.businessPct = val;
+  generateReport();
+}
+
+function setReportType(type) {
+  state.reportType = type;
+  setClientTab('reports');
+}
+
+function toggleHideZeros(val) {
+  state.hideZeros = val;
+  generateReport();
+}
+
+async function generateReport() {
+  const c   = state.currentClient;
+  const isC = c.entity_type === 'commission_earner';
+  const rt  = state.reportType;
+  const F   = window.FinancialOutputs;
+  const el  = document.getElementById('report-body');
+  if (!el) return;
+
+  el.innerHTML = '<div style="padding:30px;text-align:center;"><div class="spinner"></div></div>';
+
+  try {
+    const txs     = state.transactions.filter(t => t.account_code);
+    const ob      = state.openingBalances;
+    const coa     = state.coa;
+    const hz      = state.hideZeros;
+
+    if (isC) {
+      if (rt === 'IS') {
+        const r = F.buildCommissionIS(txs, hz, state.cmIncomeOverride, state.cmHomeOffice);
+        el.innerHTML = r.ok ? F.renderCommissionIS(r.data, hz) : `<div class="info-box red">${escH(r.error)}</div>`;
+        state._commissionIS = r.ok ? r.data : null;
+      } else if (rt === 'TB') {
+        // Build synthetic COA from ITR12 categories
+        const synthCOA = [
+          ...window.RulesEngine.ITR12_CATEGORIES.income.map(c=>({account_code:c.code,account_name:c.name,account_type:'income',is_active:true})),
+          ...window.RulesEngine.ITR12_CATEGORIES.expenses.map(c=>({account_code:c.code,account_name:c.name,account_type:'expense',is_active:true})),
+        ];
+        const r = F.buildTrialBalance(txs, synthCOA, hz);
+        el.innerHTML = r.ok ? F.renderTB(r.data) : `<div class="info-box red">${escH(r.error)}</div>`;
+        state._TB = r.ok ? r.data : null;
+      }
+      return;
+    }
+
+    // Company reports
+    if (rt === 'IS') {
+      const r = F.buildIncomeStatement(txs, coa, ob, hz);
+      el.innerHTML = r.ok ? F.renderIS(r.data, c.financial_year_end + ' ' + (parseInt(state.currentYear)-1), hz) : `<div class="info-box red">${escH(r.error)}</div>`;
+      state._IS = r.ok ? r.data : null;
+    } else if (rt === 'BS') {
+      const isR  = F.buildIncomeStatement(txs, coa, ob, false);
+      const np   = isR.ok ? isR.data.netProfit : 0;
+      const r    = F.buildBalanceSheet(txs, coa, ob, np, hz);
+      let html   = r.ok ? F.renderBS(r.data, c.financial_year_end + ' ' + (parseInt(state.currentYear)-1)) : `<div class="info-box red">${escH(r.error)}</div>`;
+      if (r.ok && !r.balanced) html += `<div class="info-box amber" style="margin-top:12px;"><strong>Balance sheet is out by ${F.fmt(r.diff)}</strong> — check for unclassified transactions or missing opening balances.</div>`;
+      el.innerHTML = html;
+      state._BS = r.ok ? r.data : null;
+    } else if (rt === 'CF') {
+      const r = F.buildCashFlow(txs, coa, ob);
+      el.innerHTML = r.ok ? F.renderCF(r.data) : `<div class="info-box red">${escH(r.error)}</div>`;
+      state._CF = r.ok ? r.data : null;
+    } else if (rt === 'TB') {
+      const r = F.buildTrialBalance(txs, coa, hz);
+      el.innerHTML = r.ok ? F.renderTB(r.data) : `<div class="info-box red">${escH(r.error)}</div>`;
+      state._TB = r.ok ? r.data : null;
+    } else if (rt === 'VAT') {
+      const allTx  = state.transactions;
+      const vatR   = window.VAT.buildVATReport(allTx, null);
+      const vat201 = window.VAT.buildVAT201(vatR, c.name, state.currentYear, null);
+      el.innerHTML = window.FinancialOutputs.renderVATReport(vat201);
+      state._VAT = vat201;
+    }
+  } catch(e) {
+    el.innerHTML = `<div class="info-box red">Error: ${escH(e.message)}</div>`;
+  }
+}
+
+async function generateFullPack() {
+  showLoading('Building financial pack…');
+  try {
+    const pack = await FinancialOutputs.buildFullPack(
+      state.currentClient.id,
+      state.currentYear,
+      state.coa,
+      state.hideZeros
+    );
+    state.pack = pack;
+    if (pack.ok) {
+      toast('Financial pack ready. Use PDF or CSV to export.');
+    } else {
+      toast('Error: ' + pack.error, 'error');
+    }
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+  hideLoading();
+}
+
+function printReport() {
+  const c  = state.currentClient;
+  const rt = state.reportType;
+  const F  = window.FinancialOutputs;
+  const isC = c.entity_type === 'commission_earner';
+
+  const titles = {IS:'Income Statement',BS:'Balance Sheet',CF:'Cash Flow Statement',TB:'Trial Balance',VAT:'VAT Report'};
+  const title  = titles[rt] || rt;
+
+  let html = '';
+  if (rt==='IS' && isC && state._commissionIS) html = F.renderCommissionIS(state._commissionIS, state.hideZeros);
+  else if (rt==='IS' && state._IS) html = F.renderIS(state._IS, null, state.hideZeros);
+  else if (rt==='BS' && state._BS) html = F.renderBS(state._BS, null);
+  else if (rt==='CF' && state._CF) html = F.renderCF(state._CF);
+  else if (rt==='TB' && state._TB) html = F.renderTB(state._TB);
+  else if (rt==='VAT' && state._VAT) html = F.renderVATReport(state._VAT);
+  else { toast('Generate the report first.', 'warning'); return; }
+
+  window.Export.printStatement(title, c.name, state.currentYear, null, html);
+}
+
+function csvReport() {
+  const c  = state.currentClient;
+  const rt = state.reportType;
+  const fy = state.currentYear;
+  const isC = c.entity_type === 'commission_earner';
+
+  if (rt==='IS' && isC && state._commissionIS) { window.Export.exportCommissionISCSV(state._commissionIS, c.name, fy); return; }
+  if (rt==='IS' && state._IS) { window.Export.exportISCSV(state._IS, c.name, fy); return; }
+  if (rt==='BS' && state._BS) { window.Export.exportBSCSV(state._BS, c.name, fy); return; }
+  if (rt==='CF' && state._CF) { window.Export.exportCFCSV(state._CF, c.name, fy); return; }
+  if (rt==='TB' && state._TB) { window.Export.exportTBCSV(state._TB, c.name, fy); return; }
+  if (rt==='VAT' && state._VAT) { window.Export.exportVATCSV(state._VAT, c.name, fy); return; }
+  toast('Generate the report first.', 'warning');
+}
+
+// ── Settings tab ──────────────────────────────────────────────
+function renderSettingsTab() {
+  const c   = state.currentClient;
+  const coa = state.coa;
+
+  const coaGroups = ['income','cost_of_sales','expense','asset','liability','equity'];
+  const coaHTML = coaGroups.map(grp => {
+    const items = coa.filter(a => a.account_type === grp);
+    if (!items.length) return '';
+    return `<div style="margin-bottom:14px;">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:6px;">
+        ${grp.replace(/_/g,' ')}
+      </div>
+      ${items.map(a => `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.84rem;">
+        <span style="font-family:var(--font-mono);font-size:0.78rem;color:var(--muted);min-width:44px;">${a.account_code}</span>
+        <span style="flex:1;">${escH(a.account_name)}</span>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+
+  const vatSection = c.entity_type !== 'commission_earner' ? `
+    <div class="card">
+      <div class="card-title">VAT Settings</div>
+      ${c.vat_active
+        ? `<div class="info-box green"><strong>VAT active</strong> — ${escH(c.vat_number)} · ${escH({'monthly':'Monthly','two_month_odd':'2 Month (Odd)','two_month_even':'2 Month (Even)','two_month_odd_or_even':'2 Month (Odd or Even)','yearly':'Yearly'}[c.vat_period] || c.vat_period)} filing</div>
+           <button class="btn btn-ghost btn-sm" onclick="deactivateVAT()">Deactivate VAT</button>`
+        : `<div class="form-grid">
+             <div class="form-group">
+               <label class="form-label">VAT number</label>
+               <input class="form-control" id="set-vat-num" placeholder="4123456789"/>
+             </div>
+             <div class="form-group">
+               <label class="form-label">Filing period</label>
+               <select class="form-control" id="set-vat-period">
+                 <option value="">— Select —</option>
+                 <option value="monthly">Monthly</option>
+                 <option value="two_month_odd">2 Month Period (Odd) — Jan/Mar/May/Jul/Sep/Nov</option>
+                 <option value="two_month_even">2 Month Period (Even) — Feb/Apr/Jun/Aug/Oct/Dec</option>
+                 <option value="two_month_odd_or_even">2 Month Period (Odd or Even) — custom registration months</option>
+                 <option value="yearly">Yearly</option>
+               </select>
+             </div>
+           </div>
+           <div style="margin-top:12px;">
+             <button class="btn btn-teal btn-sm" onclick="activateVAT()">Activate VAT</button>
+           </div>`
+      }
+    </div>` : '';
+
+  return `<div>
+    ${vatSection}
+    <div class="card">
+      <div class="card-title">
+        Chart of Accounts
+        <button class="btn btn-primary btn-xs" style="margin-left:auto;" onclick="addCOAAccount()">+ Add Account</button>
+      </div>
+      ${coaHTML || '<div class="empty-state"><div class="empty-state-sub">No accounts yet.</div></div>'}
+    </div>
+    <div class="card" style="border-color:var(--red-border,#f5c2c7);">
+      <div class="card-title" style="color:var(--red,#dc3545);">Danger Zone</div>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="editClient('${c.id}')">Edit client details</button>
+        <button class="btn btn-sm" style="background:var(--red,#dc3545);color:#fff;border-color:var(--red,#dc3545);"
+          onclick="confirmClearAllData()">&#128465; Clear All Data</button>
+      </div>
+      <div style="margin-top:10px;font-size:0.78rem;color:var(--muted);">
+        <strong style="color:var(--red,#dc3545);">Clear All Data</strong> permanently removes all transactions, bank rules, and opening balances for this client and resets the VAT period. The client profile is kept. This cannot be undone.
+      </div>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// CLEAR ALL DATA — double-confirmation flow
+// ============================================================
+async function confirmClearAllData() {
+  const c = state.currentClient;
+  if (!c) return;
+
+  // First confirmation
+  const first = confirm(`Are you sure you want to clear all data for ${c.name}?\n\nThis will permanently delete:\n• All imported transactions\n• All bank rules\n• All opening balances\n• VAT period setting\n\nThe client profile will be kept.`);
+  if (!first) return;
+
+  // Second confirmation — must type DELETE
+  const typed = prompt('This cannot be undone.\n\nType DELETE (in capitals) to confirm:');
+  if (typed === null) return; // user cancelled
+  if (typed.trim() !== 'DELETE') {
+    toast('Cancelled — you must type DELETE exactly to confirm.', 'warning');
+    return;
+  }
+
+  showLoading('Clearing all data…');
+  try {
+    await window.DB.clearAllData(c.id);
+
+    // Reset in-memory state for this client
+    state.transactions   = [];
+    state.openingBalances = [];
+    state.rules          = [];
+    state.unclassified   = [];
+    state._IS            = null;
+    state._BS            = null;
+    state._CF            = null;
+    state._TB            = null;
+    state._VAT           = null;
+    state._commissionIS  = null;
+
+    // Refresh the client record so VAT period shows as reset
+    state.currentClient = await window.DB.Clients.get(c.id);
+
+    hideLoading();
+    toast(`All data cleared for ${c.name}.`, 'success');
+    state.clientTab = 'transactions';
+    renderClientDetail();
+  } catch (err) {
+    hideLoading();
+    toast('Error clearing data: ' + err.message, 'error');
+  }
+}
+
+// ============================================================
+// CLIENT CRUD
+// ============================================================
+function newClient() {
+  state._editingClientId = null;
+  document.getElementById('client-modal-title').textContent = 'New Client';
+  ['cf-name','cf-vat','cf-vatperiod'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('cf-type').value    = '';
+  document.getElementById('cf-yearend').value = '';
+  document.getElementById('cf-bank').value    = '';
+  onEntityTypeChange();
+  openModal('client-modal');
+}
+
+async function editClient(id) {
+  const c = state.clients.find(cl => cl.id === id) || await DB.Clients.get(id);
+  if (!c) return;
+  state._editingClientId = id;
+  document.getElementById('client-modal-title').textContent = 'Edit Client';
+  document.getElementById('cf-name').value    = c.name;
+  document.getElementById('cf-type').value    = c.entity_type;
+  document.getElementById('cf-yearend').value = c.financial_year_end;
+  document.getElementById('cf-bank').value    = c.bank;
+  document.getElementById('cf-vat').value     = c.vat_number  || '';
+  document.getElementById('cf-vatperiod').value = c.vat_period || '';
+  onEntityTypeChange();
+  openModal('client-modal');
+}
+
+function onEntityTypeChange() {
+  const type = document.getElementById('cf-type').value;
+  const isComp = type === 'company_cc' || type === 'company_pty';
+  document.getElementById('vat-group').style.display        = isComp ? '' : 'none';
+  document.getElementById('vat-period-group').style.display = isComp ? '' : 'none';
+}
+
+async function saveClient() {
+  const name    = document.getElementById('cf-name').value.trim();
+  const type    = document.getElementById('cf-type').value;
+  const yearend = document.getElementById('cf-yearend').value;
+  const bank    = document.getElementById('cf-bank').value;
+  const vatNum  = document.getElementById('cf-vat').value.trim();
+  const vatPer  = document.getElementById('cf-vatperiod').value;
+
+  if (!name)    { toast('Client name is required.','warning'); return; }
+  if (!type)    { toast('Entity type is required.','warning'); return; }
+  if (!yearend) { toast('Financial year end is required.','warning'); return; }
+  if (!bank)    { toast('Bank is required.','warning'); return; }
+
+  let vatActive = false;
+  if (vatNum) {
+    const v = window.VAT.activateVAT(vatNum, vatPer);
+    if (!v.ok) { toast(v.error, 'warning'); return; }
+    vatActive = true;
+  }
+
+  const payload = {
+    name, entity_type: type, financial_year_end: yearend, bank,
+    vat_number: vatNum || null,
+    vat_active: vatActive,
+    vat_period: vatPer || null,
+  };
+
+  showLoading('Saving…');
+  try {
+    if (state._editingClientId) {
+      await DB.Clients.update(state._editingClientId, payload);
+      toast('Client updated.');
+    } else {
+      const newClient = await DB.Clients.create(payload);
+      // Seed default COA for company clients
+      if (type !== 'commission_earner') {
+        await DB.COA.seedDefaults(newClient.id);
+      }
+      toast('Client created.');
+    }
+    closeModal('client-modal');
+    await loadDashboard();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+  hideLoading();
+}
+
+async function deleteClient(id) {
+  const c = state.clients.find(cl => cl.id === id);
+  if (!c) return;
+  if (!confirm(`Delete "${c.name}"? This will permanently remove all transactions, rules, and reports for this client.`)) return;
+  showLoading('Deleting…');
+  try {
+    await DB.Clients.delete(id);
+    toast('Client deleted.');
+    await loadDashboard();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+  hideLoading();
+}
+
+// ============================================================
+// IMPORT FLOW
+// ============================================================
+function _impBankSelectHTML(idx, selectedVal) {
+  const opts = [
+    ['', '— Bank —'],
+    ['absa', 'ABSA'],
+    ['standard_bank', 'Standard Bank'],
+    ['capitec', 'Capitec'],
+    ['nedbank', 'Nedbank'],
+  ].map(([v, l]) => `<option value="${v}"${v === selectedVal ? ' selected' : ''}>${escH(l)}</option>`).join('');
+  return `<select class="form-control" style="min-width:140px;" onchange="updateImportFileBank(${idx}, this.value)">${opts}</select>`;
+}
+
+function openImportModal() {
+  state.impFileList = [];
+  document.getElementById('imp-file').value = '';
+  document.getElementById('imp-year').value = state.currentYear || '';
+  document.getElementById('imp-period').value = '';
+  document.getElementById('imp-file-list').style.display = 'none';
+  document.getElementById('imp-file-list').innerHTML = '';
+  document.getElementById('imp-error').style.display = 'none';
+  document.getElementById('imp-confirm-btn').disabled = true;
+  document.getElementById('imp-vat-row').style.display =
+    state.currentClient?.vat_active ? '' : 'none';
+  openModal('import-modal');
+}
+
+function onImportFilesSelected(input) {
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+
+  const remaining = 10 - state.impFileList.length;
+  const toAdd = files.slice(0, remaining);
+  if (files.length > remaining) {
+    toast(`Maximum 10 files allowed. Added first ${remaining} of ${files.length} selected.`, 'warning');
+  }
+
+  const defaultBank = state.currentClient?.bank || '';
+  const startIdx = state.impFileList.length;
+  for (const file of toAdd) {
+    state.impFileList.push({
+      file,
+      bank:     defaultBank,
+      label:    file.name.replace(/\.csv$/i, ''),
+      rows:     null,
+      ok:       false,
+      error:    null,
+      count:    0,
+      warnings: [],
+    });
+  }
+
+  // Auto-parse files that already have a bank pre-filled
+  for (let i = startIdx; i < state.impFileList.length; i++) {
+    if (state.impFileList[i].bank) parseImportFileAtIndex(i);
+  }
+
+  renderImportFileList();
+  input.value = ''; // allow re-selecting same file
+}
+
+function parseImportFileAtIndex(idx) {
+  const entry = state.impFileList[idx];
+  if (!entry || !entry.bank) return;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = window.Parsers.parseCSV(entry.bank, e.target.result);
+    entry.ok       = result.ok;
+    entry.error    = result.ok ? null : result.error;
+    entry.rows     = result.ok ? result.rows : null;
+    entry.count    = result.ok ? result.rows.length : 0;
+    entry.warnings = result.warnings || [];
+    renderImportFileList();
+    updateImportConfirmButton();
+  };
+  reader.readAsText(entry.file);
+}
+
+function updateImportFileBank(idx, bank) {
+  if (!state.impFileList[idx]) return;
+  state.impFileList[idx].bank  = bank;
+  state.impFileList[idx].ok    = false;
+  state.impFileList[idx].rows  = null;
+  state.impFileList[idx].error = null;
+  if (bank) {
+    parseImportFileAtIndex(idx);
+  } else {
+    renderImportFileList();
+    updateImportConfirmButton();
+  }
+}
+
+function updateImportFileLabel(idx, label) {
+  if (!state.impFileList[idx]) return;
+  state.impFileList[idx].label = label;
+  updateImportConfirmButton();
+}
+
+function removeImportFile(idx) {
+  state.impFileList.splice(idx, 1);
+  renderImportFileList();
+  updateImportConfirmButton();
+}
+
+function renderImportFileList() {
+  const container = document.getElementById('imp-file-list');
+  if (!state.impFileList.length) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  const rows = state.impFileList.map((entry, idx) => {
+    let statusHtml;
+    if (entry.ok) {
+      const warnBit = entry.warnings.length
+        ? ` <span style="color:var(--amber);">(${entry.warnings.length} skipped)</span>` : '';
+      statusHtml = `<span style="color:var(--green);font-size:0.8rem;">&#10003; ${entry.count} rows${warnBit}</span>`;
+    } else if (entry.error) {
+      statusHtml = `<span style="color:var(--red);font-size:0.8rem;" title="${escH(entry.error)}">&#10007; ${escH(entry.error.slice(0, 40))}${entry.error.length > 40 ? '…' : ''}</span>`;
+    } else if (entry.bank) {
+      statusHtml = `<span style="color:var(--text-muted);font-size:0.8rem;">Parsing…</span>`;
+    } else {
+      statusHtml = `<span style="color:var(--text-muted);font-size:0.8rem;">Select a bank</span>`;
+    }
+
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:6px 8px;font-size:0.8rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escH(entry.file.name)}">${escH(entry.file.name)}</td>
+      <td style="padding:6px 8px;">${_impBankSelectHTML(idx, entry.bank)}</td>
+      <td style="padding:6px 8px;"><input class="form-control" style="min-width:150px;" placeholder="Account label" value="${escH(entry.label)}" oninput="updateImportFileLabel(${idx}, this.value)"/></td>
+      <td style="padding:6px 8px;">${statusHtml}</td>
+      <td style="padding:6px 8px;"><button class="btn btn-ghost btn-sm" onclick="removeImportFile(${idx})" title="Remove file">&#10005;</button></td>
+    </tr>`;
+  }).join('');
+
+  container.style.display = '';
+  container.innerHTML = `
+    <div style="font-size:0.85rem;font-weight:600;margin-bottom:8px;color:var(--text-muted);">
+      ${state.impFileList.length} file${state.impFileList.length !== 1 ? 's' : ''} selected
+      ${state.impFileList.length < 10 ? `<span style="font-weight:400;"> — <a href="#" onclick="document.getElementById('imp-file').click();return false;">add more</a></span>` : ''}
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="font-size:0.75rem;color:var(--text-muted);text-align:left;border-bottom:1px solid var(--border);">
+          <th style="padding:4px 8px;">File</th>
+          <th style="padding:4px 8px;">Bank</th>
+          <th style="padding:4px 8px;">Account label <span style="font-weight:400;">(used as source on each transaction)</span></th>
+          <th style="padding:4px 8px;">Status</th>
+          <th style="padding:4px 8px;"></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function updateImportConfirmButton() {
+  const hasReady = state.impFileList.some(e => e.ok && e.rows?.length);
+  document.getElementById('imp-confirm-btn').disabled = !hasReady;
+}
+
+function showImportError(msg) {
+  const el = document.getElementById('imp-error');
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+async function confirmImport() {
+  const year    = document.getElementById('imp-year').value.trim();
+  const period  = document.getElementById('imp-period').value.trim();
+  const vatType = document.getElementById('imp-vattype')?.value || 'none';
+
+  if (!year)   { toast('Financial year is required.', 'warning'); return; }
+  if (!period) { toast('Period is required.', 'warning'); return; }
+
+  const readyFiles = state.impFileList.filter(e => e.ok && e.rows?.length);
+  if (!readyFiles.length) { toast('No valid transactions to import.', 'warning'); return; }
+
+  for (const entry of readyFiles) {
+    if (!entry.label || !entry.label.trim()) {
+      toast('Please enter an account label for every file.', 'warning');
+      return;
+    }
+  }
+
+  showLoading('Importing…');
+  closeModal('import-modal');
+
+  let totalImported = 0, totalAuto = 0, totalUnmatched = 0;
+  const errors = [];
+
+  try {
+    for (const entry of readyFiles) {
+      const result = await window.RulesEngine.runImportPipeline({
+        parsedRows:    entry.rows,
+        clientId:      state.currentClient.id,
+        financialYear: year,
+        period,
+        sourceBank:    entry.label.trim(),
+        vatType,
+        vatActive:     state.currentClient.vat_active,
+      });
+
+      if (!result.ok) {
+        errors.push(`${entry.label}: ${result.error}`);
+      } else {
+        totalImported  += result.total;
+        totalAuto      += result.autoClassified;
+        totalUnmatched += result.unmatched;
+      }
+    }
+
+    if (errors.length) {
+      toast('Some files failed: ' + errors.join('; '), 'error');
+    } else {
+      const fileWord = readyFiles.length > 1 ? `${readyFiles.length} files — ` : '';
+      toast(`${fileWord}${totalImported} transactions imported. ${totalAuto} auto-classified, ${totalUnmatched} need review.`);
+    }
+
+    // Refresh client data
+    state.currentYear     = year;
+    state.transactions    = await DB.Transactions.listByYear(state.currentClient.id, year);
+    state.unclassified    = await DB.Transactions.listUnclassified(state.currentClient.id);
+    state.rules           = await DB.Rules.list(state.currentClient.id);
+    state.openingBalances = await DB.OpeningBalances.list(state.currentClient.id, year);
+    state.clientTab = 'transactions';
+    renderClientDetail();
+  } catch(e) {
+    toast('Import error: ' + e.message, 'error');
+  }
+  hideLoading();
+}
+
+// Drag and drop on import zone
+document.getElementById('import-zone').addEventListener('dragover', e => {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+});
+document.getElementById('import-zone').addEventListener('dragleave', e => {
+  e.currentTarget.classList.remove('drag-over');
+});
+document.getElementById('import-zone').addEventListener('drop', e => {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.csv'));
+  if (!files.length) { showImportError('Please drop CSV files only.'); return; }
+
+  const remaining = 10 - state.impFileList.length;
+  const toAdd = files.slice(0, remaining);
+  if (files.length > remaining) {
+    toast(`Maximum 10 files. Added first ${remaining}.`, 'warning');
+  }
+
+  const defaultBank = state.currentClient?.bank || '';
+  const startIdx = state.impFileList.length;
+  for (const file of toAdd) {
+    state.impFileList.push({
+      file,
+      bank:     defaultBank,
+      label:    file.name.replace(/\.csv$/i, ''),
+      rows:     null,
+      ok:       false,
+      error:    null,
+      count:    0,
+      warnings: [],
+    });
+  }
+
+  for (let i = startIdx; i < state.impFileList.length; i++) {
+    if (state.impFileList[i].bank) parseImportFileAtIndex(i);
+  }
+
+  renderImportFileList();
+});
+
+// ============================================================
+// OPENING BALANCES
+// ============================================================
+function openOBModal() {
+  state.obRows = null;
+  document.getElementById('ob-year').value    = state.currentYear || '';
+  document.getElementById('ob-preview').style.display = 'none';
+  document.getElementById('ob-error').style.display   = 'none';
+  document.getElementById('ob-confirm-btn').disabled  = true;
+  openModal('ob-modal');
+}
+
+function onOBFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = window.Parsers.parseOpeningBalancesCSV(e.target.result);
+    const errEl  = document.getElementById('ob-error');
+    const preEl  = document.getElementById('ob-preview');
+    if (!result.ok) {
+      errEl.textContent = result.error;
+      errEl.style.display = '';
+      preEl.style.display = 'none';
+      state.obRows = null;
+      document.getElementById('ob-confirm-btn').disabled = true;
+      return;
+    }
+    state.obRows = result.rows;
+    errEl.style.display = 'none';
+    preEl.style.display = '';
+    preEl.innerHTML = `<div class="import-preview">
+      <div class="import-preview-title">Preview — ${result.rows.length} accounts</div>
+      ${result.rows.slice(0,5).map(r=>
+        `<div style="font-size:0.78rem;padding:3px 0;border-bottom:1px solid var(--border);">
+          ${escH(r.account_code)} · ${escH(r.account_name)} · <strong>R ${Math.abs(r.amount).toLocaleString('en-ZA',{minimumFractionDigits:2})}</strong>
+        </div>`).join('')}
+    </div>`;
+    document.getElementById('ob-confirm-btn').disabled = false;
+  };
+  reader.readAsText(file);
+}
+
+async function confirmOBImport() {
+  const year = document.getElementById('ob-year').value.trim();
+  if (!year)        { toast('Financial year is required.','warning'); return; }
+  if (!state.obRows){ toast('No data to import.','warning'); return; }
+
+  showLoading('Saving opening balances…');
+  closeModal('ob-modal');
+  try {
+    await DB.OpeningBalances.replace(state.currentClient.id, year, state.obRows);
+    state.openingBalances = await DB.OpeningBalances.list(state.currentClient.id, year);
+    toast('Opening balances saved.');
+    renderClientDetail();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+  hideLoading();
+}
+
+function downloadOBTemplate() {
+  const rows = [
+    ['account_code','account_name','debit','credit'],
+    ['4001','Sales / Revenue','','150000.00'],
+    ['6004','Bank Charges','500.00',''],
+    ['1001','Bank Account','149500.00',''],
+  ];
+  const csv  = rows.map(r=>r.join(',')).join('\r\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download='opening-balances-template.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// VAT SETTINGS
+// ============================================================
+async function activateVAT() {
+  const vatNum = document.getElementById('set-vat-num')?.value?.trim() || '';
+  const vatPer = document.getElementById('set-vat-period')?.value || '';
+  const result = window.VAT.activateVAT(vatNum, vatPer);
+  if (!result.ok) { toast(result.error,'warning'); return; }
+  showLoading('Saving…');
+  try {
+    await DB.Clients.update(state.currentClient.id, result.update);
+    state.currentClient = await DB.Clients.get(state.currentClient.id);
+    toast('VAT activated.');
+    renderClientDetail();
+  } catch(e) { toast(e.message,'error'); }
+  hideLoading();
+}
+
+async function deactivateVAT() {
+  if (!confirm('Deactivate VAT for this client? VAT amounts on existing transactions will be retained.')) return;
+  showLoading('Saving…');
+  try {
+    await DB.Clients.update(state.currentClient.id, {vat_active:false,vat_number:null,vat_period:null});
+    state.currentClient = await DB.Clients.get(state.currentClient.id);
+    toast('VAT deactivated.');
+    renderClientDetail();
+  } catch(e) { toast(e.message,'error'); }
+  hideLoading();
+}
+
+// ============================================================
+// COA
+// ============================================================
+function addCOAAccount() {
+  const code = prompt('Account code (e.g. 6022):');
+  if (!code) return;
+  const name = prompt('Account name:');
+  if (!name) return;
+  const types = ['income','cost_of_sales','expense','asset','liability','equity'];
+  const type  = prompt('Account type:\n' + types.join(', '));
+  if (!types.includes(type)) { toast('Invalid account type.','warning'); return; }
+  showLoading('Saving…');
+  DB.COA.create({ client_id: state.currentClient.id, account_code: code.trim(), account_name: name.trim(), account_type: type })
+    .then(async () => {
+      state.coa = await DB.COA.list(state.currentClient.id);
+      toast('Account added.');
+      renderClientDetail();
+    })
+    .catch(e => toast(e.message,'error'))
+    .finally(hideLoading);
+}
+
+// ============================================================
+// MODAL HELPERS
+// ============================================================
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+
+// ============================================================
+// UTILITY
+// ============================================================
+function fmtDate(isoDate) {
+  if (!isoDate) return '';
+  const [y,m,d] = String(isoDate).split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function entityLabel(type) {
+  return { company_cc:'CC', company_pty:'Pty Ltd', commission_earner:'Commission' }[type] || type;
+}
+
+function bankLabel(bank) {
+  return { absa:'ABSA', standard_bank:'Standard Bank', capitec:'Capitec', nedbank:'Nedbank' }[bank] || bank;
+}
+
+// ============================================================
+// INIT
+// ============================================================
+initPIN();
+</script>
+</body>
+</html>
