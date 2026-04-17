@@ -1053,7 +1053,8 @@ async function generateReport() {
       const np   = isR.ok ? isR.data.netProfit : 0;
       const r    = F.buildBalanceSheet(txs, coa, ob, np, hz);
       let html   = r.ok ? F.renderBS(r.data, _currentLabel, _priorLabel) : `<div class="info-box red">${escH(r.error)}</div>`;
-      if (r.ok && !r.balanced) html += `<div class="info-box amber" style="margin-top:12px;"><strong>Balance sheet is out by ${F.fmt(r.diff)}</strong> — check for unclassified transactions or missing opening balances.</div>`;
+      if (r.ok && !r.balanced)    html += `<div class="info-box amber" style="margin-top:12px;"><strong>Current year balance sheet is out by ${F.fmt(r.diff)}</strong> — check for unclassified transactions or missing opening balances.</div>`;
+      if (r.ok && !r.data.balancedCom && r.data.priorYearHasData) html += `<div class="info-box amber" style="margin-top:8px;"><strong>Prior year column is out by ${F.fmt(r.data.diffCom)}</strong> — check imported opening balances.</div>`;
       el.innerHTML = html;
       state._BS = r.ok ? r.data : null;
     } else if (rt === 'CF') {

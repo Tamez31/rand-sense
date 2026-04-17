@@ -284,11 +284,18 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
     const liabCom          = r2(liabLines.reduce((s, l) => s + l.comparative, 0));
     const equityCom        = r2(equityLines.reduce((s, l) => s + l.comparative, 0));
 
-    // Balance check: Assets must equal Liabilities + Equity
-    const diff = r2(Math.abs(totalAssets - totalLiabEquity));
+    // Current year balance check: Assets must equal Liabilities + Equity
+    const diff    = r2(Math.abs(totalAssets - totalLiabEquity));
     const balanced = diff <= 0.02; // allow 2c rounding tolerance
 
-    const comparativeAvailable = (openingBalances || []).length > 0;
+    // Prior year balance check (independent — the comparative column must also balance)
+    const totalLiabEquityCom = r2(liabCom + equityCom);
+    const diffCom            = r2(Math.abs(assetsCom - totalLiabEquityCom));
+    const balancedCom        = diffCom <= 0.02;
+
+    // The prior year column always shows — if no OB imported, dashes are displayed
+    const priorYearHasData   = (openingBalances || []).length > 0;
+    const comparativeAvailable = true; // always render two columns
 
     return {
       ok: true,
@@ -301,8 +308,10 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
         totalAssets,      assetsCom,
         totalLiabilities, liabCom,
         totalEquity,      equityCom,
-        totalLiabEquity,
+        totalLiabEquity,  totalLiabEquityCom,
+        balancedCom,      diffCom,
         comparativeAvailable,
+        priorYearHasData,
       },
     };
   } catch (err) {
@@ -865,23 +874,25 @@ function renderBS(data, currentLabel, priorLabel) {
           totalAssets, assetsCom,
           totalLiabilities, liabCom,
           totalEquity, equityCom,
-          totalLiabEquity, comparativeAvailable } = data;
+          totalLiabEquity, totalLiabEquityCom,
+          balancedCom, diffCom,
+          priorYearHasData } = data;
 
   const curLbl   = currentLabel || 'Current year';
   const priorLbl = priorLabel   || 'Prior year';
-  const showComp = comparativeAvailable;
-  const col = showComp
-    ? `<div class="stmt-col-heads"><span>Description</span><span>${priorLbl}</span><span>${curLbl}</span></div>`
-    : `<div class="stmt-col-heads"><span>Description</span><span></span><span>${curLbl}</span></div>`;
 
-  const row = (label, cur, prior) => {
-    const priorCell = showComp ? `<td class="amt">${prior !== undefined ? fmt(prior) : ''}</td>` : '<td class="amt"></td>';
-    return `<tr><td class="label indent">${label}</td>${priorCell}<td class="amt">${fmt(cur)}</td></tr>`;
-  };
-  const subtotal = (label, cur, prior, cls = 'subtotal') => {
-    const priorCell = showComp ? `<td class="amt">${prior !== undefined ? fmt(prior) : ''}</td>` : '<td class="amt"></td>';
-    return `<tr class="${cls}"><td class="label">${label}</td>${priorCell}<td class="amt">${fmt(cur)}</td></tr>`;
-  };
+  // Always show two columns — prior year shows dashes when no OB imported
+  const col = `<div class="stmt-col-heads"><span>Description</span><span>${priorLbl}</span><span>${curLbl}</span></div>`;
+
+  // When no OB data, prior year cells show a dash instead of R 0.00
+  const priorFmt = v => priorYearHasData ? fmt(v) : '—';
+
+  const row = (label, cur, prior) =>
+    `<tr><td class="label indent">${label}</td><td class="amt">${priorFmt(prior)}</td><td class="amt">${fmt(cur)}</td></tr>`;
+
+  const subtotal = (label, cur, prior, cls = 'subtotal') =>
+    `<tr class="${cls}"><td class="label">${label}</td><td class="amt">${priorFmt(prior)}</td><td class="amt">${fmt(cur)}</td></tr>`;
+
   const secHead = l => `<tr class="section-head"><td colspan="3">${l}</td></tr>`;
 
   let html = `<div class="statement-wrap">${col}<table class="stmt-table">`;
@@ -898,7 +909,7 @@ function renderBS(data, currentLabel, priorLabel) {
   equityLines.forEach(l => { html += row(l.name, l.current, l.comparative); });
   html += subtotal('Total Equity', totalEquity, equityCom);
 
-  html += subtotal('Total Liabilities & Equity', totalLiabEquity, r2(liabCom + equityCom), 'total');
+  html += subtotal('Total Liabilities & Equity', totalLiabEquity, totalLiabEquityCom, 'total');
 
   html += '</table></div>';
   return html;

@@ -197,28 +197,23 @@ function exportISCSV(data, clientName, financialYear) {
 function exportBSCSV(data, clientName, financialYear) {
   const { assetLines, liabLines, equityLines,
           totalAssets, totalLiabilities, totalEquity, totalLiabEquity,
-          comparativeAvailable } = data;
+          priorYearHasData } = data;
 
-  const header = comparativeAvailable
-    ? ['Account', 'Description', 'Prior Year (R)', 'Current Year (R)']
-    : ['Account', 'Description', 'Current Year (R)'];
+  // Always export two columns; when no prior year OB, comparative shows blank
+  const prior = v => priorYearHasData ? fmtNum(v) : '—';
 
   const rows = [
     [`${clientName} — Balance Sheet — FY${financialYear} — Generated ${todayDMY()}`],
     [],
-    header,
+    ['Account', 'Description', 'Prior Year (R)', 'Current Year (R)'],
   ];
 
   const addSection = (label, lines, total, totalCom) => {
     rows.push(['', label.toUpperCase(), '', '']);
     lines.forEach(l => {
-      rows.push(comparativeAvailable
-        ? [l.code, l.name, fmtNum(l.comparative), fmtNum(l.current)]
-        : [l.code, l.name, fmtNum(l.current)]);
+      rows.push([l.code, l.name, prior(l.comparative), fmtNum(l.current)]);
     });
-    rows.push(comparativeAvailable
-      ? ['', `Total ${label}`, fmtNum(totalCom), fmtNum(total)]
-      : ['', `Total ${label}`, fmtNum(total)]);
+    rows.push(['', `Total ${label}`, prior(totalCom), fmtNum(total)]);
     rows.push([]);
   };
 
@@ -226,9 +221,7 @@ function exportBSCSV(data, clientName, financialYear) {
   addSection('Liabilities', liabLines,  totalLiabilities, data.liabCom);
   addSection('Equity',      equityLines,totalEquity,      data.equityCom);
 
-  rows.push(comparativeAvailable
-    ? ['', 'TOTAL LIABILITIES & EQUITY', fmtNum(data.liabCom + data.equityCom), fmtNum(totalLiabEquity)]
-    : ['', 'TOTAL LIABILITIES & EQUITY', fmtNum(totalLiabEquity)]);
+  rows.push(['', 'TOTAL LIABILITIES & EQUITY', prior(data.totalLiabEquityCom), fmtNum(totalLiabEquity)]);
 
   downloadFile(toCSV(rows), `BS_${safeFilename(clientName)}_FY${financialYear}.csv`, 'text/csv');
 }
