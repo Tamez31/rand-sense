@@ -573,6 +573,105 @@ function exportEnhancedVATCSV(data, clientName, financialYear) {
   downloadFile(toCSV(rows), `VAT_${safeFilename(clientName)}_FY${financialYear}_${safeFilename(periodLabel)}.csv`, 'text/csv');
 }
 
+// ── Unclassified transactions — client review PDF ─────────────
+// Exports all transactions without an account code as a printable
+// PDF table with a blank "Client Response" column.
+// Grouped by month, sorted date ascending.
+function exportUnclassifiedPDF(transactions, clientName, financialYear) {
+  const unc = (transactions || []).filter(t => !t.account_code);
+
+  if (unc.length === 0) {
+    // Caller should prevent this, but guard just in case
+    alert('All transactions are classified — nothing to export.');
+    return;
+  }
+
+  // Sort ascending by date
+  const sorted = [...unc].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  // Group by period (stored on the transaction) or derive YYYY-MM from date
+  const monthGroups = new Map();
+  for (const t of sorted) {
+    const key = t.period || (t.date ? t.date.slice(0, 7) : 'Unknown');
+    if (!monthGroups.has(key)) monthGroups.set(key, []);
+    monthGroups.get(key).push(t);
+  }
+
+  // ── Styles ─────────────────────────────────────────────────
+  const tbl  = 'width:100%;border-collapse:collapse;margin-bottom:20px;font-size:9.5pt;';
+  const th   = 'padding:6px 8px;text-align:left;background:#eeeeee;border:1px solid #bbb;font-weight:700;font-size:8.5pt;';
+  const td   = 'padding:6px 8px;border:1px solid #ddd;vertical-align:top;';
+  const tdR  = 'padding:6px 8px;border:1px solid #ddd;text-align:right;font-family:monospace;vertical-align:top;';
+  const tdBl = 'padding:6px 8px;border:1px solid #ddd;min-width:130px;';
+  const mhd  = 'padding:5px 8px;background:#dddddd;font-weight:700;font-size:8.5pt;text-transform:uppercase;letter-spacing:0.05em;border:1px solid #bbb;';
+
+  const _fmtDate = iso => {
+    if (!iso) return '';
+    const [y, m, d] = String(iso).split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const _fmtAmt = n => {
+    const abs = Math.abs(n || 0);
+    const s   = abs.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (n < 0 ? '(' : '') + 'R\u00a0' + s + (n < 0 ? ')' : '');
+  };
+
+  // ── Summary banner ─────────────────────────────────────────
+  let body = `
+    <div style="margin-bottom:16px;padding:10px 14px;background:#fff8e1;border:1px solid #f0c040;border-radius:4px;font-size:9.5pt;">
+      <strong>${unc.length} transaction${unc.length !== 1 ? 's' : ''} require${unc.length === 1 ? 's' : ''} your attention.</strong>
+      Please complete the <em>Client Response</em> column for each item and return this document.
+    </div>`;
+
+  // ── Table ──────────────────────────────────────────────────
+  body += `<table style="${tbl}">
+    <thead>
+      <tr>
+        <th style="${th}width:11%;">Date</th>
+        <th style="${th}width:44%;">Description</th>
+        <th style="${th}width:14%;text-align:right;">Amount</th>
+        <th style="${th}width:31%;">Client Response</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  for (const [monthKey, txs] of monthGroups) {
+    body += `<tr><td colspan="4" style="${mhd}">${escapeHTML(monthKey)}</td></tr>`;
+    for (const t of txs) {
+      const amt    = t.amount || 0;
+      const color  = amt >= 0 ? 'color:#1a7a30;' : 'color:#c0392b;';
+      body += `<tr>
+        <td style="${td}">${_fmtDate(t.date)}</td>
+        <td style="${td}">${escapeHTML(t.description)}</td>
+        <td style="${tdR}${color}">${_fmtAmt(amt)}</td>
+        <td style="${tdBl}"></td>
+      </tr>`;
+    }
+  }
+
+  body += `</tbody></table>`;
+
+  // ── Footer instructions ────────────────────────────────────
+  body += `
+    <div style="margin-top:24px;padding:12px 14px;background:#f5f5f5;border:1px solid #ddd;border-radius:4px;font-size:9pt;color:#333;line-height:1.6;">
+      <strong>Instructions to client:</strong> Please complete the <em>Client Response</em> column for each
+      transaction listed above. Indicate what each item relates to — for example:
+      &ldquo;telephone expense&rdquo;, &ldquo;loan repayment&rdquo;, &ldquo;owner&rsquo;s drawings&rdquo;, &ldquo;sale of goods&rdquo;, etc.
+      Return this document so we can finalise your financial statements.
+      <br/><br/>
+      <em>Prepared by: [Practice Name]</em>
+    </div>`;
+
+  printStatement(
+    'Unclassified Transactions \u2014 Client Response Required',
+    clientName,
+    financialYear,
+    null,
+    body
+  );
+}
+
 // ── Tax Tjom handoff CSV ──────────────────────────────────────
 // Column structure matches Tax Tjom's import expectations.
 // Exports commission earner IS in Tax Tjom-compatible format.
@@ -620,6 +719,7 @@ function exportTaxTjomHandoff(commissionISData, clientName, financialYear) {
 window.Export = {
   printStatement,
   printFullPack,
+  exportUnclassifiedPDF,
   exportISCSV,
   exportBSCSV,
   exportCFCSV,

@@ -619,6 +619,7 @@ function renderTransactionsList() {
       </div>
       <div class="btn-row" style="margin-bottom:16px;">
         <button class="btn btn-dark btn-sm" onclick="openClassifyQueue()">Classify Now &#8594;</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportUnclassifiedForClient()">&#128196; Export for Client Review</button>
       </div>
       ${renderTxTable(all)}`;
   }
@@ -678,14 +679,37 @@ function openClassifyQueue() {
   renderClassifyQueue();
 }
 
+function exportUnclassifiedForClient() {
+  const unc = state.unclassified;
+  if (unc.length === 0) {
+    toast('All transactions are classified — nothing to export.', 'info');
+    return;
+  }
+  window.Export.exportUnclassifiedPDF(unc, state.currentClient.name, state.currentYear);
+}
+
 function renderClassifyQueue() {
   const unc = state.unclassified;
   const c   = state.currentClient;
-  const isCommission = c.entity_type === 'commission_earner';
+
+  const exportBtn = `<button class="btn btn-ghost btn-sm" onclick="exportUnclassifiedForClient()">&#128196; Export for Client Review</button>`;
 
   if (unc.length === 0) {
-    state.clientTab = 'transactions';
-    renderClientDetail();
+    setContent(`
+      <div>
+        <button class="back-btn" onclick="setClientTab('transactions')">&#8592; Back to transactions</button>
+        <div class="page-header" style="margin-top:8px;">
+          <div class="page-title">Classify Transactions <small>0 remaining</small></div>
+          <div>${exportBtn}</div>
+        </div>
+        <div class="card">
+          <div class="empty-state">
+            <div class="empty-state-icon">&#10003;</div>
+            <div class="empty-state-title">All transactions are classified</div>
+            <div class="empty-state-sub">Nothing to export — no unclassified transactions for this year.</div>
+          </div>
+        </div>
+      </div>`);
     return;
   }
 
@@ -712,6 +736,7 @@ function renderClassifyQueue() {
         <div class="page-title">Classify Transactions
           <small>${unc.length} remaining</small>
         </div>
+        <div>${exportBtn}</div>
       </div>
       <div class="card">
         <div class="card-title">Unclassified transactions</div>
