@@ -20,6 +20,19 @@
 
 const r2 = n => Math.round(((n || 0) + Number.EPSILON) * 100) / 100;
 
+// ── Year-end label ────────────────────────────────────────────
+// Converts a full month name + 4-digit year into a "YE MMM YYYY" label.
+// e.g. yearEndLabel('February', '2025') → 'YE Feb 2025'
+const _MONTH_ABBR = {
+  january:'Jan', february:'Feb', march:'Mar',    april:'Apr',
+  may:'May',     june:'Jun',     july:'Jul',      august:'Aug',
+  september:'Sep', october:'Oct', november:'Nov', december:'Dec',
+};
+function yearEndLabel(monthName, year) {
+  const abbr = _MONTH_ABBR[(monthName || '').toLowerCase()] || (monthName || '').slice(0, 3);
+  return `YE ${abbr} ${year}`;
+}
+
 // ── ZAR formatter ─────────────────────────────────────────────
 function fmt(n) {
   const abs = Math.abs(n || 0);
@@ -786,7 +799,7 @@ async function buildFullPack(clientId, financialYear, coa, hideZeros) {
 // Each renderer returns an HTML string for injection into the DOM.
 // ============================================================
 
-function renderIS(data, comparativeLabel, hideZeros) {
+function renderIS(data, currentLabel, priorLabel, hideZeros) {
   const { incomeLines, cosLines, expLines,
           revenue, revComparative,
           totalCOS, cosCom,
@@ -795,10 +808,12 @@ function renderIS(data, comparativeLabel, hideZeros) {
           netProfit, netProfitCom,
           comparativeAvailable } = data;
 
+  const curLbl  = currentLabel || 'Current year';
+  const priorLbl = priorLabel  || 'Prior year';
   const showComp = comparativeAvailable;
   const col = showComp
-    ? `<div class="stmt-col-heads"><span>Description</span><span>${comparativeLabel || 'Prior year'}</span><span>Current year</span></div>`
-    : `<div class="stmt-col-heads"><span>Description</span><span></span><span>Current year</span></div>`;
+    ? `<div class="stmt-col-heads"><span>Description</span><span>${priorLbl}</span><span>${curLbl}</span></div>`
+    : `<div class="stmt-col-heads"><span>Description</span><span></span><span>${curLbl}</span></div>`;
 
   const row = (label, cur, prior, cls = '') => {
     const priorCell = showComp ? `<td class="amt">${prior !== undefined ? fmt(prior) : ''}</td>` : '<td class="amt"></td>';
@@ -845,17 +860,19 @@ function renderIS(data, comparativeLabel, hideZeros) {
   return html;
 }
 
-function renderBS(data, comparativeLabel) {
+function renderBS(data, currentLabel, priorLabel) {
   const { assetLines, liabLines, equityLines,
           totalAssets, assetsCom,
           totalLiabilities, liabCom,
           totalEquity, equityCom,
           totalLiabEquity, comparativeAvailable } = data;
 
+  const curLbl   = currentLabel || 'Current year';
+  const priorLbl = priorLabel   || 'Prior year';
   const showComp = comparativeAvailable;
   const col = showComp
-    ? `<div class="stmt-col-heads"><span>Description</span><span>${comparativeLabel || 'Prior year'}</span><span>Current year</span></div>`
-    : `<div class="stmt-col-heads"><span>Description</span><span></span><span>Current year</span></div>`;
+    ? `<div class="stmt-col-heads"><span>Description</span><span>${priorLbl}</span><span>${curLbl}</span></div>`
+    : `<div class="stmt-col-heads"><span>Description</span><span></span><span>${curLbl}</span></div>`;
 
   const row = (label, cur, prior) => {
     const priorCell = showComp ? `<td class="amt">${prior !== undefined ? fmt(prior) : ''}</td>` : '<td class="amt"></td>';
@@ -887,17 +904,19 @@ function renderBS(data, comparativeLabel) {
   return html;
 }
 
-function renderCF(data) {
+function renderCF(data, currentLabel, priorLabel) {
   const { opLines, operating, invLines, investing, finLines, financing,
           netMovement, bankOB, closingBankBalance,
           priorOperating, priorInvesting, priorFinancing, priorNetMovement,
           priorYearAvailable } = data;
 
+  const curLbl   = currentLabel || 'Current year';
+  const priorLbl = priorLabel   || 'Prior year';
   const showPrior = !!priorYearAvailable;
 
   const colHead = showPrior
-    ? `<div class="stmt-col-heads"><span>Description</span><span>Prior year</span><span>Current year</span></div>`
-    : `<div class="stmt-col-heads"><span>Description</span><span></span><span>Amount</span></div>`;
+    ? `<div class="stmt-col-heads"><span>Description</span><span>${priorLbl}</span><span>${curLbl}</span></div>`
+    : `<div class="stmt-col-heads"><span>Description</span><span></span><span>${curLbl}</span></div>`;
 
   // Detail lines (current year only — prior year section totals are shown as subtotals)
   const row = (label, amt, indent = false) =>
@@ -940,7 +959,7 @@ function renderCF(data) {
   return html;
 }
 
-function renderTB(data) {
+function renderTB(data, currentLabel, priorLabel) {
   const {
     incomeLines, cosLines, expLines,
     grossIncome, totalCOS, grossProfit, totalExpenses, netProfit,
@@ -953,6 +972,8 @@ function renderTB(data) {
     priorYearAvailable,
   } = data;
 
+  const curLbl   = currentLabel || 'Current year';
+  const priorLbl = priorLabel   || 'Prior year';
   const showPrior = !!priorYearAvailable;
   const cols      = showPrior ? 5 : 3;
 
@@ -963,15 +984,15 @@ function renderTB(data) {
   const thead = showPrior
     ? `<thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
         <th class="label" style="padding:6px 10px;">Account</th>
-        <th class="amt"   style="padding:6px 10px;">Prior DR</th>
-        <th class="amt"   style="padding:6px 10px;">Prior CR</th>
-        <th class="amt"   style="padding:6px 10px;">Curr DR</th>
-        <th class="amt"   style="padding:6px 10px;">Curr CR</th>
+        <th class="amt"   style="padding:6px 10px;">${priorLbl} DR</th>
+        <th class="amt"   style="padding:6px 10px;">${priorLbl} CR</th>
+        <th class="amt"   style="padding:6px 10px;">${curLbl} DR</th>
+        <th class="amt"   style="padding:6px 10px;">${curLbl} CR</th>
       </tr></thead>`
     : `<thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
         <th class="label" style="padding:6px 10px;">Account</th>
-        <th class="amt"   style="padding:6px 10px;">Debit</th>
-        <th class="amt"   style="padding:6px 10px;">Credit</th>
+        <th class="amt"   style="padding:6px 10px;">${curLbl} DR</th>
+        <th class="amt"   style="padding:6px 10px;">${curLbl} CR</th>
       </tr></thead>`;
 
   // Individual account line
@@ -1226,7 +1247,7 @@ function renderVATReport(vat201) {
 // ENHANCED VAT REPORT RENDERER
 // Renders a full line-by-line VAT report from buildEnhancedVATReport output.
 // ============================================================
-function renderEnhancedVATReport(data) {
+function renderEnhancedVATReport(data, currentLabel) {
   const {
     incomeLines, expenseLines,
     totalIncomeInclusive, totalOutputVAT, totalIncomeExclusive,
@@ -1234,10 +1255,11 @@ function renderEnhancedVATReport(data) {
     netVAT, isRefund,
   } = data;
 
+  const periodLbl = currentLabel || 'Current year';
   const secHead = l => `<tr class="section-head"><td colspan="4">${l}</td></tr>`;
   const colHead = `
     <div class="stmt-col-heads" style="grid-template-columns:1fr repeat(3,120px);">
-      <span>Description</span>
+      <span>${periodLbl} — Transactions</span>
       <span style="text-align:right;">Inclusive (R)</span>
       <span style="text-align:right;">VAT (R)</span>
       <span style="text-align:right;">Exclusive (R)</span>
@@ -1335,4 +1357,5 @@ window.FinancialOutputs = {
   fmt,
   r2,
   netByAccount,
+  yearEndLabel,
 };

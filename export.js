@@ -94,23 +94,28 @@ function printStatement(title, clientName, financialYear, period, bodyHTML) {
 }
 
 // Print the full financial pack (all statements on one print job).
-function printFullPack(clientName, financialYear, pack) {
+// financialYearEnd: client's financial year end month name (e.g. 'February')
+function printFullPack(clientName, financialYear, pack, financialYearEnd) {
   const { IS, BS, CF, TB, VAT } = pack;
   const F = window.FinancialOutputs;
+
+  const priorYear    = String(parseInt(financialYear, 10) - 1);
+  const currentLabel = F.yearEndLabel(financialYearEnd, financialYear);
+  const priorLabel   = F.yearEndLabel(financialYearEnd, priorYear);
 
   let sections = [];
 
   if (IS && IS.ok) {
-    sections.push(`<h2 style="font-size:12pt;font-weight:700;margin:28px 0 10px;page-break-before:auto;">Income Statement</h2>${F.renderIS(IS.data, null, false)}`);
+    sections.push(`<h2 style="font-size:12pt;font-weight:700;margin:28px 0 10px;page-break-before:auto;">Income Statement</h2>${F.renderIS(IS.data, currentLabel, priorLabel, false)}`);
   }
   if (BS && BS.ok) {
-    sections.push(`<h2 style="font-size:12pt;font-weight:700;margin:28px 0 10px;page-break-before:always;">Balance Sheet</h2>${F.renderBS(BS.data, null)}`);
+    sections.push(`<h2 style="font-size:12pt;font-weight:700;margin:28px 0 10px;page-break-before:always;">Balance Sheet</h2>${F.renderBS(BS.data, currentLabel, priorLabel)}`);
   }
   if (CF && CF.ok) {
-    sections.push(`<h2 style="font-size:12pt;font-weight:700;margin:28px 0 10px;page-break-before:always;">Cash Flow Statement</h2>${F.renderCF(CF.data)}`);
+    sections.push(`<h2 style="font-size:12pt;font-weight:700;margin:28px 0 10px;page-break-before:always;">Cash Flow Statement</h2>${F.renderCF(CF.data, currentLabel, priorLabel)}`);
   }
   if (TB && TB.ok) {
-    sections.push(`<h2 style="font-size:12pt;font-weight:700;margin:28px 0 10px;page-break-before:always;">Trial Balance</h2>${F.renderTB(TB.data)}`);
+    sections.push(`<h2 style="font-size:12pt;font-weight:700;margin:28px 0 10px;page-break-before:always;">Trial Balance</h2>${F.renderTB(TB.data, currentLabel, priorLabel)}`);
   }
   if (VAT && VAT.outputVAT + VAT.inputVAT > 0) {
     const vat201 = window.VAT.buildVAT201(VAT, clientName, financialYear, null);
