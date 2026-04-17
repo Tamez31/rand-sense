@@ -1026,7 +1026,9 @@ async function generateReport() {
       el.innerHTML = r.ok ? F.renderCF(r.data) : `<div class="info-box red">${escH(r.error)}</div>`;
       state._CF = r.ok ? r.data : null;
     } else if (rt === 'TB') {
-      const r = F.buildTrialBalance(txs, coa, hz);
+      const isR2 = F.buildIncomeStatement(txs, coa, [], false);
+      const np2  = isR2.ok ? isR2.data.netProfit : 0;
+      const r    = F.buildTrialBalance(txs, coa, hz, ob, np2);
       el.innerHTML = r.ok ? F.renderTB(r.data) : `<div class="info-box red">${escH(r.error)}</div>`;
       state._TB = r.ok ? r.data : null;
     } else if (rt === 'VAT') {

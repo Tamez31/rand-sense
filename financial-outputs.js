@@ -179,6 +179,24 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
     // Bank account: net of all transactions (all account types flow through bank)
     const bankTxNet = r2(transactions.reduce((s, t) => s + (t.amount || 0), 0));
 
+    // Identify the retained earnings account by code or name
+    const _isRE = a =>
+      a.code === '3002' || (a.name || '').toLowerCase().includes('retained earnings');
+
+    // Prior retained earnings = opening balance for the RE account (default 0)
+    const reObAmount = (() => {
+      for (const [code, ob] of obMap.entries()) {
+        const coaEntry = coa.find(a => a.account_code === code);
+        if (coaEntry && coaEntry.account_type === 'equity' &&
+            _isRE({ code, name: coaEntry.account_name })) {
+          return r2(ob.amount);
+        }
+      }
+      return 0;
+    })();
+    // Auto-calculated retained earnings = prior retained earnings + current year net profit
+    const computedRetainedEarnings = r2(reObAmount + netProfit);
+
     const buildLines = (type, invertSign) =>
       merged
         .filter(a => a.type === type)
@@ -188,6 +206,9 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
           if (a.code === '1001' || a.name.toLowerCase().includes('bank account')) {
             const obBankBalance = a.openingBalance || 0;
             current = r2(obBankBalance + bankTxNet);
+          } else if (a.type === 'equity' && _isRE(a)) {
+            // Retained earnings: auto-calculated as prior balance + current year net profit
+            current = computedRetainedEarnings;
           } else {
             // All other balance sheet accounts: opening balance + net movement
             current = r2(a.openingBalance + (invertSign ? -a.net : a.net));
@@ -197,21 +218,25 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
         })
         .filter(a => !hideZeros || a.current !== 0 || a.comparative !== 0);
 
-    const assetLines     = buildLines('asset',     false);
-    const liabLines      = buildLines('liability', false);
-    const equityLines    = buildLines('equity',    false);
+    const assetLines  = buildLines('asset',     false);
+    const liabLines   = buildLines('liability', false);
+    const equityLines = buildLines('equity',    false);
 
-    // Add current year net profit to retained earnings / equity
-    // We inject it as a synthetic line so it shows on the face
-    const retainedLine = {
-      code:        'NET-PROFIT',
-      name:        netProfit >= 0 ? 'Net profit for the year' : 'Net loss for the year',
-      type:        'equity',
-      current:     r2(netProfit),
-      comparative: 0,
-      synthetic:   true,
-    };
-    if (netProfit !== 0) equityLines.push(retainedLine);
+    // If no retained earnings account exists in the COA, inject a synthetic line
+    // so net profit still appears on the face of the Balance Sheet
+    const hasRE = merged.some(a => a.type === 'equity' && _isRE(a));
+    if (!hasRE && (computedRetainedEarnings !== 0 || !hideZeros)) {
+      equityLines.push({
+        code:          'RE-COMPUTED',
+        name:          'Retained Earnings',
+        type:          'equity',
+        net:           0,
+        openingBalance: reObAmount,
+        current:       computedRetainedEarnings,
+        comparative:   reObAmount,
+        synthetic:     true,
+      });
+    }
 
     const totalAssets      = r2(assetLines.reduce((s, l) => s + l.current, 0));
     const totalLiabilities = r2(liabLines.reduce((s, l) => s + l.current, 0));
@@ -353,7 +378,7 @@ function buildCashFlow(transactions, coa, openingBalances) {
 // Normal balances:
 //   Debit  — asset, expense, cost_of_sales
 //   Credit — income, liability, equity
-function buildTrialBalance(transactions, coa, hideZeros) {
+function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netProfit) {
   try {
     // COA lookup: code → { account_name, account_type }
     const coaByCode = new Map(coa.map(a => [a.account_code, a]));
@@ -449,6 +474,38 @@ function buildTrialBalance(transactions, coa, hideZeros) {
     const liabLines   = sort(filtered.filter(l => l.type === 'liability'));
     const equityLines = sort(filtered.filter(l => l.type === 'equity'));
 
+    // ── Inject computed retained earnings into equity section ──
+    // Only when openingBalances and netProfit are supplied (company TB).
+    // The synthetic line is excluded from grand DR/CR totals so the
+    // transaction-based balance is not disturbed.
+    if (openingBalances !== undefined && netProfit !== undefined) {
+      const reAccount = coa.find(a =>
+        a.is_active && a.account_type === 'equity' &&
+        (a.account_code === '3002' || a.account_name.toLowerCase().includes('retained earnings'))
+      );
+      if (reAccount) {
+        const obMapRE = buildOpeningMap(openingBalances || []);
+        const reOB    = r2(obMapRE.get(reAccount.account_code)?.amount || 0);
+        const compRE  = r2(reOB + (netProfit || 0));
+        const reLine  = {
+          code:      reAccount.account_code,
+          name:      reAccount.account_name,
+          type:      'equity',
+          debit:     compRE < 0 ? Math.abs(compRE) : 0,
+          credit:    compRE > 0 ? compRE : 0,
+          synthetic: true,
+        };
+        const existingIdx = equityLines.findIndex(l => l.code === reAccount.account_code);
+        if (existingIdx >= 0) {
+          equityLines[existingIdx] = reLine;
+        } else {
+          equityLines.push(reLine);
+          sort(equityLines);
+        }
+      }
+    }
+    // ──────────────────────────────────────────────────────────
+
     // BS derived values
     const totalAssets      = r2(assetLines.reduce((s, l)  => s + l.debit  - l.credit, 0));
     const totalLiabilities = r2(liabLines.reduce((s, l)   => s + l.credit - l.debit,  0));
@@ -457,12 +514,18 @@ function buildTrialBalance(transactions, coa, hideZeros) {
     const balanceEffect    = r2(totalAssets - totalLiabilities - totalEquity);
 
     // ── Grand totals ──────────────────────────────────────────
-    const allLines     = [...incomeLines, ...cosLines, ...expLines,
-                          ...assetLines,  ...liabLines, ...equityLines];
-    const totalDebits  = r2(allLines.reduce((s, l) => s + l.debit,  0));
-    const totalCredits = r2(allLines.reduce((s, l) => s + l.credit, 0));
+    // Synthetic retained earnings is excluded so DR=CR stays intact.
+    const txLines      = [...incomeLines, ...cosLines, ...expLines,
+                          ...assetLines,  ...liabLines,
+                          ...equityLines.filter(l => !l.synthetic)];
+    const totalDebits  = r2(txLines.reduce((s, l) => s + l.debit,  0));
+    const totalCredits = r2(txLines.reduce((s, l) => s + l.credit, 0));
     const balanced     = Math.abs(totalDebits - totalCredits) <= 0.02;
     const diff         = r2(Math.abs(totalDebits - totalCredits));
+
+    // Full line list for CSV/print (includes synthetic RE for display)
+    const allLines = [...incomeLines, ...cosLines, ...expLines,
+                      ...assetLines,  ...liabLines, ...equityLines];
 
     return {
       ok: true,
@@ -596,7 +659,7 @@ async function buildFullPack(clientId, financialYear, coa, hideZeros) {
     const netProfit = IS.ok ? IS.data.netProfit : 0;
     const BS  = buildBalanceSheet(classified, coa, openingBalances, netProfit, hideZeros);
     const CF  = buildCashFlow(classified, coa, openingBalances);
-    const TB  = buildTrialBalance(classified, coa, hideZeros);
+    const TB  = buildTrialBalance(classified, coa, hideZeros, openingBalances, IS.ok ? IS.data.netProfit : 0);
     const VAT = window.VAT.buildVATReport(transactions, null);
 
     return { ok: true, IS, BS, CF, TB, VAT, transactions, classified, openingBalances };
