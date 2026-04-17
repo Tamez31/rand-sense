@@ -176,6 +176,21 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
     const obMap  = buildOpeningMap(openingBalances);
     const merged = mergeWithCOA(coa, txMap, obMap);
 
+    // Include opening balance accounts that are not in the COA.
+    // Type is inferred from the SA account-code prefix convention:
+    //   1xxx = asset, 2xxx = liability, 3xxx = equity
+    const coaCodes = new Set(coa.map(a => a.account_code));
+    const _prefixType = { '1':'asset','2':'liability','3':'equity','4':'income','5':'cost_of_sales','6':'expense' };
+    for (const ob of (openingBalances || [])) {
+      if (coaCodes.has(ob.account_code)) continue;
+      const inferredType = _prefixType[String(ob.account_code)[0]] || 'asset';
+      if (!['asset','liability','equity'].includes(inferredType)) continue;
+      merged.push({
+        code: ob.account_code, name: ob.account_name,
+        type: inferredType, net: 0, openingBalance: r2(ob.amount),
+      });
+    }
+
     // Bank account: net of all transactions (all account types flow through bank)
     const bankTxNet = r2(transactions.reduce((s, t) => s + (t.amount || 0), 0));
 
@@ -183,59 +198,68 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
     const _isRE = a =>
       a.code === '3002' || (a.name || '').toLowerCase().includes('retained earnings');
 
-    // Prior retained earnings = opening balance for the RE account (default 0)
+    // Prior retained earnings: from opening_balances for the RE account (credit-sign = negative stored)
     const reObAmount = (() => {
       for (const [code, ob] of obMap.entries()) {
-        const coaEntry = coa.find(a => a.account_code === code);
-        if (coaEntry && coaEntry.account_type === 'equity' &&
-            _isRE({ code, name: coaEntry.account_name })) {
-          return r2(ob.amount);
-        }
+        const name = (coa.find(a => a.account_code === code) || ob).account_name || ob.account_name || '';
+        const type = (_prefixType[String(code)[0]] || 'asset');
+        if (type === 'equity' && _isRE({ code, name })) return r2(ob.amount);
       }
       return 0;
     })();
-    // Auto-calculated retained earnings = prior retained earnings + current year net profit
-    const computedRetainedEarnings = r2(reObAmount + netProfit);
 
-    const buildLines = (type, invertSign) =>
+    // Retained earnings stored in credit-sign (negative = credit).
+    // netProfit is IS-convention (positive = profit). To keep credit-sign: subtract netProfit.
+    // Negating this for display gives a positive retained-earnings figure.
+    const computedRetainedEarnings = r2(reObAmount - netProfit);
+
+    // displaySign: +1 for assets (debit-normal, stored positive)
+    //              -1 for liabilities/equity (credit-normal, stored negative → negate for display)
+    const buildLines = (type, displaySign) =>
       merged
         .filter(a => a.type === type)
         .map(a => {
-          let current;
-          // Bank accounts are special — use running transaction total
-          if (a.code === '1001' || a.name.toLowerCase().includes('bank account')) {
-            const obBankBalance = a.openingBalance || 0;
-            current = r2(obBankBalance + bankTxNet);
-          } else if (a.type === 'equity' && _isRE(a)) {
-            // Retained earnings: auto-calculated as prior balance + current year net profit
-            current = computedRetainedEarnings;
+          let current, comparative;
+          if (a.code === '1001' || (a.name || '').toLowerCase().includes('bank account')) {
+            // Bank: opening debit balance + current year net
+            current     = r2((a.openingBalance || 0) + bankTxNet);
+            comparative = r2(a.openingBalance || 0);
+          } else if (_isRE(a)) {
+            // Retained earnings: credit-sign stored → negate for positive display
+            current     = r2(-computedRetainedEarnings);
+            comparative = r2(-a.openingBalance);
+          } else if (displaySign < 0) {
+            // Liabilities & equity (credit-normal, stored negative):
+            // -(opening − net) converts credit-sign + movement inversion → positive display.
+            current     = r2(-(a.openingBalance - a.net));
+            comparative = r2(-a.openingBalance);
           } else {
-            // All other balance sheet accounts: opening balance + net movement
-            current = r2(a.openingBalance + (invertSign ? -a.net : a.net));
+            // Assets (non-bank, debit-normal):
+            current     = r2(a.openingBalance + a.net);
+            comparative = r2(a.openingBalance);
           }
-          const comparative = r2(a.openingBalance);
           return { ...a, current, comparative };
         })
         .filter(a => !hideZeros || a.current !== 0 || a.comparative !== 0);
 
-    const assetLines  = buildLines('asset',     false);
-    const liabLines   = buildLines('liability', false);
-    const equityLines = buildLines('equity',    false);
+    const assetLines  = buildLines('asset',     +1);
+    const liabLines   = buildLines('liability', -1);
+    const equityLines = buildLines('equity',    -1);
 
-    // If no retained earnings account exists in the COA, inject a synthetic line
-    // so net profit still appears on the face of the Balance Sheet
+    // If no retained earnings account exists in the COA or opening_balances,
+    // inject a synthetic line so net profit always appears on the BS face.
     const hasRE = merged.some(a => a.type === 'equity' && _isRE(a));
-    if (!hasRE && (computedRetainedEarnings !== 0 || !hideZeros)) {
-      equityLines.push({
-        code:          'RE-COMPUTED',
-        name:          'Retained Earnings',
-        type:          'equity',
-        net:           0,
-        openingBalance: reObAmount,
-        current:       computedRetainedEarnings,
-        comparative:   reObAmount,
-        synthetic:     true,
-      });
+    if (!hasRE) {
+      const reDisplay = r2(-computedRetainedEarnings);
+      if (reDisplay !== 0 || !hideZeros) {
+        equityLines.push({
+          code: 'RE-COMPUTED', name: 'Retained Earnings', type: 'equity',
+          net: 0, openingBalance: 0,
+          current:     reDisplay,
+          comparative: r2(-reObAmount),
+          synthetic:   true,
+        });
+      }
     }
 
     const totalAssets      = r2(assetLines.reduce((s, l) => s + l.current, 0));
@@ -486,7 +510,10 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
       if (reAccount) {
         const obMapRE = buildOpeningMap(openingBalances || []);
         const reOB    = r2(obMapRE.get(reAccount.account_code)?.amount || 0);
-        const compRE  = r2(reOB + (netProfit || 0));
+        // reOB is credit-sign (negative stored). netProfit is IS-positive.
+        // TB credit balance = positive RE displayed in credit column:
+        //   compRE = netProfit − reOB  (e.g. 30000 − (−50000) = 80000 credit)
+        const compRE  = r2((netProfit || 0) - reOB);
         const reLine  = {
           code:      reAccount.account_code,
           name:      reAccount.account_name,
