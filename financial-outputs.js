@@ -306,7 +306,8 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
 //   Financing:  liability + equity accounts (loans, drawings)
 //
 // Net cash movement = opening bank balance change
-function buildCashFlow(transactions, coa, openingBalances) {
+// priorYearTransactions (optional): classified prior year transactions for comparative
+function buildCashFlow(transactions, coa, openingBalances, priorYearTransactions) {
   try {
     const txMap = netByAccount(transactions);
 
@@ -370,6 +371,30 @@ function buildCashFlow(transactions, coa, openingBalances) {
     // Reconciliation: operating + investing + financing should = netMovement
     const reconciled = r2(Math.abs((operating + investing + financing) - netMovement)) <= 0.02;
 
+    // ── Prior year comparative ─────────────────────────────────
+    const priorYearAvailable = (priorYearTransactions || []).some(t => t.account_code);
+    let priorOperating = 0, priorInvesting = 0, priorFinancing = 0;
+
+    if (priorYearAvailable) {
+      const priorTxMap = netByAccount(priorYearTransactions);
+      for (const [code, { name, net }] of priorTxMap.entries()) {
+        const type = typeByCode.get(code);
+        switch (type) {
+          case 'income': case 'cost_of_sales': case 'expense':
+            priorOperating = r2(priorOperating + net); break;
+          case 'asset':
+            if (code === '1001' || (name || '').toLowerCase().includes('bank account')) break;
+            priorInvesting = r2(priorInvesting + net); break;
+          case 'liability': case 'equity':
+            priorFinancing = r2(priorFinancing + net); break;
+        }
+      }
+    }
+
+    const priorNetMovement = priorYearAvailable
+      ? r2((priorYearTransactions || []).reduce((s, t) => s + (t.amount || 0), 0))
+      : 0;
+
     return {
       ok: true,
       data: {
@@ -381,6 +406,8 @@ function buildCashFlow(transactions, coa, openingBalances) {
         closingBankBalance,
         reconciled,
         unclassified,
+        priorOperating, priorInvesting, priorFinancing, priorNetMovement,
+        priorYearAvailable,
       },
     };
   } catch (err) {
@@ -402,7 +429,8 @@ function buildCashFlow(transactions, coa, openingBalances) {
 // Normal balances:
 //   Debit  — asset, expense, cost_of_sales
 //   Credit — income, liability, equity
-function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netProfit) {
+// priorYearTransactions (optional): classified prior year transactions for comparative columns
+function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netProfit, priorYearTransactions) {
   try {
     // COA lookup: code → { account_name, account_type }
     const coaByCode = new Map(coa.map(a => [a.account_code, a]));
@@ -540,6 +568,55 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
     // Balance Effect = Assets − (Liabilities + Equity). Zero when BS balances.
     const balanceEffect    = r2(totalAssets - totalLiabilities - totalEquity);
 
+    // ── Prior year double-entry ledger ────────────────────────
+    const priorYearAvailable = (priorYearTransactions || []).some(t => t.account_code);
+    const priorLedger = new Map();
+
+    if (priorYearAvailable) {
+      const postPrior = (code, name, type, dr, cr) => {
+        if (!priorLedger.has(code)) priorLedger.set(code, { debit: 0, credit: 0 });
+        const e = priorLedger.get(code);
+        e.debit  = r2(e.debit  + dr);
+        e.credit = r2(e.credit + cr);
+      };
+      for (const t of (priorYearTransactions || [])) {
+        if (!t.account_code) continue;
+        const abs = Math.abs(t.amount || 0);
+        if (abs === 0) continue;
+        const coaEntry = coaByCode.get(t.account_code);
+        const accName  = coaEntry?.account_name || t.account_name || t.account_code;
+        const accType  = coaEntry?.account_type || 'expense';
+        if ((t.amount || 0) > 0) {
+          postPrior(bankCode, bankName, 'asset', abs, 0);
+          postPrior(t.account_code, accName, accType, 0, abs);
+        } else {
+          postPrior(t.account_code, accName, accType, abs, 0);
+          postPrior(bankCode, bankName, 'asset', 0, abs);
+        }
+      }
+    }
+
+    // Attach prior year DR/CR to every line in every section group
+    const _addPrior = arr => arr.forEach(l => {
+      if (!priorYearAvailable) { l.priorDebit = 0; l.priorCredit = 0; return; }
+      const pe = priorLedger.get(l.code);
+      if (!pe) { l.priorDebit = 0; l.priorCredit = 0; return; }
+      const pnet = r2(pe.debit - pe.credit);
+      l.priorDebit  = pnet > 0 ? pnet         : 0;
+      l.priorCredit = pnet < 0 ? Math.abs(pnet) : 0;
+    });
+    [incomeLines, cosLines, expLines, assetLines, liabLines, equityLines].forEach(_addPrior);
+
+    // Prior year section subtotals
+    const priorGrossIncome      = r2(incomeLines.reduce((s, l)  => s + l.priorCredit - l.priorDebit,  0));
+    const priorTotalCOS         = r2(cosLines.reduce((s, l)     => s + l.priorDebit  - l.priorCredit, 0));
+    const priorGrossProfit      = r2(priorGrossIncome - priorTotalCOS);
+    const priorTotalExpenses    = r2(expLines.reduce((s, l)     => s + l.priorDebit  - l.priorCredit, 0));
+    const priorNetProfit        = r2(priorGrossProfit - priorTotalExpenses);
+    const priorTotalAssets      = r2(assetLines.reduce((s, l)   => s + l.priorDebit  - l.priorCredit, 0));
+    const priorTotalLiabilities = r2(liabLines.reduce((s, l)    => s + l.priorCredit - l.priorDebit,  0));
+    const priorTotalEquity      = r2(equityLines.reduce((s, l)  => s + l.priorCredit - l.priorDebit,  0));
+
     // ── Grand totals ──────────────────────────────────────────
     // Synthetic retained earnings is excluded so DR=CR stays intact.
     const txLines      = [...incomeLines, ...cosLines, ...expLines,
@@ -549,6 +626,9 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
     const totalCredits = r2(txLines.reduce((s, l) => s + l.credit, 0));
     const balanced     = Math.abs(totalDebits - totalCredits) <= 0.02;
     const diff         = r2(Math.abs(totalDebits - totalCredits));
+
+    const priorTotalDebits  = r2(txLines.reduce((s, l) => s + l.priorDebit,  0));
+    const priorTotalCredits = r2(txLines.reduce((s, l) => s + l.priorCredit, 0));
 
     // Full line list for CSV/print (includes synthetic RE for display)
     const allLines = [...incomeLines, ...cosLines, ...expLines,
@@ -562,11 +642,17 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
         // IS sub-groups
         incomeLines, cosLines, expLines,
         grossIncome, totalCOS, grossProfit, totalExpenses, netProfit,
+        // IS prior year subtotals
+        priorGrossIncome, priorTotalCOS, priorGrossProfit, priorTotalExpenses, priorNetProfit,
         // BS sub-groups
         assetLines, liabLines, equityLines,
         totalAssets, totalLiabilities, totalEquity, balanceEffect,
+        // BS prior year subtotals
+        priorTotalAssets, priorTotalLiabilities, priorTotalEquity,
         // Grand totals
         totalDebits, totalCredits,
+        priorTotalDebits, priorTotalCredits,
+        priorYearAvailable,
         // Flat list for CSV/print iteration
         lines: allLines,
       },
@@ -685,8 +771,8 @@ async function buildFullPack(clientId, financialYear, coa, hideZeros) {
     const IS  = buildIncomeStatement(classified, coa, priorClassified, hideZeros);
     const netProfit = IS.ok ? IS.data.netProfit : 0;
     const BS  = buildBalanceSheet(classified, coa, openingBalances, netProfit, hideZeros);
-    const CF  = buildCashFlow(classified, coa, openingBalances);
-    const TB  = buildTrialBalance(classified, coa, hideZeros, openingBalances, IS.ok ? IS.data.netProfit : 0);
+    const CF  = buildCashFlow(classified, coa, openingBalances, priorClassified);
+    const TB  = buildTrialBalance(classified, coa, hideZeros, openingBalances, IS.ok ? IS.data.netProfit : 0, priorClassified);
     const VAT = window.VAT.buildVATReport(transactions, null);
 
     return { ok: true, IS, BS, CF, TB, VAT, transactions, classified, openingBalances };
@@ -803,33 +889,52 @@ function renderBS(data, comparativeLabel) {
 
 function renderCF(data) {
   const { opLines, operating, invLines, investing, finLines, financing,
-          netMovement, bankOB, closingBankBalance } = data;
+          netMovement, bankOB, closingBankBalance,
+          priorOperating, priorInvesting, priorFinancing, priorNetMovement,
+          priorYearAvailable } = data;
 
+  const showPrior = !!priorYearAvailable;
+
+  const colHead = showPrior
+    ? `<div class="stmt-col-heads"><span>Description</span><span>Prior year</span><span>Current year</span></div>`
+    : `<div class="stmt-col-heads"><span>Description</span><span></span><span>Amount</span></div>`;
+
+  // Detail lines (current year only — prior year section totals are shown as subtotals)
   const row = (label, amt, indent = false) =>
     `<tr><td class="label${indent ? ' indent' : ''}">${label}</td><td class="amt"></td><td class="amt">${fmt(amt)}</td></tr>`;
-  const subtotal = (label, amt) =>
-    `<tr class="subtotal"><td class="label">${label}</td><td class="amt"></td><td class="amt">${fmt(amt)}</td></tr>`;
+
+  const subtotal = (label, curAmt, priorAmt) => {
+    const priorCell = showPrior ? `<td class="amt">${fmt(priorAmt)}</td>` : `<td class="amt"></td>`;
+    return `<tr class="subtotal"><td class="label">${label}</td>${priorCell}<td class="amt">${fmt(curAmt)}</td></tr>`;
+  };
+
+  const totalRow = (label, curAmt, priorAmt) => {
+    const priorCell = showPrior
+      ? `<td class="amt">${priorAmt !== null && priorAmt !== undefined ? fmt(priorAmt) : '—'}</td>`
+      : `<td class="amt"></td>`;
+    return `<tr class="total"><td class="label">${label}</td>${priorCell}<td class="amt">${fmt(curAmt)}</td></tr>`;
+  };
+
   const secHead = l => `<tr class="section-head"><td colspan="3">${l}</td></tr>`;
 
-  let html = `<div class="statement-wrap">
-    <div class="stmt-col-heads"><span>Description</span><span></span><span>Amount</span></div>
-    <table class="stmt-table">`;
+  let html = `<div class="statement-wrap">${colHead}<table class="stmt-table">`;
 
   html += secHead('Operating Activities');
   opLines.forEach(l => { html += row(l.name, l.amount, true); });
-  html += subtotal('Net cash from operating activities', operating);
+  html += subtotal('Net cash from operating activities', operating, priorOperating || 0);
 
   html += secHead('Investing Activities');
   invLines.forEach(l => { html += row(l.name, l.amount, true); });
-  html += subtotal('Net cash from investing activities', investing);
+  html += subtotal('Net cash from investing activities', investing, priorInvesting || 0);
 
   html += secHead('Financing Activities');
   finLines.forEach(l => { html += row(l.name, l.amount, true); });
-  html += subtotal('Net cash from financing activities', financing);
+  html += subtotal('Net cash from financing activities', financing, priorFinancing || 0);
 
-  html += `<tr class="total"><td class="label">Net movement in cash</td><td class="amt"></td><td class="amt">${fmt(netMovement)}</td></tr>`;
+  html += totalRow('Net movement in cash', netMovement, priorNetMovement || 0);
+  // Opening/closing bank: show current year only (prior year opening OB not stored)
   html += row('Opening bank balance', bankOB);
-  html += `<tr class="total"><td class="label">Closing bank balance</td><td class="amt"></td><td class="amt">${fmt(closingBankBalance)}</td></tr>`;
+  html += totalRow('Closing bank balance', closingBankBalance, null);
 
   html += '</table></div>';
   return html;
@@ -839,49 +944,85 @@ function renderTB(data) {
   const {
     incomeLines, cosLines, expLines,
     grossIncome, totalCOS, grossProfit, totalExpenses, netProfit,
+    priorGrossIncome, priorTotalCOS, priorGrossProfit, priorTotalExpenses, priorNetProfit,
     assetLines, liabLines, equityLines,
     totalAssets, totalLiabilities, totalEquity, balanceEffect,
+    priorTotalAssets, priorTotalLiabilities, priorTotalEquity,
     totalDebits, totalCredits,
+    priorTotalDebits, priorTotalCredits,
+    priorYearAvailable,
   } = data;
 
-  const colgroup = `<colgroup><col style="width:55%"><col style="width:22%"><col style="width:23%"></colgroup>`;
-  const thead    = `<thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
-    <th class="label" style="padding:6px 10px;">Account</th>
-    <th class="amt"   style="padding:6px 10px;">Debit</th>
-    <th class="amt"   style="padding:6px 10px;">Credit</th>
-  </tr></thead>`;
+  const showPrior = !!priorYearAvailable;
+  const cols      = showPrior ? 5 : 3;
+
+  const colgroup = showPrior
+    ? `<colgroup><col style="width:40%"><col style="width:15%"><col style="width:15%"><col style="width:15%"><col style="width:15%"></colgroup>`
+    : `<colgroup><col style="width:55%"><col style="width:22%"><col style="width:23%"></colgroup>`;
+
+  const thead = showPrior
+    ? `<thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
+        <th class="label" style="padding:6px 10px;">Account</th>
+        <th class="amt"   style="padding:6px 10px;">Prior DR</th>
+        <th class="amt"   style="padding:6px 10px;">Prior CR</th>
+        <th class="amt"   style="padding:6px 10px;">Curr DR</th>
+        <th class="amt"   style="padding:6px 10px;">Curr CR</th>
+      </tr></thead>`
+    : `<thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
+        <th class="label" style="padding:6px 10px;">Account</th>
+        <th class="amt"   style="padding:6px 10px;">Debit</th>
+        <th class="amt"   style="padding:6px 10px;">Credit</th>
+      </tr></thead>`;
 
   // Individual account line
-  const lineRow = l => `<tr>
-    <td class="label indent">${l.code} — ${escHtml(l.name)}</td>
-    <td class="amt">${l.debit  ? fmt(l.debit)  : '—'}</td>
-    <td class="amt">${l.credit ? fmt(l.credit) : '—'}</td>
-  </tr>`;
+  const lineRow = l => showPrior
+    ? `<tr>
+        <td class="label indent">${l.code} — ${escHtml(l.name)}</td>
+        <td class="amt">${l.priorDebit  ? fmt(l.priorDebit)  : '—'}</td>
+        <td class="amt">${l.priorCredit ? fmt(l.priorCredit) : '—'}</td>
+        <td class="amt">${l.debit  ? fmt(l.debit)  : '—'}</td>
+        <td class="amt">${l.credit ? fmt(l.credit) : '—'}</td>
+      </tr>`
+    : `<tr>
+        <td class="label indent">${l.code} — ${escHtml(l.name)}</td>
+        <td class="amt">${l.debit  ? fmt(l.debit)  : '—'}</td>
+        <td class="amt">${l.credit ? fmt(l.credit) : '—'}</td>
+      </tr>`;
 
-  // Empty sub-group placeholder
   const emptyRow = msg =>
-    `<tr><td colspan="3" class="label" style="color:var(--muted);padding:6px 10px;font-size:0.82rem;">${msg}</td></tr>`;
+    `<tr><td colspan="${cols}" class="label" style="color:var(--muted);padding:6px 10px;font-size:0.82rem;">${msg}</td></tr>`;
 
-  // Section heading (large separator)
-  const secHead = label => `<tr class="section-head"><td colspan="3">${label}</td></tr>`;
+  const secHead = label => `<tr class="section-head"><td colspan="${cols}">${label}</td></tr>`;
 
-  // Sub-group heading (smaller, indented style)
   const grpHead = label =>
-    `<tr style="background:var(--surface-2);"><td colspan="3" style="padding:5px 10px;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);">${label}</td></tr>`;
+    `<tr style="background:var(--surface-2);"><td colspan="${cols}" style="padding:5px 10px;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);">${label}</td></tr>`;
 
-  // Subtotal row — amount goes in the correct column based on sign
-  // drAmt / crAmt are pre-computed positive values; pass null to leave blank
-  const subtotalRow = (label, drAmt, crAmt, cls = 'subtotal') => `<tr class="${cls}">
-    <td class="label">${label}</td>
-    <td class="amt">${drAmt !== null ? fmt(drAmt) : ''}</td>
-    <td class="amt">${crAmt !== null ? fmt(crAmt) : ''}</td>
-  </tr>`;
+  // Subtotal row — drAmt/crAmt are the current-year values; priorDr/priorCr are optional prior year
+  const subtotalRow = (label, drAmt, crAmt, priorDr, priorCr, cls = 'subtotal') => {
+    if (showPrior) {
+      return `<tr class="${cls}">
+        <td class="label">${label}</td>
+        <td class="amt">${priorDr !== null && priorDr !== undefined ? fmt(priorDr) : ''}</td>
+        <td class="amt">${priorCr !== null && priorCr !== undefined ? fmt(priorCr) : ''}</td>
+        <td class="amt">${drAmt !== null ? fmt(drAmt) : ''}</td>
+        <td class="amt">${crAmt !== null ? fmt(crAmt) : ''}</td>
+      </tr>`;
+    }
+    return `<tr class="${cls}">
+      <td class="label">${label}</td>
+      <td class="amt">${drAmt !== null ? fmt(drAmt) : ''}</td>
+      <td class="amt">${crAmt !== null ? fmt(crAmt) : ''}</td>
+    </tr>`;
+  };
 
-  // Derived value row — amount lands in credit if ≥ 0, debit if < 0
-  const derivedRow = (label, amount, cls = 'subtotal') =>
-    amount >= 0
-      ? subtotalRow(label, null,              amount,              cls)
-      : subtotalRow(label, Math.abs(amount),  null,                cls);
+  // Derived row: current amount lands in credit if ≥ 0, debit if < 0; same logic for prior
+  const derivedRow = (label, amount, priorAmount, cls = 'subtotal') => {
+    const currDr   = amount      < 0 ? Math.abs(amount)      : null;
+    const currCr   = amount      >= 0 ? amount      : null;
+    const priorDr  = showPrior && priorAmount < 0  ? Math.abs(priorAmount) : (showPrior ? null : undefined);
+    const priorCr  = showPrior && priorAmount >= 0 ? priorAmount           : (showPrior ? null : undefined);
+    return subtotalRow(label, currDr, currCr, priorDr, priorCr, cls);
+  };
 
   let html = `<div class="statement-wrap"><table class="stmt-table">${colgroup}${thead}`;
 
@@ -890,77 +1031,82 @@ function renderTB(data) {
   // ══════════════════════════════════════════════════════════════
   html += secHead('Section 1 — Income Statement Accounts');
 
-  // Income
   html += grpHead('Income');
   incomeLines.length
     ? incomeLines.forEach(l => { html += lineRow(l); })
     : html += emptyRow('No income transactions classified.');
-  // grossIncome is a credit total → credit column
-  html += subtotalRow('Gross Income', null, grossIncome);
+  html += subtotalRow('Gross Income', null, grossIncome, null, priorGrossIncome);
 
-  // Cost of Sales
   html += grpHead('Cost of Sales');
   cosLines.length
     ? cosLines.forEach(l => { html += lineRow(l); })
     : html += emptyRow('No cost of sales transactions classified.');
-  // grossProfit can be positive (credit) or negative/loss (debit)
-  html += derivedRow(grossProfit >= 0 ? 'Gross Profit' : 'Gross Loss', grossProfit);
+  html += derivedRow(grossProfit >= 0 ? 'Gross Profit' : 'Gross Loss', grossProfit, priorGrossProfit || 0);
 
-  // Expenses
   html += grpHead('Expenses');
   expLines.length
     ? expLines.forEach(l => { html += lineRow(l); })
     : html += emptyRow('No expense transactions classified.');
-  html += derivedRow(netProfit >= 0 ? 'Net Profit' : 'Net Loss', netProfit, 'total ' + (netProfit >= 0 ? 'profit' : 'loss'));
+  html += derivedRow(
+    netProfit >= 0 ? 'Net Profit' : 'Net Loss',
+    netProfit, priorNetProfit || 0,
+    'total ' + (netProfit >= 0 ? 'profit' : 'loss'),
+  );
 
   // ══════════════════════════════════════════════════════════════
   // SECTION 2 — Balance Sheet Accounts
   // ══════════════════════════════════════════════════════════════
   html += secHead('Section 2 — Balance Sheet Accounts');
 
-  // Assets
   html += grpHead('Assets (including Bank)');
   assetLines.length
     ? assetLines.forEach(l => { html += lineRow(l); })
     : html += emptyRow('No asset transactions classified.');
-  // Assets are debit-normal → debit column
-  html += subtotalRow('Total Assets', totalAssets, null);
+  html += subtotalRow('Total Assets', totalAssets, null, priorTotalAssets, null);
 
-  // Liabilities
   html += grpHead('Liabilities');
   liabLines.length
     ? liabLines.forEach(l => { html += lineRow(l); })
     : html += emptyRow('No liability transactions classified.');
-  html += subtotalRow('Total Liabilities', null, totalLiabilities);
+  html += subtotalRow('Total Liabilities', null, totalLiabilities, null, priorTotalLiabilities);
 
-  // Equity
   html += grpHead('Equity');
   equityLines.length
     ? equityLines.forEach(l => { html += lineRow(l); })
     : html += emptyRow('No equity transactions classified.');
-  html += subtotalRow('Total Equity', null, totalEquity);
+  html += subtotalRow('Total Equity', null, totalEquity, null, priorTotalEquity);
 
-  // Balance Effect
   const beOk  = Math.abs(balanceEffect) <= 0.02;
   const beCls = beOk ? 'subtotal' : 'total loss';
   const beLabel = beOk
     ? 'Balance Effect — Balance Sheet balances ✓'
     : `Balance Effect — out by ${fmt(Math.abs(balanceEffect))} (check equity / opening balances)`;
-  html += derivedRow(beLabel, beOk ? 0 : balanceEffect, beCls);
+  html += derivedRow(beLabel, beOk ? 0 : balanceEffect, 0, beCls);
 
   // ══════════════════════════════════════════════════════════════
   // Grand Total
   // ══════════════════════════════════════════════════════════════
   const gtOk  = Math.abs(totalDebits - totalCredits) <= 0.02;
   const gtCls = gtOk ? 'total profit' : 'total loss';
-  html += `<tr class="${gtCls}">
-    <td class="label">Grand Total</td>
-    <td class="amt">${fmt(totalDebits)}</td>
-    <td class="amt">${fmt(totalCredits)}</td>
-  </tr>`;
+
+  if (showPrior) {
+    html += `<tr class="${gtCls}">
+      <td class="label">Grand Total</td>
+      <td class="amt">${fmt(priorTotalDebits)}</td>
+      <td class="amt">${fmt(priorTotalCredits)}</td>
+      <td class="amt">${fmt(totalDebits)}</td>
+      <td class="amt">${fmt(totalCredits)}</td>
+    </tr>`;
+  } else {
+    html += `<tr class="${gtCls}">
+      <td class="label">Grand Total</td>
+      <td class="amt">${fmt(totalDebits)}</td>
+      <td class="amt">${fmt(totalCredits)}</td>
+    </tr>`;
+  }
 
   if (!gtOk) {
-    html += `<tr><td colspan="3" style="color:var(--red);padding:8px 10px;font-size:0.8rem;">
+    html += `<tr><td colspan="${cols}" style="color:var(--red);padding:8px 10px;font-size:0.8rem;">
       &#9888; Trial balance is out by ${fmt(Math.abs(totalDebits - totalCredits))} — check for unclassified transactions.
     </td></tr>`;
   }

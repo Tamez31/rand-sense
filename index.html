@@ -302,6 +302,8 @@ const state = {
   // VAT report period filter
   _vatPeriodFilter:    null,
   _vatAvailablePeriods: [],
+  // Prior year transactions (cached for comparative columns on all reports)
+  priorTransactions:   [],
 };
 
 // ============================================================
@@ -520,6 +522,10 @@ async function openClient(id) {
     state.transactions   = state.currentYear
       ? await DB.Transactions.listByYear(id, state.currentYear)
       : [];
+    const priorYear = String(parseInt(state.currentYear, 10) - 1);
+    state.priorTransactions = state.currentYear
+      ? await DB.Transactions.listByYear(id, priorYear).catch(() => [])
+      : [];
   } catch(e) {
     toast('Error loading client: ' + e.message, 'error');
     hideLoading();
@@ -587,9 +593,14 @@ async function onYearChange(year) {
   state.currentYear = year;
   showLoading('Loading year…');
   try {
-    state.transactions    = await DB.Transactions.listByYear(state.currentClient.id, year);
-    state.unclassified    = await DB.Transactions.listUnclassified(state.currentClient.id);
-    state.openingBalances = await DB.OpeningBalances.list(state.currentClient.id, year);
+    const priorYear = String(parseInt(year, 10) - 1);
+    [state.transactions, state.unclassified, state.openingBalances, state.priorTransactions] =
+      await Promise.all([
+        DB.Transactions.listByYear(state.currentClient.id, year),
+        DB.Transactions.listUnclassified(state.currentClient.id),
+        DB.OpeningBalances.list(state.currentClient.id, year),
+        DB.Transactions.listByYear(state.currentClient.id, priorYear).catch(() => []),
+      ]);
   } catch(e) { toast(e.message,'error'); }
   hideLoading();
   renderClientDetail();
@@ -1005,11 +1016,7 @@ async function generateReport() {
     // Company reports
     if (rt === 'IS') {
       const priorYear = String(parseInt(state.currentYear, 10) - 1);
-      let priorTxs = [];
-      try {
-        const rawPrior = await DB.Transactions.listByYear(state.currentClient.id, priorYear);
-        priorTxs = rawPrior.filter(t => t.account_code);
-      } catch (_) { /* no prior year data — comparative shows zero */ }
+      const priorTxs  = (state.priorTransactions || []).filter(t => t.account_code);
       const r = F.buildIncomeStatement(txs, coa, priorTxs, hz);
       el.innerHTML = r.ok ? F.renderIS(r.data, c.financial_year_end + ' ' + priorYear, hz) : `<div class="info-box red">${escH(r.error)}</div>`;
       state._IS = r.ok ? r.data : null;
@@ -1022,13 +1029,15 @@ async function generateReport() {
       el.innerHTML = html;
       state._BS = r.ok ? r.data : null;
     } else if (rt === 'CF') {
-      const r = F.buildCashFlow(txs, coa, ob);
+      const priorTxsCF = (state.priorTransactions || []).filter(t => t.account_code);
+      const r = F.buildCashFlow(txs, coa, ob, priorTxsCF);
       el.innerHTML = r.ok ? F.renderCF(r.data) : `<div class="info-box red">${escH(r.error)}</div>`;
       state._CF = r.ok ? r.data : null;
     } else if (rt === 'TB') {
-      const isR2 = F.buildIncomeStatement(txs, coa, [], false);
-      const np2  = isR2.ok ? isR2.data.netProfit : 0;
-      const r    = F.buildTrialBalance(txs, coa, hz, ob, np2);
+      const isR2      = F.buildIncomeStatement(txs, coa, [], false);
+      const np2       = isR2.ok ? isR2.data.netProfit : 0;
+      const priorTxsTB = (state.priorTransactions || []).filter(t => t.account_code);
+      const r         = F.buildTrialBalance(txs, coa, hz, ob, np2, priorTxsTB);
       el.innerHTML = r.ok ? F.renderTB(r.data) : `<div class="info-box red">${escH(r.error)}</div>`;
       state._TB = r.ok ? r.data : null;
     } else if (rt === 'VAT') {
