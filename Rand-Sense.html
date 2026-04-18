@@ -2343,15 +2343,81 @@ function renderIRP6Tab() {
   const isC = c.entity_type === 'commission_earner';
 
   if (!isC) {
-    // Company tab — Part 3
-    const years = Object.keys(taxTables.individual).sort((a,b) => b-a).join(', ');
-    return `<div class="card">
-      <div class="card-title">IRP6 Provisional Tax</div>
-      <div class="info-box green" style="margin-bottom:0;">
-        <strong>Company IRP6 calculator coming in next build.</strong><br/>
-        Tax tables loaded for years: ${years}.
+    // ── Company IRP6 calculator ──────────────────────────────────
+    if (!state.irp6c) state.irp6c = {};
+    const ic = state.irp6c;
+
+    const defYear  = _irp6DefaultYear();
+    const year     = ic.year     || defYear;
+    const period   = ic.period   || 'first';
+    const income   = ic.income   ?? '';
+    const firstPay = ic.firstPay ?? 0;
+    const compType = ic.compType || 'standard';
+
+    const yearOpts = Object.keys(taxTables.company).sort((a,b) => b-a)
+      .map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('');
+
+    const tabBtn = (key, lbl) =>
+      `<button class="subnav-tab ${compType===key?'active':''}" style="font-size:0.82rem;padding:7px 16px;"
+        onclick="setIRP6CompType('${key}')">${lbl}</button>`;
+
+    return `
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">IRP6 Provisional Tax — Company</div>
+
+        <div class="subnav-row" style="margin-bottom:1.2rem;">
+          ${tabBtn('standard','Standard Rate')}
+          ${tabBtn('sbc','Small Business Corporation (SBC)')}
+        </div>
+
+        <div class="form-grid" style="margin-bottom:0;">
+
+          <div class="form-group">
+            <label class="form-label">Tax year</label>
+            <select class="form-control" id="irp6c-year" onchange="onIRP6CompanyChange()">
+              ${yearOpts}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Payment period</label>
+            <div style="display:flex;gap:20px;margin-top:6px;flex-wrap:wrap;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.87rem;font-weight:500;">
+                <input type="radio" name="irp6c-period" value="first"
+                  ${period==='first'?'checked':''} onchange="onIRP6CompanyChange()"/>
+                First <span style="color:#666666;font-weight:400;">(due Aug)</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.87rem;font-weight:500;">
+                <input type="radio" name="irp6c-period" value="second"
+                  ${period==='second'?'checked':''} onchange="onIRP6CompanyChange()"/>
+                Second <span style="color:#666666;font-weight:400;">(due Feb)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group span-2">
+            <label class="form-label">Estimated annual taxable income <span class="req">*</span></label>
+            <div class="r-wrap">
+              <span class="r-pre">R</span>
+              <input class="form-control" type="number" id="irp6c-income" min="0" step="1"
+                value="${income}" placeholder="0" oninput="onIRP6CompanyChange()"/>
+            </div>
+          </div>
+
+          <div class="form-group span-2" id="irp6c-first-pay-row"
+            style="display:${period==='second'?'':'none'};">
+            <label class="form-label">First period payment already made</label>
+            <div class="r-wrap" style="max-width:300px;">
+              <span class="r-pre">R</span>
+              <input class="form-control" type="number" id="irp6c-first-pay" min="0" step="1"
+                value="${firstPay}" placeholder="0" oninput="onIRP6CompanyChange()"/>
+            </div>
+          </div>
+
+        </div>
       </div>
-    </div>`;
+
+      <div id="irp6c-result"></div>`;
   }
 
   // ── Commission Earner individual calculator ──────────────────
@@ -2468,6 +2534,33 @@ function onIRP6Change() {
   // Render results
   const resultEl = document.getElementById('irp6-result');
   if (resultEl) resultEl.innerHTML = _renderIRP6Result(calculateIRP6Individual());
+}
+
+// ── IRP6 company sub-tab switcher ─────────────────────────────
+function setIRP6CompType(key) {
+  if (!state.irp6c) state.irp6c = {};
+  // Persist current form values before re-render
+  state.irp6c.year     = document.getElementById('irp6c-year')?.value || _irp6DefaultYear();
+  state.irp6c.period   = document.querySelector('input[name="irp6c-period"]:checked')?.value || 'first';
+  state.irp6c.income   = parseFloat(document.getElementById('irp6c-income')?.value) || 0;
+  state.irp6c.firstPay = parseFloat(document.getElementById('irp6c-first-pay')?.value) || 0;
+  state.irp6c.compType = key;
+  renderClientDetail();
+}
+
+// ── IRP6 company state sync ────────────────────────────────────
+function onIRP6CompanyChange() {
+  if (!state.irp6c) state.irp6c = {};
+  state.irp6c.year     = document.getElementById('irp6c-year')?.value || _irp6DefaultYear();
+  state.irp6c.period   = document.querySelector('input[name="irp6c-period"]:checked')?.value || 'first';
+  state.irp6c.income   = parseFloat(document.getElementById('irp6c-income')?.value) || 0;
+  state.irp6c.firstPay = parseFloat(document.getElementById('irp6c-first-pay')?.value) || 0;
+
+  const fpRow = document.getElementById('irp6c-first-pay-row');
+  if (fpRow) fpRow.style.display = state.irp6c.period === 'second' ? '' : 'none';
+
+  const resultEl = document.getElementById('irp6c-result');
+  if (resultEl) resultEl.innerHTML = _renderIRP6CompanyResult(calculateIRP6Company());
 }
 
 // ── IRP6 calculation engine ────────────────────────────────────
@@ -2607,6 +2700,118 @@ function _renderIRP6Result(r) {
       ${row('Step 10 — Less PAYE already deducted', neg(r.paye), r.paye > 0 ? '#C0392B' : '#666666')}
       ${row('Net annual tax after PAYE', fmt(r.afterPAYE))}
       ${periodNote}
+
+      ${totalRow(dueLabel, fmt(r.amountDue))}
+    </div>`;
+}
+
+// ── IRP6 company calculation engine ───────────────────────────
+function calculateIRP6Company() {
+  if (!state.irp6c) return null;
+  const { year, period, income, firstPay, compType } = state.irp6c;
+  const yr = String(year || _irp6DefaultYear());
+  if (!income) return null;
+
+  let grossTax, bracket = null;
+
+  if (compType === 'sbc') {
+    const sbcTable = taxTables.sbc[yr] || taxTables.sbc[2026];
+    bracket = sbcTable.find(b => income >= b.min && income <= b.max);
+    if (!bracket) return null;
+    const above = income - bracket.min + 1;
+    grossTax = Math.max(0, bracket.base + bracket.rate * above);
+  } else {
+    const rate = taxTables.company[yr] ?? 0.27;
+    grossTax   = income * rate;
+    bracket    = { rate, min: null, max: null, base: null }; // sentinel for renderer
+  }
+
+  const annualLiability = Math.max(0, grossTax);
+  const fp = firstPay || 0;
+  const amountDue = period === 'first'
+    ? annualLiability / 2
+    : Math.max(0, annualLiability - fp);
+
+  return { year: yr, period, income, firstPay: fp, compType, bracket, grossTax, annualLiability, amountDue };
+}
+
+// ── IRP6 company result renderer ──────────────────────────────
+function _renderIRP6CompanyResult(r) {
+  if (!r) {
+    return `<div class="card"><div class="info-box blue" style="margin-bottom:0;">
+      Enter an estimated annual taxable income above to calculate provisional tax.
+    </div></div>`;
+  }
+
+  const fmt  = n => 'R\u00a0' + Math.abs(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtI = n => Math.round(n || 0).toLocaleString('en-ZA');
+  const neg  = n => n > 0 ? `(${fmt(n)})` : fmt(0);
+
+  const rowSt  = (bg, bold) => `padding:9px 16px;background:${bg};border-bottom:1px solid #C8E6C9;display:flex;justify-content:space-between;align-items:center;${bold?'font-weight:700;':''}`;
+  const lbl    = txt => `<span style="font-size:0.85rem;color:#1A1A1A;">${txt}</span>`;
+  const amtSpan = (n, color) => `<span style="font-family:var(--font-mono);font-size:0.85rem;font-weight:600;color:${color||'#145A32'};">${n}</span>`;
+  const divider = txt => `<div style="background:#D4F5E2;color:#145A32;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;padding:6px 16px;border-bottom:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${txt}</div>`;
+
+  let ri = 0;
+  const row = (desc, value, color) => {
+    const bg = ri++%2===0?'#FFFFFF':'#F0F9F4';
+    return `<div style="${rowSt(bg,false)}">${lbl(desc)}${amtSpan(value,color)}</div>`;
+  };
+  const totalRow = (desc, value) =>
+    `<div style="${rowSt('#145A32',true)}-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <span style="color:#FFFFFF;font-size:0.9rem;">${desc}</span>
+      <span style="font-family:var(--font-mono);font-size:0.9rem;color:#FFFFFF;">${value}</span>
+    </div>`;
+
+  const rate     = taxTables.company[r.year] ?? 0.27;
+  const pctFlat  = Math.round(rate * 100);
+  const typeLabel = r.compType === 'sbc' ? 'SBC Sliding Scale' : `Standard Rate ${pctFlat}%`;
+  const dueLabel  = r.amountDue > 0
+    ? `${r.period === 'first' ? 'First' : 'Second'} period provisional tax due`
+    : 'No provisional tax payable';
+
+  let taxRows;
+  if (r.compType === 'sbc') {
+    const pct = Math.round(r.bracket.rate * 100);
+    const bracketDesc = r.bracket.max === Infinity
+      ? `R\u00a0${fmtI(r.bracket.min)} and above`
+      : `R\u00a0${fmtI(r.bracket.min)} \u2013 R\u00a0${fmtI(r.bracket.max)}`;
+    const above = r.income - r.bracket.min + 1;
+    taxRows = `
+      ${divider('Gross Tax \u2014 SBC Sliding Scale')}
+      ${row('Step 2 \u2014 Tax bracket', `${pct}% on ${bracketDesc}`)}
+      ${row(`Step 3 \u2014 Gross tax: R\u00a0${fmtI(r.bracket.base)} base + ${pct}% \u00d7 R\u00a0${fmtI(above)}`, fmt(r.grossTax))}`;
+  } else {
+    taxRows = `
+      ${divider('Gross Tax \u2014 Standard Rate')}
+      ${row('Step 2 \u2014 Company tax rate', `${pctFlat}%`)}
+      ${row(`Step 3 \u2014 Gross tax (income \u00d7 ${pctFlat}%)`, fmt(r.grossTax))}`;
+  }
+
+  const periodRows = r.period === 'first'
+    ? row('Step 5 \u2014 First period (annual \u00f7 2)', fmt(r.amountDue))
+    : [
+        row('Step 5 \u2014 Less first period payment', neg(r.firstPay), '#C0392B'),
+        row('Step 6 \u2014 Second period amount due', fmt(Math.max(0, r.annualLiability - r.firstPay))),
+      ].join('');
+
+  return `
+    <div class="card" style="padding:0;overflow:hidden;border-color:#C8E6C9;">
+      <div style="background:#145A32;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="color:#FFFFFF;font-weight:700;font-size:0.95rem;">IRP6 Calculation \u2014 ${r.year} Tax Year</div>
+        <div style="color:#D4F5E2;font-size:0.82rem;">${typeLabel} &middot; ${r.period === 'first' ? 'First Period' : 'Second Period'}</div>
+      </div>
+
+      ${divider('Income')}
+      ${row('Step 1 \u2014 Estimated annual taxable income', fmt(r.income))}
+
+      ${taxRows}
+
+      ${divider('Annual Tax Liability')}
+      ${row('Step 4 \u2014 Annual tax liability', fmt(r.annualLiability))}
+
+      ${divider('Period')}
+      ${periodRows}
 
       ${totalRow(dueLabel, fmt(r.amountDue))}
     </div>`;
