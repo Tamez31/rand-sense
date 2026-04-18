@@ -2332,15 +2332,283 @@ function downloadOBTemplate() {
 }
 
 // ── IRP6 Provisional Tax tab ───────────────────────────────────
+function _irp6DefaultYear() {
+  const now = new Date();
+  // SARS year starts 1 March — if we're in March or later, current year = calendar year + 1
+  return String(now.getMonth() >= 2 ? now.getFullYear() + 1 : now.getFullYear());
+}
+
 function renderIRP6Tab() {
-  const years = Object.keys(taxTables.individual).sort((a,b) => b-a).join(', ');
-  return `
-    <div class="card">
+  const c   = state.currentClient;
+  const isC = c.entity_type === 'commission_earner';
+
+  if (!isC) {
+    // Company tab — Part 3
+    const years = Object.keys(taxTables.individual).sort((a,b) => b-a).join(', ');
+    return `<div class="card">
       <div class="card-title">IRP6 Provisional Tax</div>
       <div class="info-box green" style="margin-bottom:0;">
-        <strong>Coming in next build.</strong><br/>
+        <strong>Company IRP6 calculator coming in next build.</strong><br/>
         Tax tables loaded for years: ${years}.
       </div>
+    </div>`;
+  }
+
+  // ── Commission Earner individual calculator ──────────────────
+  if (!state.irp6) state.irp6 = {};
+  const irp6 = state.irp6;
+
+  const defYear    = _irp6DefaultYear();
+  const year       = irp6.year       || defYear;
+  const period     = irp6.period     || 'first';
+  const income     = irp6.income     ?? '';
+  const ageGroup   = irp6.ageGroup   || 'under65';
+  const medMembers = irp6.medMembers ?? 0;
+  const paye       = irp6.paye       ?? 0;
+  const firstPay   = irp6.firstPay   ?? 0;
+
+  const yearOpts = Object.keys(taxTables.individual).sort((a,b)=>b-a)
+    .map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('');
+
+  return `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">IRP6 Provisional Tax — Individual</div>
+
+      <div class="form-grid" style="margin-bottom:0;">
+
+        <div class="form-group">
+          <label class="form-label">Tax year</label>
+          <select class="form-control" id="irp6-year" onchange="onIRP6Change()">
+            ${yearOpts}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Age group</label>
+          <select class="form-control" id="irp6-age" onchange="onIRP6Change()">
+            <option value="under65" ${ageGroup==='under65'?'selected':''}>Under 65</option>
+            <option value="age65"   ${ageGroup==='age65'  ?'selected':''}>Age 65 to 74</option>
+            <option value="age75"   ${ageGroup==='age75'  ?'selected':''}>Age 75 and older</option>
+          </select>
+        </div>
+
+        <div class="form-group span-2">
+          <label class="form-label">Payment period</label>
+          <div style="display:flex;gap:24px;margin-top:6px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.87rem;font-weight:500;">
+              <input type="radio" name="irp6-period" value="first"
+                ${period==='first'?'checked':''} onchange="onIRP6Change()"/>
+              First Period <span style="color:#666666;font-weight:400;">(6 months — due August)</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.87rem;font-weight:500;">
+              <input type="radio" name="irp6-period" value="second"
+                ${period==='second'?'checked':''} onchange="onIRP6Change()"/>
+              Second Period <span style="color:#666666;font-weight:400;">(year end — due February)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group span-2">
+          <label class="form-label">Estimated annual taxable income <span class="req">*</span></label>
+          <div class="r-wrap">
+            <span class="r-pre">R</span>
+            <input class="form-control" type="number" id="irp6-income" min="0" step="1"
+              value="${income}" placeholder="0" oninput="onIRP6Change()"/>
+          </div>
+          <div class="form-hint">Enter the full annual figure — the calculator will halve it for the first period.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Medical aid members</label>
+          <input class="form-control" type="number" id="irp6-med" min="0" step="1"
+            value="${medMembers}" placeholder="0" oninput="onIRP6Change()"/>
+          <div class="form-hint">Total members including yourself. 0 = no medical aid.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">PAYE already deducted (annual)</label>
+          <div class="r-wrap">
+            <span class="r-pre">R</span>
+            <input class="form-control" type="number" id="irp6-paye" min="0" step="1"
+              value="${paye}" placeholder="0" oninput="onIRP6Change()"/>
+          </div>
+        </div>
+
+        <div class="form-group span-2" id="irp6-first-pay-row"
+          style="display:${period==='second'?'':'none'};">
+          <label class="form-label">First period payment already made</label>
+          <div class="r-wrap" style="max-width:300px;">
+            <span class="r-pre">R</span>
+            <input class="form-control" type="number" id="irp6-first-pay" min="0" step="1"
+              value="${firstPay}" placeholder="0" oninput="onIRP6Change()"/>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div id="irp6-result"></div>`;
+}
+
+// ── IRP6 state sync ────────────────────────────────────────────
+function onIRP6Change() {
+  if (!state.irp6) state.irp6 = {};
+  state.irp6.year       = document.getElementById('irp6-year')?.value || _irp6DefaultYear();
+  state.irp6.period     = document.querySelector('input[name="irp6-period"]:checked')?.value || 'first';
+  state.irp6.income     = parseFloat(document.getElementById('irp6-income')?.value) || 0;
+  state.irp6.ageGroup   = document.getElementById('irp6-age')?.value || 'under65';
+  state.irp6.medMembers = parseInt(document.getElementById('irp6-med')?.value) || 0;
+  state.irp6.paye       = parseFloat(document.getElementById('irp6-paye')?.value) || 0;
+  state.irp6.firstPay   = parseFloat(document.getElementById('irp6-first-pay')?.value) || 0;
+
+  // Show/hide first period row
+  const fpRow = document.getElementById('irp6-first-pay-row');
+  if (fpRow) fpRow.style.display = state.irp6.period === 'second' ? '' : 'none';
+
+  // Render results
+  const resultEl = document.getElementById('irp6-result');
+  if (resultEl) resultEl.innerHTML = _renderIRP6Result(calculateIRP6Individual());
+}
+
+// ── IRP6 calculation engine ────────────────────────────────────
+function calculateIRP6Individual() {
+  if (!state.irp6) return null;
+  const { year, period, income, ageGroup, medMembers, paye, firstPay } = state.irp6;
+
+  const table = taxTables.individual[year];
+  if (!table || !income) return null;
+
+  // Step 2: Find bracket
+  const bracket = table.brackets.find(b => income >= b.min && income <= b.max);
+  if (!bracket) return null;
+
+  // Step 3: Gross tax = base + rate × (income − (min − 1))
+  const aboveBracketFloor = income - bracket.min + 1;
+  const grossTax = Math.max(0, bracket.base + bracket.rate * aboveBracketFloor);
+
+  // Steps 4–6: Rebates
+  const primaryR   = table.rebates.primary;
+  const secondaryR = (ageGroup === 'age65' || ageGroup === 'age75') ? table.rebates.secondary : 0;
+  const tertiaryR  = ageGroup === 'age75' ? table.rebates.tertiary : 0;
+  const totalRebates = primaryR + secondaryR + tertiaryR;
+
+  // Step 7: Medical tax credit (annual)
+  const credits = taxTables.medicalCredits[year] || taxTables.medicalCredits[2026];
+  let medCredit = 0;
+  if (medMembers >= 1) {
+    // First 2 members share a single monthly rate; additional members each attract the extra rate
+    const additionalCount = Math.max(0, medMembers - 2);
+    medCredit = credits.first2members * 12 + additionalCount * credits.additional * 12;
+  }
+
+  // Steps 8–9: Annual liability (floor zero)
+  const afterRebates  = grossTax - totalRebates;
+  const afterMedical  = afterRebates - medCredit;
+  const annualLiability = Math.max(0, afterMedical);
+
+  // Step 10: Less PAYE
+  const afterPAYE = Math.max(0, annualLiability - paye);
+
+  // Steps 11–12: Period amount
+  let amountDue;
+  if (period === 'first') {
+    amountDue = afterPAYE / 2;
+  } else {
+    amountDue = Math.max(0, afterPAYE - firstPay);
+  }
+
+  return {
+    year, period, income, ageGroup, medMembers, paye, firstPay,
+    bracket, aboveBracketFloor, grossTax,
+    primaryR, secondaryR, tertiaryR, totalRebates,
+    medCredit, credits,
+    afterRebates, afterMedical, annualLiability,
+    afterPAYE, amountDue,
+  };
+}
+
+// ── IRP6 result renderer ───────────────────────────────────────
+function _renderIRP6Result(r) {
+  if (!r) {
+    return `<div class="card"><div class="info-box blue" style="margin-bottom:0;">
+      Enter an estimated annual taxable income above to calculate provisional tax.
+    </div></div>`;
+  }
+
+  const fmt = n => 'R\u00a0' + Math.abs(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtI = n => Math.round(n || 0).toLocaleString('en-ZA');
+  const neg  = n => n > 0 ? `(${fmt(n)})` : fmt(0);
+
+  const pctLabel = Math.round(r.bracket.rate * 100);
+  const bracketDesc = r.bracket.max === Infinity
+    ? `R\u00a0${fmtI(r.bracket.min)} and above`
+    : `R\u00a0${fmtI(r.bracket.min)} \u2013 R\u00a0${fmtI(r.bracket.max)}`;
+
+  const ageLabel = { under65: 'Under 65', age65: 'Age 65\u201374', age75: 'Age 75+' }[r.ageGroup];
+  const medDesc  = r.medMembers >= 1
+    ? `${r.medMembers} member${r.medMembers!==1?'s':''} @ R${fmtI(r.credits.first2members)}/mth${r.medMembers>2?` + ${r.medMembers-2} additional @ R${fmtI(r.credits.additional)}/mth`:''}`
+    : 'No medical aid';
+
+  const rowSt  = (bg,bold) => `padding:9px 16px;background:${bg};border-bottom:1px solid #C8E6C9;display:flex;justify-content:space-between;align-items:center;${bold?'font-weight:700;':''}`;
+  const label  = txt => `<span style="font-size:0.85rem;color:#1A1A1A;">${txt}</span>`;
+  const amt    = (n,color) => `<span style="font-family:var(--font-mono);font-size:0.85rem;font-weight:600;color:${color||'#145A32'};">${n}</span>`;
+  const divider = txt => `<div style="background:#D4F5E2;color:#145A32;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;padding:6px 16px;border-bottom:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${txt}</div>`;
+
+  let ri = 0;
+  const row = (desc, value, color) => {
+    const bg = ri++%2===0?'#FFFFFF':'#F0F9F4';
+    return `<div style="${rowSt(bg,false)}">${label(desc)}${amt(value,color)}</div>`;
+  };
+  const totalRow = (desc, value, color) =>
+    `<div style="${rowSt('#145A32',true)}-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <span style="color:#FFFFFF;font-size:0.9rem;">${desc}</span>
+      <span style="font-family:var(--font-mono);font-size:0.9rem;color:#FFFFFF;">${value}</span>
+    </div>`;
+
+  const dueColor = r.amountDue > 0 ? '#145A32' : '#1E8449';
+  const dueLabel = r.amountDue > 0
+    ? `${r.period === 'first' ? 'First' : 'Second'} period provisional tax due`
+    : 'No provisional tax payable';
+
+  const periodNote = r.period === 'first'
+    ? row(`Step 11 — First period (annual ÷ 2)`, fmt(r.amountDue))
+    : [
+        row(`Step 11 — Less first period payment`, neg(r.firstPay), '#C0392B'),
+        row(`Step 12 — Second period amount due`, fmt(Math.max(0, r.afterPAYE - r.firstPay))),
+      ].join('');
+
+  return `
+    <div class="card" style="padding:0;overflow:hidden;border-color:#C8E6C9;">
+      <div style="background:#145A32;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="color:#FFFFFF;font-weight:700;font-size:0.95rem;">IRP6 Calculation — ${r.year} Tax Year</div>
+        <div style="color:#D4F5E2;font-size:0.82rem;">${ageLabel} &middot; ${r.period === 'first' ? 'First Period' : 'Second Period'}</div>
+      </div>
+
+      ${divider('Income')}
+      ${row('Step 1 — Estimated annual taxable income', fmt(r.income))}
+
+      ${divider('Gross Tax')}
+      ${row(`Step 2 — Tax bracket`, `${pctLabel}% on ${bracketDesc}`)}
+      ${row(`Step 3 — Gross tax: R ${fmtI(r.bracket.base)} base + ${pctLabel}% × R ${fmtI(r.aboveBracketFloor)}`, fmt(r.grossTax))}
+
+      ${divider('Rebates')}
+      ${row('Step 4 — Less primary rebate', neg(r.primaryR), '#C0392B')}
+      ${r.secondaryR ? row('Step 5 — Less secondary rebate (age 65+)', neg(r.secondaryR), '#C0392B') : ''}
+      ${r.tertiaryR  ? row('Step 6 — Less tertiary rebate (age 75+)',  neg(r.tertiaryR),  '#C0392B') : ''}
+
+      ${divider('Medical Tax Credit')}
+      ${row(`Step 7 — ${medDesc}`, neg(r.medCredit), r.medCredit > 0 ? '#C0392B' : '#666666')}
+
+      ${divider('Annual Tax Liability')}
+      ${row('Step 8 — Tax after rebates and medical credit', fmt(r.afterMedical < 0 ? 0 : r.afterMedical))}
+      ${row('Step 9 — Annual tax liability (minimum R 0)', fmt(r.annualLiability))}
+
+      ${divider('PAYE and Period')}
+      ${row('Step 10 — Less PAYE already deducted', neg(r.paye), r.paye > 0 ? '#C0392B' : '#666666')}
+      ${row('Net annual tax after PAYE', fmt(r.afterPAYE))}
+      ${periodNote}
+
+      ${totalRow(dueLabel, fmt(r.amountDue))}
     </div>`;
 }
 
