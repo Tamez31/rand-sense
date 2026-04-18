@@ -2331,6 +2331,93 @@ function downloadOBTemplate() {
   a.click(); URL.revokeObjectURL(url);
 }
 
+// ── IRP6 due date calculator ───────────────────────────────────
+// Returns { first, second } formatted as "31 Aug 2026"
+// First period: last day of the month 6 months after year start
+// Second period: last day of the financial year end month
+function _irp6DueDates(yearEndMonthName, taxYear) {
+  const endIdx = _FY_MONTHS.indexOf(yearEndMonthName);
+  if (endIdx < 0) return { first: '', second: '' };
+  const yr           = parseInt(taxYear, 10);
+  const startMoIdx   = (endIdx + 1) % 12;
+  // December year end → year starts Jan of same year; all others → prior calendar year
+  const startYear    = endIdx === 11 ? yr : yr - 1;
+  // First period due = end of month 6 months from year start
+  const fpMoIdx      = (startMoIdx + 5) % 12;
+  const fpYear       = startYear + (startMoIdx + 5 >= 12 ? 1 : 0);
+  const fpDay        = new Date(fpYear, fpMoIdx + 1, 0).getDate();
+  // Second period due = last day of year-end month in taxYear
+  const spDay        = new Date(yr, endIdx + 1, 0).getDate();
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return {
+    first:  `${fpDay} ${mo[fpMoIdx]} ${fpYear}`,
+    second: `${spDay} ${mo[endIdx]} ${yr}`,
+  };
+}
+
+// ── IRP6 summary card renderer ─────────────────────────────────
+// Shared by both individual and company — shown above the step-by-step detail.
+function _renderIRP6SummaryCard(r, client, isCompany) {
+  const yearEndMonth = client.financial_year_end || 'February';
+  const due          = _irp6DueDates(yearEndMonth, r.year);
+  const fmt          = n => 'R\u00a0' + Math.abs(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const periodLabel  = r.period === 'first' ? 'First Period' : 'Second Period';
+  const entityLabel  = isCompany
+    ? (r.compType === 'sbc' ? 'Small Business Corporation' : 'Company \u2014 Standard Rate')
+    : 'Commission Earner \u2014 Individual';
+
+  const rowSt = bg => `padding:9px 16px;background:${bg};border-bottom:1px solid #C8E6C9;display:flex;justify-content:space-between;align-items:center;`;
+  const lbl   = txt => `<span style="font-size:0.85rem;color:#1A1A1A;">${txt}</span>`;
+  const amtSpan = (v, color, large) => `<span style="font-family:var(--font-mono);font-size:${large?'1rem':'0.85rem'};font-weight:${large?'700':'600'};color:${color||'#145A32'};">${v}</span>`;
+
+  let ri = 0;
+  const row = (desc, val, color) => {
+    const bg = ri++%2===0?'#FFFFFF':'#F0F9F4';
+    return `<div style="${rowSt(bg)}">${lbl(desc)}${amtSpan(val, color)}</div>`;
+  };
+
+  // "Less" deduction rows
+  let lessRows = '';
+  if (!isCompany && r.paye > 0) {
+    const bg = ri++%2===0?'#FFFFFF':'#F0F9F4';
+    lessRows += `<div style="${rowSt(bg)}">${lbl('Less: PAYE already deducted')}${amtSpan('(' + fmt(r.paye) + ')', '#C0392B')}</div>`;
+  }
+  if (r.period === 'second' && r.firstPay > 0) {
+    const bg = ri++%2===0?'#FFFFFF':'#F0F9F4';
+    lessRows += `<div style="${rowSt(bg)}">${lbl('Less: First period payment made')}${amtSpan('(' + fmt(r.firstPay) + ')', '#C0392B')}</div>`;
+  }
+
+  return `
+    <div class="card" style="padding:0;overflow:hidden;border-color:#C8E6C9;margin-bottom:16px;">
+      <div style="background:#145A32;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="display:flex;align-items:baseline;">
+          <span style="font-weight:900;font-size:18px;color:#FFFFFF;line-height:1;">Rand</span>
+          <span style="font-weight:300;font-size:18px;color:#A8E6C1;line-height:1;">Sense</span>
+        </div>
+        <div style="color:#FFFFFF;font-weight:700;font-size:0.95rem;">IRP6 Provisional Tax &mdash; ${periodLabel}</div>
+        <div style="color:#D4F5E2;font-size:12px;">Tax Year ${r.year}</div>
+      </div>
+
+      ${row('Client', escH(client.name))}
+      ${row('Tax year', String(r.year))}
+      ${row('Payment period', periodLabel)}
+      ${row('Entity type', entityLabel)}
+      ${row('Estimated annual taxable income', fmt(r.income))}
+      ${row('Annual tax liability', fmt(r.annualLiability))}
+      ${lessRows}
+
+      <div style="padding:12px 16px;background:#145A32;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <span style="color:#FFFFFF;font-size:1rem;font-weight:700;">Amount payable to SARS</span>
+        <span style="font-family:var(--font-mono);font-size:1rem;color:#FFFFFF;font-weight:700;">${fmt(r.amountDue)}</span>
+      </div>
+
+      <div style="padding:10px 16px;background:#F0F9F4;font-size:0.82rem;color:#145A32;border-top:1px solid #C8E6C9;">
+        <strong>Due dates:</strong>&nbsp; First period due ${due.first} &nbsp;&bull;&nbsp; Second period due ${due.second}
+      </div>
+    </div>`;
+}
+
 // ── IRP6 Provisional Tax tab ───────────────────────────────────
 function _irp6DefaultYear() {
   const now = new Date();
@@ -2533,7 +2620,7 @@ function onIRP6Change() {
 
   // Render results
   const resultEl = document.getElementById('irp6-result');
-  if (resultEl) resultEl.innerHTML = _renderIRP6Result(calculateIRP6Individual());
+  if (resultEl) resultEl.innerHTML = _renderIRP6Result(calculateIRP6Individual(), state.currentClient);
 }
 
 // ── IRP6 company sub-tab switcher ─────────────────────────────
@@ -2560,7 +2647,7 @@ function onIRP6CompanyChange() {
   if (fpRow) fpRow.style.display = state.irp6c.period === 'second' ? '' : 'none';
 
   const resultEl = document.getElementById('irp6c-result');
-  if (resultEl) resultEl.innerHTML = _renderIRP6CompanyResult(calculateIRP6Company());
+  if (resultEl) resultEl.innerHTML = _renderIRP6CompanyResult(calculateIRP6Company(), state.currentClient);
 }
 
 // ── IRP6 calculation engine ────────────────────────────────────
@@ -2621,12 +2708,15 @@ function calculateIRP6Individual() {
 }
 
 // ── IRP6 result renderer ───────────────────────────────────────
-function _renderIRP6Result(r) {
+function _renderIRP6Result(r, client) {
   if (!r) {
     return `<div class="card"><div class="info-box blue" style="margin-bottom:0;">
       Enter an estimated annual taxable income above to calculate provisional tax.
     </div></div>`;
   }
+
+  const btnHtml     = `<div style="margin-bottom:16px;"><button class="btn btn-primary" onclick="printIRP6()">&#128196; Download IRP6 PDF</button></div>`;
+  const summaryHtml = client ? _renderIRP6SummaryCard(r, client, false) : '';
 
   const fmt = n => 'R\u00a0' + Math.abs(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtI = n => Math.round(n || 0).toLocaleString('en-ZA');
@@ -2670,34 +2760,34 @@ function _renderIRP6Result(r) {
         row(`Step 12 — Second period amount due`, fmt(Math.max(0, r.afterPAYE - r.firstPay))),
       ].join('');
 
-  return `
+  return btnHtml + summaryHtml + `
     <div class="card" style="padding:0;overflow:hidden;border-color:#C8E6C9;">
       <div style="background:#145A32;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <div style="color:#FFFFFF;font-weight:700;font-size:0.95rem;">IRP6 Calculation — ${r.year} Tax Year</div>
+        <div style="color:#FFFFFF;font-weight:700;font-size:0.95rem;">IRP6 Calculation \u2014 ${r.year} Tax Year</div>
         <div style="color:#D4F5E2;font-size:0.82rem;">${ageLabel} &middot; ${r.period === 'first' ? 'First Period' : 'Second Period'}</div>
       </div>
 
       ${divider('Income')}
-      ${row('Step 1 — Estimated annual taxable income', fmt(r.income))}
+      ${row('Step 1 \u2014 Estimated annual taxable income', fmt(r.income))}
 
       ${divider('Gross Tax')}
-      ${row(`Step 2 — Tax bracket`, `${pctLabel}% on ${bracketDesc}`)}
-      ${row(`Step 3 — Gross tax: R ${fmtI(r.bracket.base)} base + ${pctLabel}% × R ${fmtI(r.aboveBracketFloor)}`, fmt(r.grossTax))}
+      ${row(`Step 2 \u2014 Tax bracket`, `${pctLabel}% on ${bracketDesc}`)}
+      ${row(`Step 3 \u2014 Gross tax: R\u00a0${fmtI(r.bracket.base)} base + ${pctLabel}% \u00d7 R\u00a0${fmtI(r.aboveBracketFloor)}`, fmt(r.grossTax))}
 
       ${divider('Rebates')}
-      ${row('Step 4 — Less primary rebate', neg(r.primaryR), '#C0392B')}
-      ${r.secondaryR ? row('Step 5 — Less secondary rebate (age 65+)', neg(r.secondaryR), '#C0392B') : ''}
-      ${r.tertiaryR  ? row('Step 6 — Less tertiary rebate (age 75+)',  neg(r.tertiaryR),  '#C0392B') : ''}
+      ${row('Step 4 \u2014 Less primary rebate', neg(r.primaryR), '#C0392B')}
+      ${r.secondaryR ? row('Step 5 \u2014 Less secondary rebate (age 65+)', neg(r.secondaryR), '#C0392B') : ''}
+      ${r.tertiaryR  ? row('Step 6 \u2014 Less tertiary rebate (age 75+)',  neg(r.tertiaryR),  '#C0392B') : ''}
 
       ${divider('Medical Tax Credit')}
-      ${row(`Step 7 — ${medDesc}`, neg(r.medCredit), r.medCredit > 0 ? '#C0392B' : '#666666')}
+      ${row(`Step 7 \u2014 ${medDesc}`, neg(r.medCredit), r.medCredit > 0 ? '#C0392B' : '#666666')}
 
       ${divider('Annual Tax Liability')}
-      ${row('Step 8 — Tax after rebates and medical credit', fmt(r.afterMedical < 0 ? 0 : r.afterMedical))}
-      ${row('Step 9 — Annual tax liability (minimum R 0)', fmt(r.annualLiability))}
+      ${row('Step 8 \u2014 Tax after rebates and medical credit', fmt(r.afterMedical < 0 ? 0 : r.afterMedical))}
+      ${row('Step 9 \u2014 Annual tax liability (minimum R 0)', fmt(r.annualLiability))}
 
       ${divider('PAYE and Period')}
-      ${row('Step 10 — Less PAYE already deducted', neg(r.paye), r.paye > 0 ? '#C0392B' : '#666666')}
+      ${row('Step 10 \u2014 Less PAYE already deducted', neg(r.paye), r.paye > 0 ? '#C0392B' : '#666666')}
       ${row('Net annual tax after PAYE', fmt(r.afterPAYE))}
       ${periodNote}
 
@@ -2736,12 +2826,15 @@ function calculateIRP6Company() {
 }
 
 // ── IRP6 company result renderer ──────────────────────────────
-function _renderIRP6CompanyResult(r) {
+function _renderIRP6CompanyResult(r, client) {
   if (!r) {
     return `<div class="card"><div class="info-box blue" style="margin-bottom:0;">
       Enter an estimated annual taxable income above to calculate provisional tax.
     </div></div>`;
   }
+
+  const btnHtml     = `<div style="margin-bottom:16px;"><button class="btn btn-primary" onclick="printIRP6()">&#128196; Download IRP6 PDF</button></div>`;
+  const summaryHtml = client ? _renderIRP6SummaryCard(r, client, true) : '';
 
   const fmt  = n => 'R\u00a0' + Math.abs(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtI = n => Math.round(n || 0).toLocaleString('en-ZA');
@@ -2795,7 +2888,7 @@ function _renderIRP6CompanyResult(r) {
         row('Step 6 \u2014 Second period amount due', fmt(Math.max(0, r.annualLiability - r.firstPay))),
       ].join('');
 
-  return `
+  return btnHtml + summaryHtml + `
     <div class="card" style="padding:0;overflow:hidden;border-color:#C8E6C9;">
       <div style="background:#145A32;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
         <div style="color:#FFFFFF;font-weight:700;font-size:0.95rem;">IRP6 Calculation \u2014 ${r.year} Tax Year</div>
@@ -2815,6 +2908,18 @@ function _renderIRP6CompanyResult(r) {
 
       ${totalRow(dueLabel, fmt(r.amountDue))}
     </div>`;
+}
+
+// ── printIRP6 — gather state and call PDF export ───────────────
+function printIRP6() {
+  const c    = state.currentClient;
+  if (!c) return;
+  const isC  = c.entity_type === 'commission_earner';
+  const r    = isC ? calculateIRP6Individual() : calculateIRP6Company();
+  if (!r) { toast('Enter income details to generate the IRP6 report.', 'warning'); return; }
+  const yearEndMonth = c.financial_year_end || 'February';
+  const dueDates     = _irp6DueDates(yearEndMonth, r.year);
+  window.Export.printIRP6PDF({ r, clientName: c.name, entityType: c.entity_type, yearEndMonth, dueDates });
 }
 
 // ============================================================

@@ -986,6 +986,199 @@ function exportVATReportCSV(vatData) {
   );
 }
 
+// ── IRP6 Provisional Tax PDF ──────────────────────────────────
+// params: { r, clientName, entityType, yearEndMonth, dueDates }
+//   r          — result object from calculateIRP6Individual() or calculateIRP6Company()
+//   entityType — 'commission_earner' | 'company_cc' | 'company_pty'
+//   dueDates   — { first, second } formatted strings
+function printIRP6PDF(params) {
+  const { r, clientName, entityType, dueDates } = params;
+  const target = getPrintTarget();
+
+  const isIndividual = entityType === 'commission_earner';
+  const periodLabel  = r.period === 'first' ? 'First Period' : 'Second Period';
+  const entityLabel  = isIndividual ? 'Commission Earner — Individual'
+    : (r.compType === 'sbc' ? 'Small Business Corporation' : 'Company — Standard Rate');
+
+  const fmt  = n => 'R\u00a0' + Math.abs(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtI = n => Math.round(n || 0).toLocaleString('en-ZA');
+  const neg  = n => n > 0 ? `(${fmt(n)})` : fmt(0);
+
+  // ── Letterhead ────────────────────────────────────────────────
+  const barSt = 'background:#145A32;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const botSt = 'background:#1E8449;padding:0.5rem 1.5rem;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+
+  const letterhead = `
+    <div style="${barSt}">
+      <div>
+        <div style="display:flex;align-items:baseline;">
+          <span style="font-weight:900;font-size:18px;color:#FFFFFF;line-height:1;">Rand</span>
+          <span style="font-weight:300;font-size:18px;color:#A8E6C1;line-height:1;">Sense</span>
+        </div>
+        <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#D4F5E2;margin-top:3px;">Making Cents of it all</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="color:#FFFFFF;font-weight:700;font-size:14px;">IRP6 Provisional Tax Return</div>
+        <div style="color:#D4F5E2;font-size:11px;margin-top:2px;">${escapeHTML(clientName)} &mdash; ${periodLabel} &mdash; Tax Year ${r.year}</div>
+      </div>
+      <div style="text-align:right;color:#D4F5E2;font-size:11px;">Matthew Le Roux</div>
+    </div>`;
+
+  const footer = `<div style="${botSt}"><span style="color:#FFFFFF;font-size:9px;font-family:'Poppins',sans-serif;">Making Cents of it all &mdash; RandSense &mdash; Prepared by: Matthew Le Roux</span></div>`;
+
+  // ── Summary card ──────────────────────────────────────────────
+  const rowSt  = bg => `padding:8px 16px;background:${bg};border-bottom:1px solid #C8E6C9;display:flex;justify-content:space-between;font-size:9.5pt;`;
+  const sLbl   = txt => `<span style="color:#1A1A1A;">${txt}</span>`;
+  const sAmt   = (v, color) => `<span style="font-family:monospace;font-weight:600;color:${color||'#145A32'};">${v}</span>`;
+
+  let sri = 0;
+  const sRow = (desc, val, color) => {
+    const bg = sri++%2===0?'#FFFFFF':'#F0F9F4';
+    return `<div style="${rowSt(bg)}">${sLbl(desc)}${sAmt(val, color)}</div>`;
+  };
+
+  let lessRows = '';
+  if (isIndividual && r.paye > 0) {
+    const bg = sri++%2===0?'#FFFFFF':'#F0F9F4';
+    lessRows += `<div style="${rowSt(bg)}">${sLbl('Less: PAYE already deducted')}${sAmt('(' + fmt(r.paye) + ')', '#C0392B')}</div>`;
+  }
+  if (r.period === 'second' && r.firstPay > 0) {
+    const bg = sri++%2===0?'#FFFFFF':'#F0F9F4';
+    lessRows += `<div style="${rowSt(bg)}">${sLbl('Less: First period payment made')}${sAmt('(' + fmt(r.firstPay) + ')', '#C0392B')}</div>`;
+  }
+
+  const summaryCard = `
+    <div style="border:1px solid #C8E6C9;border-radius:4px;overflow:hidden;margin-bottom:20px;">
+      <div style="background:#145A32;padding:0.85rem 1.25rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="display:flex;align-items:baseline;">
+          <span style="font-weight:900;font-size:16px;color:#FFFFFF;line-height:1;">Rand</span>
+          <span style="font-weight:300;font-size:16px;color:#A8E6C1;line-height:1;">Sense</span>
+        </div>
+        <div style="color:#FFFFFF;font-weight:700;font-size:12px;">IRP6 Provisional Tax &mdash; ${periodLabel}</div>
+        <div style="color:#D4F5E2;font-size:11px;">Tax Year ${r.year}</div>
+      </div>
+      ${sRow('Client', escapeHTML(clientName))}
+      ${sRow('Tax year', String(r.year))}
+      ${sRow('Payment period', periodLabel)}
+      ${sRow('Entity type', entityLabel)}
+      ${sRow('Estimated annual taxable income', fmt(r.income))}
+      ${sRow('Annual tax liability', fmt(r.annualLiability))}
+      ${lessRows}
+      <div style="padding:10px 16px;background:#145A32;display:flex;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <span style="color:#FFFFFF;font-size:11pt;font-weight:700;">Amount payable to SARS</span>
+        <span style="font-family:monospace;font-size:11pt;color:#FFFFFF;font-weight:700;">${fmt(r.amountDue)}</span>
+      </div>
+      <div style="padding:8px 16px;background:#F0F9F4;font-size:8.5pt;color:#145A32;border-top:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <strong>Due dates:</strong>&nbsp; First period due ${dueDates.first} &nbsp;&bull;&nbsp; Second period due ${dueDates.second}
+      </div>
+    </div>`;
+
+  // ── Step-by-step calculation ──────────────────────────────────
+  const sec = txt => `<div style="background:#D4F5E2;color:#145A32;font-weight:700;font-size:7.5pt;text-transform:uppercase;letter-spacing:0.05em;padding:5px 14px;border-bottom:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${txt}</div>`;
+
+  let ri = 0;
+  const dRow = (desc, val, color) => {
+    const bg = ri++%2===0?'#FFFFFF':'#F0F9F4';
+    return `<div style="${rowSt(bg)}">${sLbl(desc)}${sAmt(val, color)}</div>`;
+  };
+  const totRow = (desc, val) =>
+    `<div style="padding:9px 14px;background:#145A32;display:flex;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <span style="color:#FFFFFF;font-size:10pt;font-weight:700;">${desc}</span>
+      <span style="font-family:monospace;font-size:10pt;color:#FFFFFF;font-weight:700;">${val}</span>
+    </div>`;
+
+  let stepsHTML = '';
+  if (isIndividual) {
+    const pct = Math.round(r.bracket.rate * 100);
+    const bDesc = r.bracket.max === Infinity
+      ? `R\u00a0${fmtI(r.bracket.min)} and above`
+      : `R\u00a0${fmtI(r.bracket.min)} \u2013 R\u00a0${fmtI(r.bracket.max)}`;
+    const ageLabel = { under65: 'Under 65', age65: 'Age 65\u201374', age75: 'Age 75+' }[r.ageGroup];
+    const medDesc = r.medMembers >= 1
+      ? `${r.medMembers} member${r.medMembers!==1?'s':''} @ R${fmtI(r.credits.first2members)}/mth${r.medMembers>2?` + ${r.medMembers-2} extra @ R${fmtI(r.credits.additional)}/mth`:''}`
+      : 'No medical aid';
+
+    stepsHTML += sec('Income');
+    stepsHTML += dRow('Step 1 \u2014 Estimated annual taxable income', fmt(r.income));
+    stepsHTML += sec(`Gross Tax (${ageLabel})`);
+    stepsHTML += dRow(`Step 2 \u2014 Tax bracket`, `${pct}% on ${bDesc}`);
+    stepsHTML += dRow(`Step 3 \u2014 Gross tax: R\u00a0${fmtI(r.bracket.base)} base + ${pct}% \u00d7 R\u00a0${fmtI(r.aboveBracketFloor)}`, fmt(r.grossTax));
+    stepsHTML += sec('Rebates');
+    stepsHTML += dRow('Step 4 \u2014 Less primary rebate', neg(r.primaryR), '#C0392B');
+    if (r.secondaryR) stepsHTML += dRow('Step 5 \u2014 Less secondary rebate (age 65+)', neg(r.secondaryR), '#C0392B');
+    if (r.tertiaryR)  stepsHTML += dRow('Step 6 \u2014 Less tertiary rebate (age 75+)',  neg(r.tertiaryR),  '#C0392B');
+    stepsHTML += sec('Medical Tax Credit');
+    stepsHTML += dRow(`Step 7 \u2014 ${medDesc}`, neg(r.medCredit), r.medCredit > 0 ? '#C0392B' : '#666666');
+    stepsHTML += sec('Annual Tax Liability');
+    stepsHTML += dRow('Step 8 \u2014 Tax after rebates and medical credit', fmt(r.afterMedical < 0 ? 0 : r.afterMedical));
+    stepsHTML += dRow('Step 9 \u2014 Annual tax liability (minimum R 0)', fmt(r.annualLiability));
+    stepsHTML += sec('PAYE and Period');
+    stepsHTML += dRow('Step 10 \u2014 Less PAYE already deducted', neg(r.paye), r.paye > 0 ? '#C0392B' : '#666666');
+    stepsHTML += dRow('Net annual tax after PAYE', fmt(r.afterPAYE));
+    if (r.period === 'first') {
+      stepsHTML += dRow('Step 11 \u2014 First period (annual \u00f7 2)', fmt(r.amountDue));
+    } else {
+      stepsHTML += dRow('Step 11 \u2014 Less first period payment', neg(r.firstPay), '#C0392B');
+      stepsHTML += dRow('Step 12 \u2014 Second period amount due', fmt(Math.max(0, r.afterPAYE - r.firstPay)));
+    }
+  } else {
+    stepsHTML += sec('Income');
+    stepsHTML += dRow('Step 1 \u2014 Estimated annual taxable income', fmt(r.income));
+    if (r.compType === 'sbc') {
+      const pct = Math.round(r.bracket.rate * 100);
+      const bDesc = r.bracket.max === Infinity
+        ? `R\u00a0${fmtI(r.bracket.min)} and above`
+        : `R\u00a0${fmtI(r.bracket.min)} \u2013 R\u00a0${fmtI(r.bracket.max)}`;
+      const above = r.income - r.bracket.min + 1;
+      stepsHTML += sec('Gross Tax \u2014 SBC Sliding Scale');
+      stepsHTML += dRow('Step 2 \u2014 Tax bracket', `${pct}% on ${bDesc}`);
+      stepsHTML += dRow(`Step 3 \u2014 Gross tax: R\u00a0${fmtI(r.bracket.base)} base + ${pct}% \u00d7 R\u00a0${fmtI(above)}`, fmt(r.grossTax));
+    } else {
+      const pct = Math.round(r.bracket.rate * 100);
+      stepsHTML += sec('Gross Tax \u2014 Standard Rate');
+      stepsHTML += dRow('Step 2 \u2014 Company tax rate', `${pct}%`);
+      stepsHTML += dRow(`Step 3 \u2014 Gross tax (income \u00d7 ${pct}%)`, fmt(r.grossTax));
+    }
+    stepsHTML += sec('Annual Tax Liability');
+    stepsHTML += dRow('Step 4 \u2014 Annual tax liability', fmt(r.annualLiability));
+    stepsHTML += sec('Period');
+    if (r.period === 'first') {
+      stepsHTML += dRow('Step 5 \u2014 First period (annual \u00f7 2)', fmt(r.amountDue));
+    } else {
+      stepsHTML += dRow('Step 5 \u2014 Less first period payment', neg(r.firstPay), '#C0392B');
+      stepsHTML += dRow('Step 6 \u2014 Second period amount due', fmt(Math.max(0, r.annualLiability - r.firstPay)));
+    }
+  }
+
+  const dueLabel = r.period === 'first' ? 'First period provisional tax due' : 'Second period provisional tax due';
+  stepsHTML += totRow(dueLabel, fmt(r.amountDue));
+
+  const stepsBlock = `
+    <h3 style="font-size:10pt;font-weight:700;color:#145A32;margin:20px 0 8px;">Detailed Tax Calculation</h3>
+    <div style="border:1px solid #C8E6C9;border-radius:4px;overflow:hidden;margin-bottom:20px;">${stepsHTML}</div>`;
+
+  // ── Disclaimer ────────────────────────────────────────────────
+  const disclaimer = `
+    <div style="margin-top:20px;padding:12px 16px;border:1px solid #C8E6C9;border-radius:4px;background:#F0F9F4;font-size:8.5pt;color:#666666;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <strong>Disclaimer:</strong> This is an estimate based on current financials. Final tax liability may differ.
+      Please verify with your tax practitioner before submission.<br/>
+      <span style="font-size:8pt;">Prepared by: Matthew Le Roux &mdash; Generated: ${todayDMY()}</span>
+    </div>`;
+
+  target.innerHTML = `
+    <div style="font-family:'Poppins',sans-serif;color:#1A1A1A;font-size:10pt;margin:0;padding:0;">
+      ${letterhead}
+      <div style="padding:24px;background:#FFFFFF;">
+        ${summaryCard}
+        ${stepsBlock}
+        ${disclaimer}
+      </div>
+      ${footer}
+    </div>`;
+
+  window.print();
+}
+
 // ============================================================
 // EXPORTS
 // ============================================================
@@ -1005,6 +1198,7 @@ window.Export = {
   exportTaxTjomHandoff,
   printVATReport,
   exportVATReportCSV,
+  printIRP6PDF,
   // Utilities exposed for testing
   toCSV,
   todayDMY,
