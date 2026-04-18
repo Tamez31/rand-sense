@@ -234,6 +234,15 @@
           <option value="">— Select account —</option>
         </select>
       </div>
+      <div class="form-group" id="cm-vat-code-row" style="margin-bottom:14px;">
+        <label class="form-label">VAT Code</label>
+        <select class="form-control" id="cm-vat-code">
+          <option value="0">0 — No VAT (default)</option>
+          <option value="1">1 — VAT 15% (standard rated)</option>
+          <option value="2">2 — Zero-rated VAT</option>
+          <option value="3">3 — Exempt</option>
+        </select>
+      </div>
       <div style="border-top:1px solid #C8E6C9;padding-top:14px;margin-top:4px;">
         <label class="toggle-row" style="margin-bottom:10px;">
           <input type="checkbox" id="cm-save-rule" checked/>
@@ -781,6 +790,7 @@ function openClassifyModal(txId) {
       `</optgroup>`;
     document.getElementById('cm-save-rule').parentElement.style.display = 'none';
     document.getElementById('cm-keyword-row').style.display = 'none';
+    document.getElementById('cm-vat-code-row').style.display = 'none';
   } else {
     const groups = ['income','cost_of_sales','expense','asset','liability','equity'];
     groups.forEach(grp => {
@@ -795,6 +805,8 @@ function openClassifyModal(txId) {
     document.getElementById('cm-save-rule').parentElement.style.display = '';
     document.getElementById('cm-keyword').value = window.RulesEngine.suggestKeyword(tx.description);
     document.getElementById('cm-keyword-row').style.display = '';
+    document.getElementById('cm-vat-code').value = '0';
+    document.getElementById('cm-vat-code-row').style.display = '';
   }
 
   openModal('classify-modal');
@@ -814,6 +826,7 @@ async function confirmClassify() {
   const [code, name] = val.split('|');
   const keyword      = document.getElementById('cm-keyword')?.value?.trim() || '';
   const saveRule     = document.getElementById('cm-save-rule')?.checked ?? false;
+  const vatCode      = parseInt(document.getElementById('cm-vat-code')?.value || '0', 10);
 
   showLoading('Classifying…');
   try {
@@ -824,6 +837,7 @@ async function confirmClassify() {
       accountName:     name,
       vatType:         'none',
       vatAmount:       0,
+      vatCode,
       keyword,
       saveAsRule:      saveRule,
       existingRules:   state.rules,
@@ -1198,7 +1212,16 @@ function renderSettingsTab() {
              · ${escH(vatPeriodLabel[c.vat_period] || c.vat_period || '')} filing
              ${c.vat_registration_date ? ` · Registered ${escH(c.vat_registration_date)}` : ''}
            </div>
-           <button class="btn btn-ghost btn-sm" onclick="deactivateVAT()">Deactivate VAT</button>`
+           <div class="info-box blue" style="margin-top:12px;">
+             <strong>VAT codes</strong> — applied per transaction during classification:<br/>
+             <span style="display:block;margin-top:6px;line-height:1.8;">
+               <strong>0 — No VAT:</strong> transaction has no VAT component<br/>
+               <strong>1 — VAT 15%:</strong> standard rated supply or purchase<br/>
+               <strong>2 — Zero-rated:</strong> taxable at 0% — milk, bread, eggs etc<br/>
+               <strong>3 — Exempt:</strong> not subject to VAT — residential rent, financial services etc
+             </span>
+           </div>
+           <button class="btn btn-ghost btn-sm" style="margin-top:4px;" onclick="deactivateVAT()">Deactivate VAT</button>`
         : `<div class="form-grid">
              <div class="form-group">
                <label class="form-label">VAT number</label>

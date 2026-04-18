@@ -95,6 +95,7 @@ function applyRules(parsedRows, rules, clientId, financialYear, period, sourceBa
         account_code: rule.account_code,
         account_name: rule.account_name,
         vat_type:     rule.vat_type || 'none',
+        vat_code:     rule.vat_code || 0,
         vat_amount:   0, // VAT amount calculated separately by vat-module.js
       });
       matchedRuleIds.push(rule.id);
@@ -104,6 +105,7 @@ function applyRules(parsedRows, rules, clientId, financialYear, period, sourceBa
         account_code: null,
         account_name: null,
         vat_type:     'none',
+        vat_code:     0,
         vat_amount:   0,
       });
     }
@@ -256,6 +258,7 @@ async function classifyAndSaveRule(params) {
     accountName,
     vatType,
     vatAmount,
+    vatCode,          // integer 0–3: VAT code selected by user
     keyword,          // suggested keyword — user may have edited it
     saveAsRule,       // boolean
     existingRules,
@@ -268,7 +271,8 @@ async function classifyAndSaveRule(params) {
     accountCode,
     accountName,
     vatType || 'none',
-    vatAmount || 0
+    vatAmount || 0,
+    vatCode  || 0
   );
 
   let ruleCreated = false;
@@ -295,6 +299,7 @@ async function classifyAndSaveRule(params) {
         account_code: accountCode,
         account_name: accountName,
         vat_type:     vatType || 'none',
+        vat_code:     vatCode  || 0,
         match_count:  1,
       });
       ruleCreated = true;
@@ -316,6 +321,7 @@ async function classifyAndSaveRule(params) {
         account_code: accountCode,
         account_name: accountName,
         vat_type:     vatType || 'none',
+        vat_code:     vatCode  || 0,
         // Compute VAT on each transaction's actual amount
         vat_amount:   (vatType && vatType !== 'none')
           ? window.VAT.extractVAT(t.amount)

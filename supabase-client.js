@@ -109,12 +109,18 @@ const Transactions = {
   },
 
   // Classify a single transaction (apply account + optional VAT)
-  async classify(id, accountCode, accountName, vatType, vatAmount) {
+  async classify(id, accountCode, accountName, vatType, vatAmount, vatCode) {
     const sb = getClient();
     return unwrap(
       await sb
         .from('transactions')
-        .update({ account_code: accountCode, account_name: accountName, vat_type: vatType || 'none', vat_amount: vatAmount || 0 })
+        .update({
+          account_code: accountCode,
+          account_name: accountName,
+          vat_type:     vatType  || 'none',
+          vat_amount:   vatAmount || 0,
+          vat_code:     vatCode  || 0,
+        })
         .eq('id', id)
         .select()
     );
@@ -122,7 +128,7 @@ const Transactions = {
 
   // Bulk-classify many transactions at once (rules engine result)
   async classifyBatch(updates) {
-    // updates = [{ id, account_code, account_name, vat_type, vat_amount }, ...]
+    // updates = [{ id, account_code, account_name, vat_type, vat_amount, vat_code }, ...]
     const sb = getClient();
     const promises = updates.map(u =>
       sb
@@ -130,8 +136,9 @@ const Transactions = {
         .update({
           account_code: u.account_code,
           account_name: u.account_name,
-          vat_type: u.vat_type || 'none',
-          vat_amount: u.vat_amount || 0,
+          vat_type:     u.vat_type  || 'none',
+          vat_amount:   u.vat_amount || 0,
+          vat_code:     u.vat_code  || 0,
         })
         .eq('id', u.id)
     );
