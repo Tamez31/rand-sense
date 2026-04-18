@@ -2418,6 +2418,53 @@ function _renderIRP6SummaryCard(r, client, isCompany) {
     </div>`;
 }
 
+// ── IRP6 ecosystem helpers ─────────────────────────────────────
+
+// Compute net profit from current state.transactions via IS engine.
+// Returns { hasData, netProfit, txCount, latestDate, error }
+function _irp6GetFinancials() {
+  const txs = (state.transactions || []).filter(t => t.account_code);
+  const coa  = state.coa || [];
+  const F    = window.FinancialOutputs;
+  if (!F)            return { hasData: false, error: 'FinancialOutputs not loaded.' };
+  if (!txs.length)   return { hasData: false, netProfit: null, latestDate: null };
+  const result = F.buildIncomeStatement(txs, coa, [], false);
+  if (!result.ok)    return { hasData: false, error: result.error };
+  const sorted    = [...txs].sort((a, b) => b.date.localeCompare(a.date));
+  const latestDate = sorted[0]?.date || null;
+  return { hasData: true, netProfit: result.data.netProfit, txCount: txs.length, latestDate };
+}
+
+// Status bar shown at the top of the IRP6 tab.
+function _renderIRP6StatusBar(fin) {
+  const isoToDmy = iso => { if (!iso) return '—'; const [y,m,d]=String(iso).split('-'); return `${d}/${m}/${y}`; };
+  const fmtR = n => 'R\u00a0' + Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dot  = c => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:5px;flex-shrink:0;vertical-align:middle;"></span>`;
+  const item = (c, txt) => `<div style="display:flex;align-items:center;font-size:0.8rem;white-space:nowrap;">${dot(c)}<span style="color:#1A1A1A;">${txt}</span></div>`;
+
+  let isItem, npItem, luItem;
+  if (fin.error) {
+    isItem = item('#E74C3C', `Income Statement: error`);
+    npItem = item('#E74C3C', 'Net profit: not available');
+    luItem = item('#E74C3C', 'Last updated: unknown');
+  } else if (!fin.hasData) {
+    isItem = item('#F39C12', 'Income Statement: not connected');
+    npItem = item('#F39C12', 'Net profit: not available');
+    luItem = item('#F39C12', 'Last updated: no data');
+  } else {
+    const np = fin.netProfit;
+    isItem = item('#27AE60', `Income Statement: connected (${fin.txCount} classified transactions)`);
+    npItem = np >= 0
+      ? item('#27AE60', `Net profit: ${fmtR(np)}`)
+      : item('#F39C12', `Net profit: loss of ${fmtR(Math.abs(np))}`);
+    luItem = item('#27AE60', `Last updated: ${isoToDmy(fin.latestDate)}`);
+  }
+
+  return `<div style="background:#F0F9F4;border:1px solid #C8E6C9;border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
+    ${isItem}${npItem}${luItem}
+  </div>`;
+}
+
 // ── IRP6 Provisional Tax tab ───────────────────────────────────
 function _irp6DefaultYear() {
   const now = new Date();
@@ -2429,26 +2476,64 @@ function renderIRP6Tab() {
   const c   = state.currentClient;
   const isC = c.entity_type === 'commission_earner';
 
+  // ── Ecosystem connection — computed once for both branches ────
+  const fin       = _irp6GetFinancials();
+  const statusBar = _renderIRP6StatusBar(fin);
+
+  // Auto-populate income: always refresh from latest classified transactions.
+  // Negative net profit → clamp to zero. No data → null (leave field editable).
+  const autoIncome = fin.hasData ? Math.max(0, fin.netProfit) : null;
+
+  // Income field note
+  const fyMonth = c.financial_year_end || 'December';
+  const fyYear  = state.currentYear    || '';
+  let incomeNote = '';
+  if (fin.error) {
+    incomeNote = `<div class="info-box red" style="margin-top:8px;padding:8px 12px;font-size:0.82rem;">${escH(fin.error)}</div>`;
+  } else if (!fin.hasData) {
+    incomeNote = `<div class="info-box amber" style="margin-top:8px;padding:8px 12px;font-size:0.82rem;">No classified transactions found for this period — please enter estimated income manually.</div>`;
+  } else if (fin.netProfit < 0) {
+    incomeNote = `<div class="info-box amber" style="margin-top:8px;padding:8px 12px;font-size:0.82rem;">Current financials show a loss — estimated income set to zero.</div>`;
+  } else {
+    incomeNote = `<div class="info-box green" style="margin-top:8px;padding:8px 12px;font-size:0.82rem;">Auto-populated from YE ${escH(fyMonth)} ${escH(fyYear)} Income Statement — adjust if needed.</div>`;
+  }
+
+  // Tax year: default to state.currentYear (SARS year = client financial year).
+  // Clamp to nearest available table year if needed.
+  const curFY        = state.currentYear || String(new Date().getFullYear());
+  const availIndiv   = Object.keys(taxTables.individual).sort((a,b) => b-a);
+  const availComp    = Object.keys(taxTables.company).sort((a,b) => b-a);
+  const defaultIndiv = availIndiv.includes(curFY) ? curFY : availIndiv[0];
+  const defaultComp  = availComp.includes(curFY)  ? curFY : availComp[0];
+
   if (!isC) {
     // ── Company IRP6 calculator ──────────────────────────────────
     if (!state.irp6c) state.irp6c = {};
     const ic = state.irp6c;
 
-    const defYear  = _irp6DefaultYear();
-    const year     = ic.year     || defYear;
+    // Auto-populate income from IS (refreshes on every tab open)
+    if (autoIncome !== null) ic.income = autoIncome;
+
+    // Sync tax year to current financial year when it changes
+    if (ic._lastFY !== curFY) {
+      ic.year    = defaultComp;
+      ic._lastFY = curFY;
+    }
+
+    const year     = ic.year     || defaultComp;
     const period   = ic.period   || 'first';
     const income   = ic.income   ?? '';
     const firstPay = ic.firstPay ?? 0;
     const compType = ic.compType || 'standard';
 
-    const yearOpts = Object.keys(taxTables.company).sort((a,b) => b-a)
+    const yearOpts = availComp
       .map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('');
 
     const tabBtn = (key, lbl) =>
       `<button class="subnav-tab ${compType===key?'active':''}" style="font-size:0.82rem;padding:7px 16px;"
         onclick="setIRP6CompType('${key}')">${lbl}</button>`;
 
-    return `
+    return statusBar + `
       <div class="card" style="margin-bottom:16px;">
         <div class="card-title">IRP6 Provisional Tax — Company</div>
 
@@ -2489,6 +2574,7 @@ function renderIRP6Tab() {
               <input class="form-control" type="number" id="irp6c-income" min="0" step="1"
                 value="${income}" placeholder="0" oninput="onIRP6CompanyChange()"/>
             </div>
+            ${incomeNote}
           </div>
 
           <div class="form-group span-2" id="irp6c-first-pay-row"
@@ -2511,8 +2597,16 @@ function renderIRP6Tab() {
   if (!state.irp6) state.irp6 = {};
   const irp6 = state.irp6;
 
-  const defYear    = _irp6DefaultYear();
-  const year       = irp6.year       || defYear;
+  // Auto-populate income from IS (refreshes on every tab open)
+  if (autoIncome !== null) irp6.income = autoIncome;
+
+  // Sync tax year to current financial year when it changes
+  if (irp6._lastFY !== curFY) {
+    irp6.year    = defaultIndiv;
+    irp6._lastFY = curFY;
+  }
+
+  const year       = irp6.year       || defaultIndiv;
   const period     = irp6.period     || 'first';
   const income     = irp6.income     ?? '';
   const ageGroup   = irp6.ageGroup   || 'under65';
@@ -2520,10 +2614,10 @@ function renderIRP6Tab() {
   const paye       = irp6.paye       ?? 0;
   const firstPay   = irp6.firstPay   ?? 0;
 
-  const yearOpts = Object.keys(taxTables.individual).sort((a,b)=>b-a)
+  const yearOpts = availIndiv
     .map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('');
 
-  return `
+  return statusBar + `
     <div class="card" style="margin-bottom:16px;">
       <div class="card-title">IRP6 Provisional Tax — Individual</div>
 
@@ -2568,7 +2662,8 @@ function renderIRP6Tab() {
             <input class="form-control" type="number" id="irp6-income" min="0" step="1"
               value="${income}" placeholder="0" oninput="onIRP6Change()"/>
           </div>
-          <div class="form-hint">Enter the full annual figure — the calculator will halve it for the first period.</div>
+          ${incomeNote}
+          <div class="form-hint" style="margin-top:4px;">Enter the full annual figure — the calculator will halve it for the first period.</div>
         </div>
 
         <div class="form-group">
