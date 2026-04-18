@@ -137,8 +137,8 @@
       <button class="modal-close" onclick="closeModal('import-modal')">&#10005;</button>
     </div>
     <div class="modal-body">
-      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 14px;margin-bottom:14px;font-size:0.85rem;color:var(--text-muted);">
-        Importing for: <strong id="imp-client-name" style="color:var(--text);"></strong>
+      <div style="background:#F0F9F4;border:1px solid #C8E6C9;border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:0.85rem;color:#666666;">
+        Importing for: <strong id="imp-client-name" style="color:#1A1A1A;"></strong>
       </div>
       <div class="import-meta">
         <div class="form-group">
@@ -224,9 +224,9 @@
       <button class="modal-close" onclick="closeModal('classify-modal')">&#10005;</button>
     </div>
     <div class="modal-body">
-      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:16px;font-size:0.87rem;">
+      <div style="background:#F0F9F4;border:1px solid #C8E6C9;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:0.87rem;">
         <div style="font-weight:700;" id="cm-desc"></div>
-        <div style="color:var(--muted);margin-top:3px;font-size:0.8rem;" id="cm-meta"></div>
+        <div style="color:#666666;margin-top:3px;font-size:0.8rem;" id="cm-meta"></div>
       </div>
       <div class="form-group" style="margin-bottom:14px;">
         <label class="form-label">Account <span class="req">*</span></label>
@@ -234,7 +234,7 @@
           <option value="">— Select account —</option>
         </select>
       </div>
-      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;">
+      <div style="border-top:1px solid #C8E6C9;padding-top:14px;margin-top:4px;">
         <label class="toggle-row" style="margin-bottom:10px;">
           <input type="checkbox" id="cm-save-rule" checked/>
           Save as a bank rule (auto-classify future transactions)
@@ -887,20 +887,20 @@ function renderReportsTab() {
   const ovActive        = state.cmIncomeOverride.active;
   const ovAmount        = state.cmIncomeOverride.amount || '';
   const incomeOverrideBar = (isC && rt === 'IS') ? `
-    <div style="background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:14px;">
-      <div style="font-size:0.78rem;font-weight:700;color:var(--text-light);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.04em;">Income Source</div>
-      <div style="display:flex;gap:0;border:1.5px solid var(--border);border-radius:6px;overflow:hidden;width:fit-content;">
-        <label data-income-src="bank" style="display:flex;align-items:center;gap:7px;padding:8px 16px;cursor:pointer;background:${!ovActive ? 'var(--accent)' : 'var(--surface-1)'};color:${!ovActive ? '#fff' : 'var(--text)'};font-weight:600;font-size:0.84rem;transition:background 0.15s;">
+    <div style="background:#F0F9F4;border:1.5px solid #C8E6C9;border-radius:8px;padding:12px 16px;margin-bottom:14px;">
+      <div style="font-size:0.78rem;font-weight:700;color:#145A32;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.04em;">Income Source</div>
+      <div style="display:flex;gap:0;border:1.5px solid #C8E6C9;border-radius:6px;overflow:hidden;width:fit-content;">
+        <label data-income-src="bank" style="display:flex;align-items:center;gap:7px;padding:8px 16px;cursor:pointer;background:${!ovActive ? '#145A32' : '#FFFFFF'};color:${!ovActive ? '#FFFFFF' : '#1A1A1A'};font-weight:600;font-size:0.84rem;transition:background 0.15s;">
           <input type="radio" name="income-source" value="bank" ${!ovActive ? 'checked' : ''} onchange="toggleIncomeOverride(false)" style="display:none;"/>
           &#128197; Use bank statement income
         </label>
-        <label data-income-src="manual" style="display:flex;align-items:center;gap:7px;padding:8px 16px;cursor:pointer;background:${ovActive ? 'var(--amber)' : 'var(--surface-1)'};color:${ovActive ? '#fff' : 'var(--text)'};font-weight:600;font-size:0.84rem;border-left:1.5px solid var(--border);transition:background 0.15s;">
+        <label data-income-src="manual" style="display:flex;align-items:center;gap:7px;padding:8px 16px;cursor:pointer;background:${ovActive ? '#1E8449' : '#FFFFFF'};color:${ovActive ? '#FFFFFF' : '#1A1A1A'};font-weight:600;font-size:0.84rem;border-left:1.5px solid #C8E6C9;transition:background 0.15s;">
           <input type="radio" name="income-source" value="manual" ${ovActive ? 'checked' : ''} onchange="toggleIncomeOverride(true)" style="display:none;"/>
           &#9997; Enter income manually
         </label>
       </div>
       <div id="income-override-input" style="margin-top:12px;display:${ovActive ? 'flex' : 'none'};align-items:center;gap:10px;flex-wrap:wrap;">
-        <label style="font-size:0.82rem;font-weight:600;color:var(--text-light);white-space:nowrap;">Income amount (R)</label>
+        <label style="font-size:0.82rem;font-weight:600;color:#145A32;white-space:nowrap;">Income amount (R)</label>
         <div class="r-wrap" style="width:220px;">
           <span class="r-pre">R</span>
           <input class="form-control" type="number" min="0" step="0.01"
@@ -909,7 +909,7 @@ function renderReportsTab() {
             placeholder="0.00"
             oninput="setOverrideAmount(this.value)"/>
         </div>
-        <span style="font-size:0.78rem;color:var(--muted);">This amount replaces the bank-derived income total on the statement.</span>
+        <span style="font-size:0.78rem;color:#666666;">This amount replaces the bank-derived income total on the statement.</span>
       </div>
     </div>` : '';
 
@@ -918,13 +918,13 @@ function renderReportsTab() {
   const hoPct          = state.cmHomeOffice.businessPct || '';
   const hoPctVisible   = state.cmHomeOffice.active ? 'flex' : 'none';
   const homeOfficeBar  = (isC && rt === 'IS') ? `
-    <div style="background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:14px;">
+    <div style="background:#F0F9F4;border:1.5px solid #C8E6C9;border-radius:8px;padding:12px 16px;margin-bottom:14px;">
       <label class="toggle-row">
         <input type="checkbox" id="ho-split-toggle" ${hoChecked} onchange="toggleHomeOfficeSplit(this.checked)"/>
         <span style="font-weight:600;">Apply home office business % split (ITR12 4011)</span>
       </label>
       <div id="ho-split-input" style="margin-top:12px;display:${hoPctVisible};align-items:center;gap:10px;flex-wrap:wrap;">
-        <label style="font-size:0.82rem;font-weight:600;color:var(--text-light);white-space:nowrap;">Business use</label>
+        <label style="font-size:0.82rem;font-weight:600;color:#145A32;white-space:nowrap;">Business use</label>
         <div style="display:flex;align-items:center;gap:6px;">
           <input class="form-control" type="number" min="0" max="100" step="1"
             id="ho-split-pct"
@@ -934,7 +934,7 @@ function renderReportsTab() {
             oninput="setHomeOfficePct(this.value)"/>
           <span style="font-size:0.9rem;font-weight:700;">%</span>
         </div>
-        <span style="font-size:0.78rem;color:var(--muted);">Only the business portion of home office expenses will appear on the statement. The personal portion is excluded and a breakdown is shown for verification.</span>
+        <span style="font-size:0.78rem;color:#666666;">Only the business portion of home office expenses will appear on the statement. The personal portion is excluded and a breakdown is shown for verification.</span>
       </div>
     </div>` : '';
 
@@ -942,8 +942,8 @@ function renderReportsTab() {
   const vatPeriods   = state._vatAvailablePeriods || [];
   const vatFilter    = state._vatPeriodFilter;
   const vatFilterBar = (!isC && c.vat_active && rt === 'VAT') ? `
-    <div style="background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <span style="font-size:0.8rem;font-weight:700;color:var(--text-light);white-space:nowrap;">Filing period</span>
+    <div style="background:#F0F9F4;border:1.5px solid #C8E6C9;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span style="font-size:0.8rem;font-weight:700;color:#145A32;white-space:nowrap;">Filing period</span>
       <select class="form-control" style="width:auto;min-width:160px;" onchange="setVATPeriodFilter(this.value)">
         <option value="">Full year</option>
         ${vatPeriods.map(p => `<option value="${escH(p)}" ${vatFilter===p?'selected':''}>${escH(p)}</option>`).join('')}
@@ -972,9 +972,9 @@ function toggleIncomeOverride(active) {
   labels.forEach(lbl => {
     const isActive = lbl.dataset.incomeSrc === (active ? 'manual' : 'bank');
     lbl.style.background = isActive
-      ? (active ? 'var(--amber)' : 'var(--accent)')
-      : 'var(--surface-1)';
-    lbl.style.color = isActive ? '#fff' : 'var(--text)';
+      ? (active ? '#1E8449' : '#145A32')
+      : '#FFFFFF';
+    lbl.style.color = isActive ? '#FFFFFF' : '#1A1A1A';
   });
   generateReport();
 }
@@ -1176,11 +1176,11 @@ function renderSettingsTab() {
     const items = coa.filter(a => a.account_type === grp);
     if (!items.length) return '';
     return `<div style="margin-bottom:14px;">
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:6px;">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666666;margin-bottom:6px;">
         ${grp.replace(/_/g,' ')}
       </div>
-      ${items.map(a => `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.84rem;">
-        <span style="font-family:var(--font-mono);font-size:0.78rem;color:var(--muted);min-width:44px;">${a.account_code}</span>
+      ${items.map(a => `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #C8E6C9;font-size:0.84rem;">
+        <span style="font-family:var(--font-mono);font-size:0.78rem;color:#666666;min-width:44px;">${a.account_code}</span>
         <span style="flex:1;">${escH(a.account_name)}</span>
       </div>`).join('')}
     </div>`;
@@ -1608,17 +1608,17 @@ function renderImportFileList() {
     let statusHtml;
     if (entry.ok) {
       const warnBit = entry.warnings.length
-        ? ` <span style="color:var(--amber);">(${entry.warnings.length} skipped)</span>` : '';
-      statusHtml = `<span style="color:var(--green);font-size:0.8rem;">&#10003; ${entry.count} rows${warnBit}</span>`;
+        ? ` <span style="color:#B7950B;">(${entry.warnings.length} skipped)</span>` : '';
+      statusHtml = `<span style="color:#145A32;font-size:0.8rem;">&#10003; ${entry.count} rows${warnBit}</span>`;
     } else if (entry.error) {
-      statusHtml = `<span style="color:var(--red);font-size:0.8rem;" title="${escH(entry.error)}">&#10007; ${escH(entry.error.slice(0, 40))}${entry.error.length > 40 ? '…' : ''}</span>`;
+      statusHtml = `<span style="color:#C0392B;font-size:0.8rem;" title="${escH(entry.error)}">&#10007; ${escH(entry.error.slice(0, 40))}${entry.error.length > 40 ? '…' : ''}</span>`;
     } else if (entry.bank) {
-      statusHtml = `<span style="color:var(--text-muted);font-size:0.8rem;">Parsing…</span>`;
+      statusHtml = `<span style="color:#666666;font-size:0.8rem;">Parsing…</span>`;
     } else {
-      statusHtml = `<span style="color:var(--text-muted);font-size:0.8rem;">Select a bank</span>`;
+      statusHtml = `<span style="color:#666666;font-size:0.8rem;">Select a bank</span>`;
     }
 
-    return `<tr style="border-bottom:1px solid var(--border);">
+    return `<tr style="border-bottom:1px solid #C8E6C9;">
       <td style="padding:6px 8px;font-size:0.8rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escH(entry.file.name)}">${escH(entry.file.name)}</td>
       <td style="padding:6px 8px;">${_impBankSelectHTML(idx, entry.bank)}</td>
       <td style="padding:6px 8px;"><input class="form-control" style="min-width:150px;" placeholder="Account label" value="${escH(entry.label)}" oninput="updateImportFileLabel(${idx}, this.value)"/></td>
@@ -1629,13 +1629,13 @@ function renderImportFileList() {
 
   container.style.display = '';
   container.innerHTML = `
-    <div style="font-size:0.85rem;font-weight:600;margin-bottom:8px;color:var(--text-muted);">
+    <div style="font-size:0.85rem;font-weight:600;margin-bottom:8px;color:#666666;">
       ${state.impFileList.length} file${state.impFileList.length !== 1 ? 's' : ''} selected
       ${state.impFileList.length < 10 ? `<span style="font-weight:400;"> — <a href="#" onclick="document.getElementById('imp-file').click();return false;">add more</a></span>` : ''}
     </div>
     <table style="width:100%;border-collapse:collapse;">
       <thead>
-        <tr style="font-size:0.75rem;color:var(--text-muted);text-align:left;border-bottom:1px solid var(--border);">
+        <tr style="font-size:0.75rem;color:#666666;text-align:left;border-bottom:1px solid #C8E6C9;">
           <th style="padding:4px 8px;">File</th>
           <th style="padding:4px 8px;">Bank</th>
           <th style="padding:4px 8px;">Account label <span style="font-weight:400;">(used as source on each transaction)</span></th>
@@ -1800,7 +1800,7 @@ function onOBFileSelected(input) {
     preEl.innerHTML = `<div class="import-preview">
       <div class="import-preview-title">Preview — ${result.rows.length} accounts</div>
       ${result.rows.slice(0,5).map(r=>
-        `<div style="font-size:0.78rem;padding:3px 0;border-bottom:1px solid var(--border);">
+        `<div style="font-size:0.78rem;padding:3px 0;border-bottom:1px solid #C8E6C9;">
           ${escH(r.account_code)} · ${escH(r.account_name)} · <strong>R ${Math.abs(r.amount).toLocaleString('en-ZA',{minimumFractionDigits:2})}</strong>
         </div>`).join('')}
     </div>`;
