@@ -1124,6 +1124,99 @@ function toggleHideZeros(val) {
   generateReport();
 }
 
+// ── VAT201 Summary card ────────────────────────────────────────
+function _buildVAT201Card(txs, fromIso, toIso, client) {
+  // Classified transactions only, vat_code 1 or 2
+  const vatTxs = txs.filter(t => t.account_code && ((t.vat_code || 0) === 1 || (t.vat_code || 0) === 2));
+
+  // Split by direction (sign) and code
+  const outStd  = vatTxs.filter(t => (t.vat_code || 0) === 1 && t.amount > 0);  // income, standard rated
+  const outZero = vatTxs.filter(t => (t.vat_code || 0) === 2 && t.amount > 0);  // income, zero rated
+  const inStd   = vatTxs.filter(t => (t.vat_code || 0) === 1 && t.amount < 0);  // expense, standard rated
+  const inZero  = vatTxs.filter(t => (t.vat_code || 0) === 2 && t.amount < 0);  // expense, zero rated
+
+  const sumAbs  = arr => arr.reduce((a, t) => a + Math.abs(t.amount || 0), 0);
+  const r2      = n => Math.round(n * 100) / 100;
+
+  // Output calculations
+  const outInc  = r2(sumAbs(outStd));
+  const outVAT  = r2(outInc / 115 * 15);
+  const outExc  = r2(outInc - outVAT);
+  const outZeroAmt = r2(sumAbs(outZero));
+
+  // Input calculations
+  const inInc   = r2(sumAbs(inStd));
+  const inVAT   = r2(inInc / 115 * 15);
+  const inExc   = r2(inInc - inVAT);
+  const inZeroAmt = r2(sumAbs(inZero));
+
+  // Net VAT
+  const net     = r2(outVAT - inVAT);
+  const payable = net >= 0;
+
+  // Amount formatter
+  const fmtAmt = n => 'R\u00a0' + Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Date range label
+  const fromDis = fromIso ? _isoToDmy(fromIso) : '';
+  const toDis   = toIso   ? _isoToDmy(toIso)   : '';
+  const dateLabel = (fromIso && toIso) ? `${fromDis} \u2013 ${toDis}`
+                  : fromIso ? `From ${fromDis}`
+                  : toIso   ? `To ${toDis}`
+                  : 'All Dates';
+
+  // Alternating row builder
+  let ri = 0;
+  const row = (label, amount) => {
+    const bg = (ri++ % 2 === 0) ? '#FFFFFF' : '#F0F9F4';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 1.5rem;background:${bg};border-bottom:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <span style="font-size:0.87rem;color:#1A1A1A;">${label}</span>
+      <span style="font-size:0.87rem;font-family:var(--font-mono);font-weight:600;color:#145A32;text-align:right;">${fmtAmt(amount)}</span>
+    </div>`;
+  };
+
+  const secHead = label => `<div style="background:#D4F5E2;color:#145A32;font-weight:700;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em;padding:0.5rem 1.5rem;border-bottom:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${label}</div>`;
+
+  const netRow = payable
+    ? `<div style="background:#145A32;color:#FFFFFF;font-weight:700;font-size:1rem;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <span>NET VAT PAYABLE TO SARS</span>
+        <span style="font-family:var(--font-mono);">${fmtAmt(net)}</span>
+      </div>`
+    : `<div style="background:#1E8449;color:#FFFFFF;font-weight:700;font-size:1rem;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <span>VAT REFUNDABLE</span>
+        <span style="font-family:var(--font-mono);">${fmtAmt(Math.abs(net))}</span>
+      </div>`;
+
+  return `
+    <div style="border:1px solid #C8E6C9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+      <div style="background:#145A32;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="display:flex;align-items:baseline;">
+          <span style="font-weight:900;font-size:18px;color:#FFFFFF;line-height:1;">Rand</span>
+          <span style="font-weight:300;font-size:18px;color:#A8E6C1;line-height:1;">Sense</span>
+        </div>
+        <div style="text-align:center;">
+          <div style="color:#FFFFFF;font-weight:700;font-size:0.95rem;">VAT Return Summary</div>
+          <div style="color:#D4F5E2;font-size:0.78rem;margin-top:2px;">${dateLabel}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="color:#D4F5E2;font-size:12px;font-weight:600;">${escH(client.name)}</div>
+          ${client.vat_number ? `<div style="color:#D4F5E2;font-size:12px;">VAT No. ${escH(client.vat_number)}</div>` : ''}
+        </div>
+      </div>
+      ${secHead('Output VAT')}
+      ${row('Total taxable supplies VAT inclusive', outInc)}
+      ${row('Output VAT at 15%', outVAT)}
+      ${row('Total taxable supplies VAT exclusive', outExc)}
+      ${row('Zero rated supplies', outZeroAmt)}
+      ${secHead('Input VAT')}
+      ${row('Total taxable purchases VAT inclusive', inInc)}
+      ${row('Input VAT claimable at 15%', inVAT)}
+      ${row('Total taxable purchases VAT exclusive', inExc)}
+      ${row('Zero rated purchases', inZeroAmt)}
+      ${netRow}
+    </div>`;
+}
+
 async function generateReport() {
   const c   = state.currentClient;
   const el  = document.getElementById('report-body');
@@ -1208,9 +1301,14 @@ async function generateReport() {
           ? `Showing transactions from ${_isoToDmy(fromIso) || '—'} to ${_isoToDmy(toIso) || '—'}`
           : 'Showing all transactions';
       }
+      // Build VAT201 summary card
+      const vat201HTML = _buildVAT201Card(allTx, fromIso, toIso, c);
       const vatPeriodSetting = c.vat_period || 'monthly';
       const r = window.VAT.buildEnhancedVATReport(allTx, vatPeriodSetting, null);
-      el.innerHTML = r.ok ? window.FinancialOutputs.renderEnhancedVATReport(r, _currentLabel, { title: 'VAT Report', clientName: c.name }) : `<div class="info-box red">${escH(r.error || 'No VAT data found.')}</div>`;
+      const reportHTML = r.ok
+        ? window.FinancialOutputs.renderEnhancedVATReport(r, _currentLabel, { title: 'VAT Report', clientName: c.name })
+        : `<div class="info-box red">${escH(r.error || 'No VAT data found.')}</div>`;
+      el.innerHTML = vat201HTML + reportHTML;
       state._VAT = r.ok ? r : null;
     }
   } catch(e) {
