@@ -998,6 +998,10 @@ function renderReportsTab() {
           <span id="vat-date-label" style="font-size:0.8rem;color:#145A32;font-weight:500;align-self:center;">${showingTxt}</span>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">${qBtns}</div>
+        <div style="display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid #C8E6C9;">
+          <button class="btn btn-primary btn-sm" onclick="printVATReport()">&#128196; Download VAT Report PDF</button>
+          <button class="btn btn-ghost btn-sm" onclick="csvVATReport()">&#8595; Download VAT Report CSV</button>
+        </div>
       </div>`;
   }
 
@@ -1217,6 +1221,146 @@ function _buildVAT201Card(txs, fromIso, toIso, client) {
     </div>`;
 }
 
+// ── VAT Audit Schedules ────────────────────────────────────────
+function _buildVATSchedulesHTML(txs, fromIso, toIso, c) {
+  const r2     = n => Math.round(n * 100) / 100;
+  const fmtAmt = n => 'R\u00a0' + Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Classified txs only, split by vat_code and direction
+  const stdTxs    = txs.filter(t => t.account_code && (t.vat_code || 0) === 1);
+  const zeroTxs   = txs.filter(t => t.account_code && (t.vat_code || 0) === 2);
+  const outputTxs = stdTxs.filter(t => t.amount > 0);
+  const inputTxs  = stdTxs.filter(t => t.amount < 0);
+  const zeroOutTxs = zeroTxs.filter(t => t.amount > 0);
+  const zeroInTxs  = zeroTxs.filter(t => t.amount < 0);
+
+  // Build row data for export
+  const buildStdRow = t => {
+    const inc = r2(Math.abs(t.amount || 0));
+    const vat = r2(inc / 115 * 15);
+    return { date: t.date, description: t.description, accountName: t.account_name || '', amtInc: inc, vatAmt: vat, amtExc: r2(inc - vat) };
+  };
+  const buildZeroRow = t => ({ date: t.date, description: t.description, accountName: t.account_name || '', amount: r2(Math.abs(t.amount || 0)) });
+
+  const dateLabel = (fromIso || toIso)
+    ? `${fromIso ? _isoToDmy(fromIso) : '—'} \u2013 ${toIso ? _isoToDmy(toIso) : '—'}`
+    : 'All Dates';
+
+  // Store computed data for export functions
+  state._VATData = {
+    fromIso, toIso, dateLabel, client: c,
+    output:  outputTxs.map(buildStdRow),
+    input:   inputTxs.map(buildStdRow),
+    zeroOut: zeroOutTxs.map(buildZeroRow),
+    zeroIn:  zeroInTxs.map(buildZeroRow),
+  };
+
+  // ── Table builders ─────────────────────────────────────────
+  const hd  = 'padding:8px 12px;background:#145A32;color:#FFFFFF;font-weight:600;font-size:0.78rem;border:1px solid #145A32;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const hdR = hd + 'text-align:right;';
+  const cell = (bg, right) => `padding:7px 12px;border:1px solid #C8E6C9;background:${bg};vertical-align:top;${right ? 'text-align:right;font-family:var(--font-mono);font-size:0.82rem;' : 'font-size:0.84rem;'}`;
+  const subCell = right => `padding:8px 12px;background:#D4F5E2;color:#145A32;font-weight:700;border:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;${right ? 'text-align:right;font-family:var(--font-mono);' : ''}`;
+
+  const secTitle = (label, count) => `
+    <div style="margin:24px 0 10px;">
+      <div style="font-size:1rem;font-weight:700;color:#145A32;">${label}</div>
+      <div style="font-size:0.78rem;color:#666666;margin-top:2px;">${count} transaction${count !== 1 ? 's' : ''}</div>
+    </div>`;
+
+  const emptyMsg = `<div class="info-box blue" style="margin-bottom:20px;">No transactions found for this period.</div>`;
+
+  // Standard schedule (Output or Input)
+  const stdSchedule = rows => {
+    if (!rows.length) return emptyMsg;
+    let body = ''; let tot = { inc: 0, vat: 0, exc: 0 }; let ri = 0;
+    for (const r of rows) {
+      const bg = ri++ % 2 === 0 ? '#FFFFFF' : '#F0F9F4';
+      tot.inc += r.amtInc; tot.vat += r.vatAmt; tot.exc += r.amtExc;
+      body += `<tr>
+        <td style="${cell(bg,false)}">${_isoToDmy(r.date)}</td>
+        <td style="${cell(bg,false)}">${escH(r.description)}</td>
+        <td style="${cell(bg,true)}">${fmtAmt(r.amtInc)}</td>
+        <td style="${cell(bg,true)}">${fmtAmt(r.vatAmt)}</td>
+        <td style="${cell(bg,true)}">${fmtAmt(r.amtExc)}</td>
+      </tr>`;
+    }
+    return `<div style="overflow-x:auto;margin-bottom:20px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr>
+          <th style="${hd}width:11%;">Date</th>
+          <th style="${hd}">Description</th>
+          <th style="${hdR}width:17%;">VAT Inclusive</th>
+          <th style="${hdR}width:15%;">VAT at 15%</th>
+          <th style="${hdR}width:17%;">VAT Exclusive</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+        <tfoot><tr>
+          <td colspan="2" style="${subCell(false)}">Total — ${rows.length} transaction${rows.length!==1?'s':''}</td>
+          <td style="${subCell(true)}">${fmtAmt(r2(tot.inc))}</td>
+          <td style="${subCell(true)}">${fmtAmt(r2(tot.vat))}</td>
+          <td style="${subCell(true)}">${fmtAmt(r2(tot.exc))}</td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+  };
+
+  // Zero rated schedule section (supplies or purchases)
+  const zeroSection = (label, rows) => {
+    if (!rows.length) return `<div style="margin-bottom:10px;font-size:0.82rem;color:#666666;font-style:italic;">${label}: no transactions.</div>`;
+    let body = ''; let tot = 0; let ri = 0;
+    for (const r of rows) {
+      const bg = ri++ % 2 === 0 ? '#FFFFFF' : '#F0F9F4';
+      tot += r.amount;
+      body += `<tr>
+        <td style="${cell(bg,false)}">${_isoToDmy(r.date)}</td>
+        <td style="${cell(bg,false)}">${escH(r.description)}</td>
+        <td style="${cell(bg,false)}">${escH(r.accountName)}</td>
+        <td style="${cell(bg,true)}">${fmtAmt(r.amount)}</td>
+      </tr>`;
+    }
+    return `<div style="margin-bottom:6px;font-size:0.85rem;font-weight:600;color:#1E8449;">${label}</div>
+    <div style="overflow-x:auto;margin-bottom:16px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr>
+          <th style="${hd}width:11%;">Date</th>
+          <th style="${hd}">Description</th>
+          <th style="${hd}width:22%;">Account</th>
+          <th style="${hdR}width:17%;">Amount</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+        <tfoot><tr>
+          <td colspan="3" style="${subCell(false)}">Total — ${rows.length} transaction${rows.length!==1?'s':''}</td>
+          <td style="${subCell(true)}">${fmtAmt(r2(tot))}</td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+  };
+
+  const zeroSchedule = () => {
+    if (!zeroOutTxs.length && !zeroInTxs.length) return emptyMsg;
+    return zeroSection('Zero Rated Supplies (income)', state._VATData.zeroOut) +
+           zeroSection('Zero Rated Purchases (expenses)', state._VATData.zeroIn);
+  };
+
+  return `
+    ${secTitle('OUTPUT VAT SCHEDULE', outputTxs.length)}
+    ${stdSchedule(state._VATData.output)}
+    ${secTitle('INPUT VAT SCHEDULE', inputTxs.length)}
+    ${stdSchedule(state._VATData.input)}
+    ${secTitle('ZERO RATED SCHEDULE', zeroOutTxs.length + zeroInTxs.length)}
+    ${zeroSchedule()}`;
+}
+
+function printVATReport() {
+  if (!state._VATData) { toast('Generate the VAT report first.', 'warning'); return; }
+  window.Export.printVATReport(state._VATData);
+}
+
+function csvVATReport() {
+  if (!state._VATData) { toast('Generate the VAT report first.', 'warning'); return; }
+  window.Export.exportVATReportCSV(state._VATData);
+}
+
 async function generateReport() {
   const c   = state.currentClient;
   const el  = document.getElementById('report-body');
@@ -1301,14 +1445,15 @@ async function generateReport() {
           ? `Showing transactions from ${_isoToDmy(fromIso) || '—'} to ${_isoToDmy(toIso) || '—'}`
           : 'Showing all transactions';
       }
-      // Build VAT201 summary card
-      const vat201HTML = _buildVAT201Card(allTx, fromIso, toIso, c);
+      // Build VAT201 summary card + audit schedules
+      const vat201HTML    = _buildVAT201Card(allTx, fromIso, toIso, c);
+      const schedulesHTML = _buildVATSchedulesHTML(allTx, fromIso, toIso, c);
       const vatPeriodSetting = c.vat_period || 'monthly';
       const r = window.VAT.buildEnhancedVATReport(allTx, vatPeriodSetting, null);
       const reportHTML = r.ok
         ? window.FinancialOutputs.renderEnhancedVATReport(r, _currentLabel, { title: 'VAT Report', clientName: c.name })
         : `<div class="info-box red">${escH(r.error || 'No VAT data found.')}</div>`;
-      el.innerHTML = vat201HTML + reportHTML;
+      el.innerHTML = vat201HTML + schedulesHTML + reportHTML;
       state._VAT = r.ok ? r : null;
     }
   } catch(e) {

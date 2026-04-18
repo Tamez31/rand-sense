@@ -731,6 +731,261 @@ function exportTaxTjomHandoff(commissionISData, clientName, financialYear) {
   );
 }
 
+// ── VAT Report full PDF (multi-page letterhead) ───────────────
+// vatData = { fromIso, toIso, dateLabel, client, output, input, zeroOut, zeroIn }
+function printVATReport(vatData) {
+  const { dateLabel, client, output, input, zeroOut, zeroIn } = vatData;
+  const target = getPrintTarget();
+
+  const bar = 'background:#145A32;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const bot = 'background:#1E8449;padding:0.5rem 1.5rem;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const pg  = 'page-break-after:always;font-family:\'Poppins\',sans-serif;margin:0;';
+
+  const letterhead = (pageTitle) => `
+    <div style="${bar}">
+      <div>
+        <div style="display:flex;align-items:baseline;">
+          <span style="font-weight:900;font-size:18px;color:#FFFFFF;line-height:1;">Rand</span>
+          <span style="font-weight:300;font-size:18px;color:#A8E6C1;line-height:1;">Sense</span>
+        </div>
+        <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#D4F5E2;margin-top:3px;">Making Cents of it all</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="color:#FFFFFF;font-weight:700;font-size:14px;">${escapeHTML(pageTitle)}</div>
+        <div style="color:#D4F5E2;font-size:11px;margin-top:2px;">${escapeHTML(dateLabel)}</div>
+      </div>
+      <div style="text-align:right;color:#D4F5E2;font-size:11px;">Matthew Le Roux</div>
+    </div>`;
+
+  const clientInfo = `
+    <div style="padding:16px 24px 0;background:#FFFFFF;">
+      <div style="font-size:14px;font-weight:700;color:#145A32;">${escapeHTML(client.name)}</div>
+      ${client.vat_number ? `<div style="font-size:12px;color:#1E8449;">VAT No. ${escapeHTML(client.vat_number)}</div>` : ''}
+      <div style="font-size:11px;color:#666666;margin-top:2px;">Generated: ${todayDMY()}</div>
+    </div>`;
+
+  const footer = `<div style="${bot}"><span style="color:#FFFFFF;font-size:9px;font-family:'Poppins',sans-serif;">Making Cents of it all &mdash; RandSense</span></div>`;
+
+  // Table helpers
+  const fmtA = n => 'R\u00a0' + Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const r2   = n => Math.round(n * 100) / 100;
+  const th   = 'padding:6px 10px;background:#145A32;color:#FFFFFF;font-weight:600;font-size:8pt;border:1px solid #145A32;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const thR  = th + 'text-align:right;';
+  const sub  = 'padding:6px 10px;background:#D4F5E2;color:#145A32;font-weight:700;border:1px solid #C8E6C9;font-size:8pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const subR = sub + 'text-align:right;font-family:monospace;';
+  const td   = (bg, right) => `padding:5px 10px;border:1px solid #C8E6C9;background:${bg};font-size:8pt;${right?'text-align:right;font-family:monospace;':''}`;
+
+  const isoToDmy = iso => { if (!iso) return ''; const [y,m,d] = String(iso).split('-'); return `${d}/${m}/${y}`; };
+
+  // Standard schedule table (output / input)
+  const stdTable = rows => {
+    if (!rows.length) return '<p style="font-size:9pt;color:#666;font-style:italic;">No transactions for this period.</p>';
+    let body = ''; let tot = { inc:0, vat:0, exc:0 }; let ri = 0;
+    rows.forEach(r => {
+      const bg = ri++%2===0?'#FFFFFF':'#F0F9F4';
+      tot.inc += r.amtInc; tot.vat += r.vatAmt; tot.exc += r.amtExc;
+      body += `<tr>
+        <td style="${td(bg,false)}">${isoToDmy(r.date)}</td>
+        <td style="${td(bg,false)}">${escapeHTML(r.description)}</td>
+        <td style="${td(bg,true)}">${fmtA(r.amtInc)}</td>
+        <td style="${td(bg,true)}">${fmtA(r.vatAmt)}</td>
+        <td style="${td(bg,true)}">${fmtA(r.amtExc)}</td>
+      </tr>`;
+    });
+    return `<table style="width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:12px;">
+      <thead><tr>
+        <th style="${th}width:11%;">Date</th><th style="${th}">Description</th>
+        <th style="${thR}width:16%;">VAT Inclusive</th>
+        <th style="${thR}width:14%;">VAT at 15%</th>
+        <th style="${thR}width:16%;">VAT Exclusive</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr>
+        <td colspan="2" style="${sub}">Total — ${rows.length} transaction${rows.length!==1?'s':''}</td>
+        <td style="${subR}">${fmtA(r2(tot.inc))}</td>
+        <td style="${subR}">${fmtA(r2(tot.vat))}</td>
+        <td style="${subR}">${fmtA(r2(tot.exc))}</td>
+      </tr></tfoot>
+    </table>`;
+  };
+
+  const zeroTable = (label, rows) => {
+    if (!rows.length) return `<p style="font-size:9pt;color:#666;font-style:italic;margin-bottom:10px;">${escapeHTML(label)}: no transactions.</p>`;
+    let body = ''; let tot = 0; let ri = 0;
+    rows.forEach(r => {
+      const bg = ri++%2===0?'#FFFFFF':'#F0F9F4';
+      tot += r.amount;
+      body += `<tr>
+        <td style="${td(bg,false)}">${isoToDmy(r.date)}</td>
+        <td style="${td(bg,false)}">${escapeHTML(r.description)}</td>
+        <td style="${td(bg,false)}">${escapeHTML(r.accountName)}</td>
+        <td style="${td(bg,true)}">${fmtA(r.amount)}</td>
+      </tr>`;
+    });
+    return `<p style="font-size:9pt;font-weight:600;color:#1E8449;margin-bottom:4px;">${escapeHTML(label)}</p>
+    <table style="width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:14px;">
+      <thead><tr>
+        <th style="${th}width:11%;">Date</th><th style="${th}">Description</th>
+        <th style="${th}width:22%;">Account</th>
+        <th style="${thR}width:16%;">Amount</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr>
+        <td colspan="3" style="${sub}">Total — ${rows.length} transaction${rows.length!==1?'s':''}</td>
+        <td style="${subR}">${fmtA(r2(tot))}</td>
+      </tr></tfoot>
+    </table>`;
+  };
+
+  const pageWrap = (breakAfter, ...content) =>
+    `<div style="${breakAfter ? pg : 'font-family:\'Poppins\',sans-serif;margin:0;'}">${content.join('')}</div>`;
+
+  // Page 1 — VAT201 Summary (re-computed inline from stored data)
+  // Re-use the on-screen card's vatData for the summary rows
+  const vat = vatData;
+  const hasZero = zeroOut.length > 0 || zeroIn.length > 0;
+
+  // Compute VAT201 figures from schedule rows
+  const sumInc  = rows => r2(rows.reduce((a, r) => a + r.amtInc, 0));
+  const sumVAT  = rows => r2(rows.reduce((a, r) => a + r.vatAmt, 0));
+  const sumExc  = rows => r2(rows.reduce((a, r) => a + r.amtExc, 0));
+  const sumAmt  = rows => r2(rows.reduce((a, r) => a + r.amount, 0));
+
+  const outInc = sumInc(output), outVAT = sumVAT(output), outExc = sumExc(output);
+  const inInc  = sumInc(input),  inVAT  = sumVAT(input),  inExc  = sumExc(input);
+  const zeroOutAmt = sumAmt(zeroOut), zeroInAmt = sumAmt(zeroIn);
+  const net = r2(outVAT - inVAT);
+  const payable = net >= 0;
+
+  const sumSt = `background:#D4F5E2;color:#145A32;font-weight:700;padding:8px 16px;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+  const rowSt = (bg) => `padding:8px 16px;background:${bg};border-bottom:1px solid #C8E6C9;display:flex;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+  let ri2 = 0;
+  const sRow = (label, amt) => { const bg = ri2++%2===0?'#FFFFFF':'#F0F9F4'; return `<div style="${rowSt(bg)}"><span style="font-size:9pt;">${label}</span><span style="font-family:monospace;font-size:9pt;font-weight:600;color:#145A32;">${fmtA(amt)}</span></div>`; };
+
+  const summaryCard = `
+    <div style="border:1px solid #C8E6C9;border-radius:8px;overflow:hidden;margin:16px 0 8px;">
+      <div style="background:#D4F5E2;color:#145A32;font-weight:700;font-size:9pt;padding:8px 16px;border-bottom:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">OUTPUT VAT</div>
+      ${sRow('Total taxable supplies VAT inclusive', outInc)}
+      ${sRow('Output VAT at 15%', outVAT)}
+      ${sRow('Total taxable supplies VAT exclusive', outExc)}
+      ${sRow('Zero rated supplies', zeroOutAmt)}
+      <div style="${sumSt}border-bottom:1px solid #C8E6C9;">INPUT VAT</div>
+      ${sRow('Total taxable purchases VAT inclusive', inInc)}
+      ${sRow('Input VAT claimable at 15%', inVAT)}
+      ${sRow('Total taxable purchases VAT exclusive', inExc)}
+      ${sRow('Zero rated purchases', zeroInAmt)}
+      <div style="${payable?'background:#145A32;':'background:#1E8449;'}color:#FFFFFF;font-weight:700;font-size:11pt;padding:12px 16px;display:flex;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <span>${payable ? 'NET VAT PAYABLE TO SARS' : 'VAT REFUNDABLE'}</span>
+        <span style="font-family:monospace;">${fmtA(Math.abs(net))}</span>
+      </div>
+    </div>`;
+
+  const pages = [
+    pageWrap(true,
+      letterhead('VAT201 Summary'), clientInfo,
+      `<div style="padding:0 24px 24px;background:#FFFFFF;">${summaryCard}</div>`,
+      footer),
+    pageWrap(true,
+      letterhead('Output VAT Schedule'), clientInfo,
+      `<div style="padding:16px 24px 24px;background:#FFFFFF;">
+        <p style="font-size:9pt;color:#666;margin-bottom:12px;">${output.length} transaction${output.length!==1?'s':''}</p>
+        ${stdTable(output)}</div>`,
+      footer),
+    pageWrap(hasZero,
+      letterhead('Input VAT Schedule'), clientInfo,
+      `<div style="padding:16px 24px 24px;background:#FFFFFF;">
+        <p style="font-size:9pt;color:#666;margin-bottom:12px;">${input.length} transaction${input.length!==1?'s':''}</p>
+        ${stdTable(input)}</div>`,
+      footer),
+  ];
+
+  if (hasZero) {
+    pages.push(pageWrap(false,
+      letterhead('Zero Rated Schedule'), clientInfo,
+      `<div style="padding:16px 24px 24px;background:#FFFFFF;">
+        ${zeroTable('Zero Rated Supplies (income)', zeroOut)}
+        ${zeroTable('Zero Rated Purchases (expenses)', zeroIn)}
+      </div>`,
+      footer));
+  }
+
+  target.innerHTML = `<div style="font-family:'Poppins',sans-serif;color:#1A1A1A;">${pages.join('')}</div>`;
+  window.print();
+}
+
+// ── VAT Report full CSV (4 sections) ─────────────────────────
+function exportVATReportCSV(vatData) {
+  const { dateLabel, client, output, input, zeroOut, zeroIn } = vatData;
+  const r2   = n => Math.round(n * 100) / 100;
+  const isoToDmy = iso => { if (!iso) return ''; const [y,m,d] = String(iso).split('-'); return `${d}/${m}/${y}`; };
+  const rows = [];
+
+  // Section 1 — VAT201 Summary
+  const outInc = r2(output.reduce((a, r) => a + r.amtInc, 0));
+  const outVAT = r2(output.reduce((a, r) => a + r.vatAmt, 0));
+  const outExc = r2(output.reduce((a, r) => a + r.amtExc, 0));
+  const inInc  = r2(input.reduce((a, r) => a + r.amtInc, 0));
+  const inVAT  = r2(input.reduce((a, r) => a + r.vatAmt, 0));
+  const inExc  = r2(input.reduce((a, r) => a + r.amtExc, 0));
+  const zOA = r2(zeroOut.reduce((a, r) => a + r.amount, 0));
+  const zIA = r2(zeroIn.reduce((a, r)  => a + r.amount, 0));
+  const net = r2(outVAT - inVAT);
+
+  rows.push(['VAT201 SUMMARY', '', '']);
+  rows.push([`Client: ${client.name}`, `VAT No: ${client.vat_number || ''}`, `Period: ${dateLabel}`]);
+  rows.push(['', '', '']);
+  rows.push(['OUTPUT VAT', '', '']);
+  rows.push(['Total taxable supplies VAT inclusive', '', fmtNum(outInc)]);
+  rows.push(['Output VAT at 15%', '', fmtNum(outVAT)]);
+  rows.push(['Total taxable supplies VAT exclusive', '', fmtNum(outExc)]);
+  rows.push(['Zero rated supplies', '', fmtNum(zOA)]);
+  rows.push(['', '', '']);
+  rows.push(['INPUT VAT', '', '']);
+  rows.push(['Total taxable purchases VAT inclusive', '', fmtNum(inInc)]);
+  rows.push(['Input VAT claimable at 15%', '', fmtNum(inVAT)]);
+  rows.push(['Total taxable purchases VAT exclusive', '', fmtNum(inExc)]);
+  rows.push(['Zero rated purchases', '', fmtNum(zIA)]);
+  rows.push(['', '', '']);
+  rows.push([net >= 0 ? 'NET VAT PAYABLE TO SARS' : 'VAT REFUNDABLE', '', fmtNum(Math.abs(net))]);
+
+  // Section 2 — Output VAT Schedule
+  rows.push(['', '', '']);
+  rows.push(['OUTPUT VAT SCHEDULE', '', '', '', '']);
+  rows.push(['Date', 'Description', 'VAT Inclusive (R)', 'VAT at 15% (R)', 'VAT Exclusive (R)']);
+  output.forEach(r => rows.push([isoToDmy(r.date), r.description, fmtNum(r.amtInc), fmtNum(r.vatAmt), fmtNum(r.amtExc)]));
+  rows.push(['TOTAL', '', fmtNum(outInc), fmtNum(outVAT), fmtNum(outExc)]);
+
+  // Section 3 — Input VAT Schedule
+  rows.push(['', '', '', '', '']);
+  rows.push(['INPUT VAT SCHEDULE', '', '', '', '']);
+  rows.push(['Date', 'Description', 'VAT Inclusive (R)', 'VAT at 15% (R)', 'VAT Exclusive (R)']);
+  input.forEach(r => rows.push([isoToDmy(r.date), r.description, fmtNum(r.amtInc), fmtNum(r.vatAmt), fmtNum(r.amtExc)]));
+  rows.push(['TOTAL', '', fmtNum(inInc), fmtNum(inVAT), fmtNum(inExc)]);
+
+  // Section 4 — Zero Rated Schedule
+  rows.push(['', '', '', '']);
+  rows.push(['ZERO RATED SCHEDULE', '', '', '']);
+  if (zeroOut.length || zeroIn.length) {
+    rows.push(['Zero Rated Supplies (income)', '', '', '']);
+    rows.push(['Date', 'Description', 'Account', 'Amount (R)']);
+    zeroOut.forEach(r => rows.push([isoToDmy(r.date), r.description, r.accountName, fmtNum(r.amount)]));
+    rows.push(['TOTAL', '', '', fmtNum(zOA)]);
+    rows.push(['', '', '', '']);
+    rows.push(['Zero Rated Purchases (expenses)', '', '', '']);
+    rows.push(['Date', 'Description', 'Account', 'Amount (R)']);
+    zeroIn.forEach(r => rows.push([isoToDmy(r.date), r.description, r.accountName, fmtNum(r.amount)]));
+    rows.push(['TOTAL', '', '', fmtNum(zIA)]);
+  } else {
+    rows.push(['No zero rated transactions for this period.', '', '', '']);
+  }
+
+  downloadFile(
+    toCSV(rows),
+    `VAT_Report_${safeFilename(client.name)}_${safeFilename(dateLabel)}.csv`,
+    'text/csv'
+  );
+}
+
 // ============================================================
 // EXPORTS
 // ============================================================
@@ -748,6 +1003,8 @@ window.Export = {
   exportFullPackCSV,
   exportTransactionsCSV,
   exportTaxTjomHandoff,
+  printVATReport,
+  exportVATReportCSV,
   // Utilities exposed for testing
   toCSV,
   todayDMY,
