@@ -18,7 +18,7 @@
 
 ### 2. Open Rand Sense
 
-Open `rand-sense/index.html` in any modern browser (Chrome, Edge, Firefox).  
+Open `rand-sense/Rand-Sense.html` in any modern browser (Chrome, Edge, Firefox).  
 You will be prompted to set a 4-digit PIN on first launch.
 
 ### 3. Open Tax Tjom
@@ -148,7 +148,7 @@ All bank statement CSV files must use this exact column structure:
 
 ```
 rand-sense/
-  index.html              ← Rand Sense app (open this)
+  Rand-Sense.html         ← Rand Sense app (open this)
   styles.css              ← Design system
   supabase-client.js      ← All database operations
   csv-parsers.js          ← ABSA, Standard Bank, Capitec, Nedbank parsers
