@@ -314,9 +314,10 @@ const state = {
   cmIncomeOverride: { active: false, amount: '' },
   // Commission earner home office split
   cmHomeOffice: { active: false, businessPct: '' },
-  // VAT report period filter
-  _vatPeriodFilter:    null,
-  _vatAvailablePeriods: [],
+  // VAT report date range filter
+  _vatDateFrom:    null,       // YYYY-MM-DD or null
+  _vatDateTo:      null,       // YYYY-MM-DD or null
+  _vatQuickSelect: null,       // active quick-select key or null for custom
   // Prior year transactions (cached for comparative columns on all reports)
   priorTransactions:   [],
 };
@@ -952,18 +953,53 @@ function renderReportsTab() {
       </div>
     </div>` : '';
 
-  // VAT period filter bar — shown only on VAT tab for VAT-active companies
-  const vatPeriods   = state._vatAvailablePeriods || [];
-  const vatFilter    = state._vatPeriodFilter;
-  const vatFilterBar = (!isC && c.vat_active && rt === 'VAT') ? `
-    <div style="background:#F0F9F4;border:1.5px solid #C8E6C9;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <span style="font-size:0.8rem;font-weight:700;color:#145A32;white-space:nowrap;">Filing period</span>
-      <select class="form-control" style="width:auto;min-width:160px;" onchange="setVATPeriodFilter(this.value)">
-        <option value="">Full year</option>
-        ${vatPeriods.map(p => `<option value="${escH(p)}" ${vatFilter===p?'selected':''}>${escH(p)}</option>`).join('')}
-      </select>
-      ${vatFilter ? `<button class="btn btn-ghost btn-xs" onclick="setVATPeriodFilter('')">&#10005; Clear filter</button>` : ''}
-    </div>` : '';
+  // VAT date range filter bar — shown only on VAT tab for VAT-active companies
+  let vatFilterBar = '';
+  if (!isC && c.vat_active && rt === 'VAT') {
+    // Default to current month on first open
+    if (!state._vatDateFrom && !state._vatDateTo && !state._vatQuickSelect) {
+      const def = _computeVATQuickRange('current-month');
+      state._vatDateFrom    = def.from;
+      state._vatDateTo      = def.to;
+      state._vatQuickSelect = 'current-month';
+    }
+    const fromVal = state._vatDateFrom || '';
+    const toVal   = state._vatDateTo   || '';
+    const qs      = state._vatQuickSelect;
+    const fromDis = fromVal ? _isoToDmy(fromVal) : '—';
+    const toDis   = toVal   ? _isoToDmy(toVal)   : '—';
+    const showingTxt = (fromVal || toVal)
+      ? `Showing transactions from ${fromDis} to ${toDis}`
+      : 'Showing all transactions';
+    const qBtns = [
+      ['current-month', 'Current Month'],
+      ['last-month',    'Last Month'],
+      ['last-2-months', 'Last 2 Months'],
+      ['last-6-months', 'Last 6 Months'],
+      ['current-year',  'Current Year'],
+      ['all-dates',     'All Dates'],
+    ].map(([key, label]) => {
+      const active = qs === key;
+      return `<button class="btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'} vat-quick-btn"
+        data-key="${key}" onclick="setVATQuickSelect('${key}')">${label}</button>`;
+    }).join('');
+    vatFilterBar = `
+      <div style="background:#F0F9F4;border:1px solid #C8E6C9;border-radius:12px;padding:1rem 1.5rem;margin-bottom:16px;">
+        <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+          <div>
+            <label style="display:block;font-size:13px;font-weight:500;color:#145A32;margin-bottom:4px;">From</label>
+            <input type="date" id="vat-date-from" class="form-control" style="width:170px;" value="${fromVal}"/>
+          </div>
+          <div>
+            <label style="display:block;font-size:13px;font-weight:500;color:#145A32;margin-bottom:4px;">To</label>
+            <input type="date" id="vat-date-to" class="form-control" style="width:170px;" value="${toVal}"/>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="applyVATDateFilter()">Apply</button>
+          <span id="vat-date-label" style="font-size:0.8rem;color:#145A32;font-weight:500;align-self:center;">${showingTxt}</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">${qBtns}</div>
+      </div>`;
+  }
 
   const content = `<div id="report-body"><div class="empty-state">
     <div class="empty-state-icon">&#128202;</div>
@@ -1012,14 +1048,75 @@ function setHomeOfficePct(val) {
 
 function setReportType(type) {
   state.reportType = type;
-  // Reset VAT period filter when switching away from VAT tab
-  if (type !== 'VAT') state._vatPeriodFilter = null;
   setClientTab('reports');
 }
 
-function setVATPeriodFilter(val) {
-  state._vatPeriodFilter = val || null;
-  setClientTab('reports');
+// ── VAT date range helpers ─────────────────────────────────────
+function _isoToDmy(iso) {
+  if (!iso) return '';
+  const [y, m, d] = String(iso).split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function _computeVATQuickRange(key) {
+  const now  = new Date();
+  const y    = now.getFullYear();
+  const mo   = now.getMonth(); // 0-indexed
+  const pad  = n => String(n).padStart(2, '0');
+  const isoD = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const today = isoD(now);
+  switch (key) {
+    case 'current-month':
+      return { from: `${y}-${pad(mo+1)}-01`, to: today };
+    case 'last-month': {
+      const last = new Date(y, mo, 0); // last day of prev month
+      return { from: `${last.getFullYear()}-${pad(last.getMonth()+1)}-01`, to: isoD(last) };
+    }
+    case 'last-2-months': {
+      const last   = new Date(y, mo, 0);
+      const start  = new Date(y, mo - 2, 1);
+      return { from: isoD(start), to: isoD(last) };
+    }
+    case 'last-6-months': {
+      const last   = new Date(y, mo, 0);
+      const start  = new Date(y, mo - 6, 1);
+      return { from: isoD(start), to: isoD(last) };
+    }
+    case 'current-year':
+      return { from: `${y}-01-01`, to: today };
+    case 'all-dates':
+      return { from: null, to: null };
+    default:
+      return { from: null, to: null };
+  }
+}
+
+function setVATQuickSelect(key) {
+  state._vatQuickSelect = key;
+  const { from, to } = _computeVATQuickRange(key);
+  state._vatDateFrom = from;
+  state._vatDateTo   = to;
+  const fromEl = document.getElementById('vat-date-from');
+  const toEl   = document.getElementById('vat-date-to');
+  if (fromEl) fromEl.value = from || '';
+  if (toEl)   toEl.value   = to   || '';
+  document.querySelectorAll('.vat-quick-btn').forEach(btn => {
+    const active = btn.dataset.key === key;
+    btn.classList.toggle('btn-primary', active);
+    btn.classList.toggle('btn-ghost',   !active);
+  });
+  generateReport();
+}
+
+function applyVATDateFilter() {
+  state._vatQuickSelect = null;
+  state._vatDateFrom = document.getElementById('vat-date-from')?.value || null;
+  state._vatDateTo   = document.getElementById('vat-date-to')?.value   || null;
+  document.querySelectorAll('.vat-quick-btn').forEach(btn => {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-ghost');
+  });
+  generateReport();
 }
 
 function toggleHideZeros(val) {
@@ -1097,24 +1194,24 @@ async function generateReport() {
       el.innerHTML = r.ok ? F.renderTB(r.data, _currentLabel, _priorLabel, _opts('Trial Balance')) : `<div class="info-box red">${escH(r.error)}</div>`;
       state._TB = r.ok ? r.data : null;
     } else if (rt === 'VAT') {
-      const allTx  = state.transactions;
-      const vatPeriodSetting = c.vat_period || 'monthly';
-      const r = window.VAT.buildEnhancedVATReport(allTx, vatPeriodSetting, state._vatPeriodFilter || null);
-      // Update available periods for the filter selector
-      state._vatAvailablePeriods = r.availablePeriods || [];
-      // If the current filter is no longer valid, clear it
-      if (state._vatPeriodFilter && !state._vatAvailablePeriods.includes(state._vatPeriodFilter)) {
-        state._vatPeriodFilter = null;
+      const fromIso = state._vatDateFrom;
+      const toIso   = state._vatDateTo;
+      const allTx   = state.transactions.filter(t => {
+        if (fromIso && t.date < fromIso) return false;
+        if (toIso   && t.date > toIso)   return false;
+        return true;
+      });
+      // Update the "Showing…" label in the filter bar without re-rendering it
+      const labelEl = document.getElementById('vat-date-label');
+      if (labelEl) {
+        labelEl.textContent = (fromIso || toIso)
+          ? `Showing transactions from ${_isoToDmy(fromIso) || '—'} to ${_isoToDmy(toIso) || '—'}`
+          : 'Showing all transactions';
       }
+      const vatPeriodSetting = c.vat_period || 'monthly';
+      const r = window.VAT.buildEnhancedVATReport(allTx, vatPeriodSetting, null);
       el.innerHTML = r.ok ? window.FinancialOutputs.renderEnhancedVATReport(r, _currentLabel, { title: 'VAT Report', clientName: c.name }) : `<div class="info-box red">${escH(r.error || 'No VAT data found.')}</div>`;
       state._VAT = r.ok ? r : null;
-      // Update the period selector dropdown if it exists in the DOM
-      const periodSel = document.querySelector('#report-body').closest('div')?.querySelector('select[onchange*="setVATPeriodFilter"]');
-      if (periodSel && r.ok) {
-        const cur = state._vatPeriodFilter || '';
-        periodSel.innerHTML = `<option value="">Full year</option>` +
-          r.availablePeriods.map(p => `<option value="${escH(p)}"${cur===p?' selected':''}>${escH(p)}</option>`).join('');
-      }
     }
   } catch(e) {
     el.innerHTML = `<div class="info-box red">Error: ${escH(e.message)}</div>`;
