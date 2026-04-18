@@ -1052,16 +1052,18 @@ async function generateReport() {
     const _currentLabel = F.yearEndLabel(c.financial_year_end, state.currentYear);
     const _priorLabel   = F.yearEndLabel(c.financial_year_end, _priorYear);
 
+    const _opts = type => ({ title: type, clientName: c.name });
+
     if (rt === 'IS') {
       const priorTxs  = (state.priorTransactions || []).filter(t => t.account_code);
       const r = F.buildIncomeStatement(txs, coa, priorTxs, hz);
-      el.innerHTML = r.ok ? F.renderIS(r.data, _currentLabel, _priorLabel, hz) : `<div class="info-box red">${escH(r.error)}</div>`;
+      el.innerHTML = r.ok ? F.renderIS(r.data, _currentLabel, _priorLabel, hz, _opts('Income Statement')) : `<div class="info-box red">${escH(r.error)}</div>`;
       state._IS = r.ok ? r.data : null;
     } else if (rt === 'BS') {
       const isR  = F.buildIncomeStatement(txs, coa, [], false);
       const np   = isR.ok ? isR.data.netProfit : 0;
       const r    = F.buildBalanceSheet(txs, coa, ob, np, hz);
-      let html   = r.ok ? F.renderBS(r.data, _currentLabel, _priorLabel) : `<div class="info-box red">${escH(r.error)}</div>`;
+      let html   = r.ok ? F.renderBS(r.data, _currentLabel, _priorLabel, _opts('Balance Sheet')) : `<div class="info-box red">${escH(r.error)}</div>`;
       if (r.ok && !r.balanced)    html += `<div class="info-box amber" style="margin-top:12px;"><strong>Current year balance sheet is out by ${F.fmt(r.diff)}</strong> — check for unclassified transactions or missing opening balances.</div>`;
       if (r.ok && !r.data.balancedCom && r.data.priorYearHasData) html += `<div class="info-box amber" style="margin-top:8px;"><strong>Prior year column is out by ${F.fmt(r.data.diffCom)}</strong> — check imported opening balances.</div>`;
       el.innerHTML = html;
@@ -1069,14 +1071,14 @@ async function generateReport() {
     } else if (rt === 'CF') {
       const priorTxsCF = (state.priorTransactions || []).filter(t => t.account_code);
       const r = F.buildCashFlow(txs, coa, ob, priorTxsCF);
-      el.innerHTML = r.ok ? F.renderCF(r.data, _currentLabel, _priorLabel) : `<div class="info-box red">${escH(r.error)}</div>`;
+      el.innerHTML = r.ok ? F.renderCF(r.data, _currentLabel, _priorLabel, _opts('Cash Flow Statement')) : `<div class="info-box red">${escH(r.error)}</div>`;
       state._CF = r.ok ? r.data : null;
     } else if (rt === 'TB') {
       const isR2      = F.buildIncomeStatement(txs, coa, [], false);
       const np2       = isR2.ok ? isR2.data.netProfit : 0;
       const priorTxsTB = (state.priorTransactions || []).filter(t => t.account_code);
       const r         = F.buildTrialBalance(txs, coa, hz, ob, np2, priorTxsTB);
-      el.innerHTML = r.ok ? F.renderTB(r.data, _currentLabel, _priorLabel) : `<div class="info-box red">${escH(r.error)}</div>`;
+      el.innerHTML = r.ok ? F.renderTB(r.data, _currentLabel, _priorLabel, _opts('Trial Balance')) : `<div class="info-box red">${escH(r.error)}</div>`;
       state._TB = r.ok ? r.data : null;
     } else if (rt === 'VAT') {
       const allTx  = state.transactions;
@@ -1088,7 +1090,7 @@ async function generateReport() {
       if (state._vatPeriodFilter && !state._vatAvailablePeriods.includes(state._vatPeriodFilter)) {
         state._vatPeriodFilter = null;
       }
-      el.innerHTML = r.ok ? window.FinancialOutputs.renderEnhancedVATReport(r, _currentLabel) : `<div class="info-box red">${escH(r.error || 'No VAT data found.')}</div>`;
+      el.innerHTML = r.ok ? window.FinancialOutputs.renderEnhancedVATReport(r, _currentLabel, { title: 'VAT Report', clientName: c.name }) : `<div class="info-box red">${escH(r.error || 'No VAT data found.')}</div>`;
       state._VAT = r.ok ? r : null;
       // Update the period selector dropdown if it exists in the DOM
       const periodSel = document.querySelector('#report-body').closest('div')?.querySelector('select[onchange*="setVATPeriodFilter"]');

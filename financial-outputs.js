@@ -808,7 +808,7 @@ async function buildFullPack(clientId, financialYear, coa, hideZeros) {
 // Each renderer returns an HTML string for injection into the DOM.
 // ============================================================
 
-function renderIS(data, currentLabel, priorLabel, hideZeros) {
+function renderIS(data, currentLabel, priorLabel, hideZeros, opts) {
   const { incomeLines, cosLines, expLines,
           revenue, revComparative,
           totalCOS, cosCom,
@@ -837,7 +837,8 @@ function renderIS(data, currentLabel, priorLabel, hideZeros) {
   const secHead = (label) =>
     `<tr class="section-head"><td colspan="3">${label}</td></tr>`;
 
-  let html = `<div class="statement-wrap">${col}<table class="stmt-table">`;
+  const header = (opts && opts.title) ? _brandHeader(opts.title, opts.clientName, currentLabel, priorLabel) : '';
+  let html = `<div class="statement-wrap">${header}${col}<table class="stmt-table">`;
 
   // Income
   html += secHead('Income');
@@ -869,7 +870,7 @@ function renderIS(data, currentLabel, priorLabel, hideZeros) {
   return html;
 }
 
-function renderBS(data, currentLabel, priorLabel) {
+function renderBS(data, currentLabel, priorLabel, opts) {
   const { assetLines, liabLines, equityLines,
           totalAssets, assetsCom,
           totalLiabilities, liabCom,
@@ -895,7 +896,8 @@ function renderBS(data, currentLabel, priorLabel) {
 
   const secHead = l => `<tr class="section-head"><td colspan="3">${l}</td></tr>`;
 
-  let html = `<div class="statement-wrap">${col}<table class="stmt-table">`;
+  const header = (opts && opts.title) ? _brandHeader(opts.title, opts.clientName, currentLabel, priorLabel) : '';
+  let html = `<div class="statement-wrap">${header}${col}<table class="stmt-table">`;
 
   html += secHead('Assets');
   assetLines.forEach(l => { html += row(l.name, l.current, l.comparative); });
@@ -915,7 +917,7 @@ function renderBS(data, currentLabel, priorLabel) {
   return html;
 }
 
-function renderCF(data, currentLabel, priorLabel) {
+function renderCF(data, currentLabel, priorLabel, opts) {
   const { opLines, operating, invLines, investing, finLines, financing,
           netMovement, bankOB, closingBankBalance,
           priorOperating, priorInvesting, priorFinancing, priorNetMovement,
@@ -947,7 +949,8 @@ function renderCF(data, currentLabel, priorLabel) {
 
   const secHead = l => `<tr class="section-head"><td colspan="3">${l}</td></tr>`;
 
-  let html = `<div class="statement-wrap">${colHead}<table class="stmt-table">`;
+  const header = (opts && opts.title) ? _brandHeader(opts.title, opts.clientName, currentLabel, priorLabel) : '';
+  let html = `<div class="statement-wrap">${header}${colHead}<table class="stmt-table">`;
 
   html += secHead('Operating Activities');
   opLines.forEach(l => { html += row(l.name, l.amount, true); });
@@ -970,7 +973,7 @@ function renderCF(data, currentLabel, priorLabel) {
   return html;
 }
 
-function renderTB(data, currentLabel, priorLabel) {
+function renderTB(data, currentLabel, priorLabel, opts) {
   const {
     incomeLines, cosLines, expLines,
     grossIncome, totalCOS, grossProfit, totalExpenses, netProfit,
@@ -993,17 +996,17 @@ function renderTB(data, currentLabel, priorLabel) {
     : `<colgroup><col style="width:55%"><col style="width:22%"><col style="width:23%"></colgroup>`;
 
   const thead = showPrior
-    ? `<thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
-        <th class="label" style="padding:6px 10px;">Account</th>
-        <th class="amt"   style="padding:6px 10px;">${priorLbl} DR</th>
-        <th class="amt"   style="padding:6px 10px;">${priorLbl} CR</th>
-        <th class="amt"   style="padding:6px 10px;">${curLbl} DR</th>
-        <th class="amt"   style="padding:6px 10px;">${curLbl} CR</th>
+    ? `<thead><tr class="stmt-thead">
+        <th class="label">Account</th>
+        <th class="amt">${priorLbl} DR</th>
+        <th class="amt">${priorLbl} CR</th>
+        <th class="amt">${curLbl} DR</th>
+        <th class="amt">${curLbl} CR</th>
       </tr></thead>`
-    : `<thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
-        <th class="label" style="padding:6px 10px;">Account</th>
-        <th class="amt"   style="padding:6px 10px;">${curLbl} DR</th>
-        <th class="amt"   style="padding:6px 10px;">${curLbl} CR</th>
+    : `<thead><tr class="stmt-thead">
+        <th class="label">Account</th>
+        <th class="amt">${curLbl} DR</th>
+        <th class="amt">${curLbl} CR</th>
       </tr></thead>`;
 
   // Individual account line
@@ -1027,7 +1030,7 @@ function renderTB(data, currentLabel, priorLabel) {
   const secHead = label => `<tr class="section-head"><td colspan="${cols}">${label}</td></tr>`;
 
   const grpHead = label =>
-    `<tr style="background:var(--surface-2);"><td colspan="${cols}" style="padding:5px 10px;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);">${label}</td></tr>`;
+    `<tr class="grp-head"><td colspan="${cols}">${label}</td></tr>`;
 
   // Subtotal row — drAmt/crAmt are the current-year values; priorDr/priorCr are optional prior year
   const subtotalRow = (label, drAmt, crAmt, priorDr, priorCr, cls = 'subtotal') => {
@@ -1056,7 +1059,8 @@ function renderTB(data, currentLabel, priorLabel) {
     return subtotalRow(label, currDr, currCr, priorDr, priorCr, cls);
   };
 
-  let html = `<div class="statement-wrap"><table class="stmt-table">${colgroup}${thead}`;
+  const header = (opts && opts.title) ? _brandHeader(opts.title, opts.clientName, currentLabel, priorLabel) : '';
+  let html = `<div class="statement-wrap">${header}<table class="stmt-table">${colgroup}${thead}`;
 
   // ══════════════════════════════════════════════════════════════
   // SECTION 1 — Income Statement Accounts
@@ -1119,10 +1123,9 @@ function renderTB(data, currentLabel, priorLabel) {
   // Grand Total
   // ══════════════════════════════════════════════════════════════
   const gtOk  = Math.abs(totalDebits - totalCredits) <= 0.02;
-  const gtCls = gtOk ? 'total profit' : 'total loss';
 
   if (showPrior) {
-    html += `<tr class="${gtCls}">
+    html += `<tr class="grand-total">
       <td class="label">Grand Total</td>
       <td class="amt">${fmt(priorTotalDebits)}</td>
       <td class="amt">${fmt(priorTotalCredits)}</td>
@@ -1130,7 +1133,7 @@ function renderTB(data, currentLabel, priorLabel) {
       <td class="amt">${fmt(totalCredits)}</td>
     </tr>`;
   } else {
-    html += `<tr class="${gtCls}">
+    html += `<tr class="grand-total">
       <td class="label">Grand Total</td>
       <td class="amt">${fmt(totalDebits)}</td>
       <td class="amt">${fmt(totalCredits)}</td>
@@ -1258,7 +1261,7 @@ function renderVATReport(vat201) {
 // ENHANCED VAT REPORT RENDERER
 // Renders a full line-by-line VAT report from buildEnhancedVATReport output.
 // ============================================================
-function renderEnhancedVATReport(data, currentLabel) {
+function renderEnhancedVATReport(data, currentLabel, opts) {
   const {
     incomeLines, expenseLines,
     totalIncomeInclusive, totalOutputVAT, totalIncomeExclusive,
@@ -1291,14 +1294,15 @@ function renderEnhancedVATReport(data, currentLabel) {
       <td class="amt">${fmt(exc)}</td>
     </tr>`;
 
-  let html = `<div class="statement-wrap">
+  const vatHeader = (opts && opts.title) ? _brandHeader(opts.title, opts.clientName, currentLabel, null) : '';
+  let html = `<div class="statement-wrap">${vatHeader}
     <table class="stmt-table">
     <colgroup><col style="width:46%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup>
-    <thead><tr style="background:var(--surface-2);font-size:0.78rem;font-weight:700;color:var(--text-muted);">
-      <th class="label" style="padding:6px 10px;">Description</th>
-      <th class="amt" style="padding:6px 10px;">Inclusive</th>
-      <th class="amt" style="padding:6px 10px;">VAT</th>
-      <th class="amt" style="padding:6px 10px;">Exclusive</th>
+    <thead><tr class="stmt-thead">
+      <th class="label">Description</th>
+      <th class="amt">Inclusive</th>
+      <th class="amt">VAT</th>
+      <th class="amt">Exclusive</th>
     </tr></thead>`;
 
   // Section 1 — Income / Output VAT
@@ -1346,6 +1350,22 @@ function fmtDate(isoDate) {
 function escHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+// Branded report header bar (logo + slogan + title + client/period line)
+function _brandHeader(title, clientName, currentLabel, priorLabel) {
+  const period = [currentLabel, priorLabel].filter(Boolean).join(' / ');
+  return `
+    <div class="stmt-brand-bar">
+      <div class="stmt-brand-left">
+        <div class="stmt-brand-logo"><span class="stmt-brand-rand">Rand</span><span class="stmt-brand-sense">Sense</span></div>
+        <div class="stmt-brand-slogan">Making Cents of it all</div>
+      </div>
+      <div class="stmt-brand-practice">Your Practice Name</div>
+    </div>
+    <div class="stmt-report-meta">
+      <div class="stmt-report-title">${escHtml(title || '')}</div>
+      ${clientName ? `<div class="stmt-report-client">${escHtml(clientName)}${period ? ' &nbsp;&middot;&nbsp; ' + escHtml(period) : ''}</div>` : ''}
+    </div>`;
 
 // ============================================================
 // EXPORTS

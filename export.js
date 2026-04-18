@@ -77,18 +77,33 @@ function getPrintTarget() {
 
 function printStatement(title, clientName, financialYear, period, bodyHTML) {
   const target = getPrintTarget();
+  const periodLine = period ? ` &mdash; Period: ${escapeHTML(period)}` : '';
+  const barStyle  = 'background:#145A32;padding:1rem 1.5rem;display:flex;align-items:flex-start;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const botStyle  = 'background:#1E8449;padding:0.5rem 1.5rem;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
   target.innerHTML = `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111;font-size:11pt;max-width:700px;margin:0 auto;">
-      <div style="text-align:center;margin-bottom:28px;padding-bottom:14px;border-bottom:2px solid #111;">
-        <div style="font-size:15pt;font-weight:800;margin-bottom:2px;">${escapeHTML(clientName)}</div>
-        <div style="font-size:11pt;font-weight:700;margin-top:6px;">${escapeHTML(title)}</div>
-        <div style="font-size:9pt;color:#555;margin-top:4px;">
-          Financial year: ${escapeHTML(financialYear)}
-          ${period ? ' &mdash; Period: ' + escapeHTML(period) : ''}
+    <div style="font-family:'Poppins',sans-serif;color:#1A1A1A;font-size:11pt;margin:0;padding:0;">
+      <div style="${barStyle}">
+        <div>
+          <div style="display:flex;align-items:baseline;">
+            <span style="font-weight:900;font-size:18px;color:#FFFFFF;line-height:1;">Rand</span>
+            <span style="font-weight:300;font-size:18px;color:#A8E6C1;line-height:1;">Sense</span>
+          </div>
+          <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#D4F5E2;margin-top:3px;">Making Cents of it all</div>
         </div>
-        <div style="font-size:8.5pt;color:#888;margin-top:3px;">Generated: ${todayDMY()}</div>
+        <div style="font-size:11px;color:#D4F5E2;text-align:right;">Your Practice Name</div>
       </div>
-      ${bodyHTML}
+      <div style="padding:24px;background:#FFFFFF;">
+        <div style="margin-bottom:20px;">
+          <div style="color:#145A32;font-weight:700;font-size:16pt;margin-bottom:2px;">${escapeHTML(clientName)}</div>
+          <div style="color:#1E8449;font-weight:500;font-size:13pt;">${escapeHTML(title)}</div>
+          <div style="color:#1E8449;font-size:10pt;margin-top:2px;">FY ${escapeHTML(financialYear)}${periodLine}</div>
+          <div style="font-size:8.5pt;color:#666666;margin-top:3px;">Generated: ${todayDMY()}</div>
+        </div>
+        ${bodyHTML}
+      </div>
+      <div style="${botStyle}">
+        <span style="color:#FFFFFF;font-size:9px;font-family:'Poppins',sans-serif;">Making Cents of it all &mdash; RandSense</span>
+      </div>
     </div>`;
   window.print();
 }
@@ -597,11 +612,11 @@ function exportUnclassifiedPDF(transactions, clientName, financialYear) {
 
   // ── Styles ─────────────────────────────────────────────────
   const tbl  = 'width:100%;border-collapse:collapse;margin-bottom:20px;font-size:9.5pt;';
-  const th   = 'padding:6px 8px;text-align:left;background:#eeeeee;border:1px solid #bbb;font-weight:700;font-size:8.5pt;';
-  const td   = 'padding:6px 8px;border:1px solid #ddd;vertical-align:top;';
-  const tdR  = 'padding:6px 8px;border:1px solid #ddd;text-align:right;font-family:monospace;vertical-align:top;';
-  const tdBl = 'padding:6px 8px;border:1px solid #ddd;min-width:130px;';
-  const mhd  = 'padding:5px 8px;background:#dddddd;font-weight:700;font-size:8.5pt;text-transform:uppercase;letter-spacing:0.05em;border:1px solid #bbb;';
+  const th   = 'padding:6px 8px;text-align:left;background:#145A32;color:#FFFFFF;border:1px solid #145A32;font-weight:600;font-size:8.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const td   = 'padding:6px 8px;border:1px solid #C8E6C9;vertical-align:top;';
+  const tdR  = 'padding:6px 8px;border:1px solid #C8E6C9;text-align:right;font-family:monospace;vertical-align:top;';
+  const tdBl = 'padding:6px 8px;border:1px solid #C8E6C9;min-width:130px;background:#D4F5E2;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const mhd  = 'padding:5px 8px;background:#D4F5E2;color:#145A32;font-weight:700;font-size:8.5pt;text-transform:uppercase;letter-spacing:0.05em;border:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
 
   const _fmtDate = iso => {
     if (!iso) return '';
@@ -617,7 +632,7 @@ function exportUnclassifiedPDF(transactions, clientName, financialYear) {
 
   // ── Summary banner ─────────────────────────────────────────
   let body = `
-    <div style="margin-bottom:16px;padding:10px 14px;background:#fff8e1;border:1px solid #f0c040;border-radius:4px;font-size:9.5pt;">
+    <div style="margin-bottom:16px;padding:10px 14px;background:#D4F5E2;border:1px solid #C8E6C9;border-radius:4px;font-size:9.5pt;color:#145A32;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
       <strong>${unc.length} transaction${unc.length !== 1 ? 's' : ''} require${unc.length === 1 ? 's' : ''} your attention.</strong>
       Please complete the <em>Client Response</em> column for each item and return this document.
     </div>`;
@@ -652,13 +667,13 @@ function exportUnclassifiedPDF(transactions, clientName, financialYear) {
 
   // ── Footer instructions ────────────────────────────────────
   body += `
-    <div style="margin-top:24px;padding:12px 14px;background:#f5f5f5;border:1px solid #ddd;border-radius:4px;font-size:9pt;color:#333;line-height:1.6;">
-      <strong>Instructions to client:</strong> Please complete the <em>Client Response</em> column for each
+    <div style="margin-top:24px;padding:12px 14px;background:#F0F9F4;border:1px solid #C8E6C9;border-radius:4px;font-size:9pt;color:#145A32;font-style:italic;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <strong style="font-style:normal;">Instructions to client:</strong> Please complete the Client Response column for each
       transaction listed above. Indicate what each item relates to — for example:
       &ldquo;telephone expense&rdquo;, &ldquo;loan repayment&rdquo;, &ldquo;owner&rsquo;s drawings&rdquo;, &ldquo;sale of goods&rdquo;, etc.
       Return this document so we can finalise your financial statements.
       <br/><br/>
-      <em>Prepared by: [Practice Name]</em>
+      Prepared by: [Practice Name]
     </div>`;
 
   printStatement(
