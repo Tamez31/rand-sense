@@ -36,8 +36,18 @@
   --shadow-sm:     0 1px 3px rgba(0,0,0,.08);
   --shadow:        0 1px 4px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
   --shadow-lg:     0 4px 6px rgba(0,0,0,.07), 0 10px 40px rgba(0,0,0,.10);
-  --font:          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font:          'Poppins', sans-serif;
   --font-mono:     'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* ── Brand palette ── */
+  --rs-dark:       #145A32;
+  --rs-mid:        #1E8449;
+  --rs-mint:       #A8E6C1;
+  --rs-light-mint: #D4F5E2;
+  --rs-bg:         #F0F9F4;
+  --rs-border:     #C8E6C9;
+  --rs-text:       #1A1A1A;
+  --rs-muted:      #666666;
 }
 
 /* ── Reset & Base ────────────────────────────────────────────── */
@@ -45,8 +55,8 @@
 html { font-size: 15px; -webkit-text-size-adjust: 100%; }
 body {
   font-family: var(--font);
-  background: var(--bg);
-  color: var(--text);
+  background: var(--rs-bg);
+  color: var(--rs-text);
   line-height: 1.6;
   min-height: 100vh;
 }
