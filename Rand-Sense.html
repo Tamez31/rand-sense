@@ -1015,11 +1015,13 @@ function toggleHideZeros(val) {
 
 async function generateReport() {
   const c   = state.currentClient;
-  const isC = c.entity_type === 'commission_earner';
-  const rt  = state.reportType;
-  const F   = window.FinancialOutputs;
   const el  = document.getElementById('report-body');
   if (!el) return;
+  if (!c) { el.innerHTML = '<div class="info-box red">No client loaded. Please go back and reopen the client.</div>'; return; }
+  const F   = window.FinancialOutputs;
+  if (!F)  { el.innerHTML = '<div class="info-box red">Report engine failed to load. Please refresh the page.</div>'; return; }
+  const isC = c.entity_type === 'commission_earner';
+  const rt  = state.reportType;
 
   el.innerHTML = '<div style="padding:30px;text-align:center;"><div class="spinner"></div></div>';
 

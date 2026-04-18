@@ -1366,6 +1366,7 @@ function _brandHeader(title, clientName, currentLabel, priorLabel) {
       <div class="stmt-report-title">${escHtml(title || '')}</div>
       ${clientName ? `<div class="stmt-report-client">${escHtml(clientName)}${period ? ' &nbsp;&middot;&nbsp; ' + escHtml(period) : ''}</div>` : ''}
     </div>`;
+}
 
 // ============================================================
 // EXPORTS
