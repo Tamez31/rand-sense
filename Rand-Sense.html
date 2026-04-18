@@ -43,8 +43,13 @@
 <!-- ── App Shell ────────────────────────────────────────────── -->
 <div id="app">
   <nav class="topnav">
-    <div class="topnav-brand">Rand Sense <span>by Tax Tjom</span></div>
+    <div class="topnav-brand">
+      <div class="topnav-logo"><span class="topnav-rand">Rand</span><span class="topnav-sense">Sense</span></div>
+      <div class="topnav-slogan">Making Cents of it all</div>
+    </div>
+    <div id="topnav-links" class="topnav-links"></div>
     <div class="topnav-spacer"></div>
+    <button id="topnav-new-client-btn" class="topnav-new-client" style="display:none;" onclick="newClient()">+ New Client</button>
     <button class="topnav-lock" onclick="lockApp()">&#128274; Lock</button>
   </nav>
   <div class="main-wrap">
@@ -457,11 +462,11 @@ function renderDashboard() {
     : ['commission_earner'];
   const filtered = state.clients.filter(c => types.includes(c.entity_type));
 
-  const tabsHTML = `
-    <div class="section-tabs">
-      <button class="section-tab ${tab==='companies'?'active':''}" onclick="switchTab('companies')">Companies</button>
-      <button class="section-tab ${tab==='commission'?'active':''}" onclick="switchTab('commission')">Commission Earners</button>
-    </div>`;
+  // Inject nav links into topnav
+  document.getElementById('topnav-links').innerHTML = `
+    <button class="topnav-link ${tab==='companies'?'active':''}" onclick="switchTab('companies')">Companies</button>
+    <button class="topnav-link ${tab==='commission'?'active':''}" onclick="switchTab('commission')">Commission Earners</button>`;
+  document.getElementById('topnav-new-client-btn').style.display = '';
 
   const cardsHTML = filtered.map(c => `
     <div class="client-card" onclick="openClient('${c.id}')">
@@ -484,7 +489,6 @@ function renderDashboard() {
     </button>`;
 
   setContent(`
-    ${tabsHTML}
     <div class="page-header">
       <div class="page-title">${isComp ? 'Companies' : 'Commission Earners'}
         <small>${filtered.length} client${filtered.length!==1?'s':''}</small>
@@ -538,6 +542,10 @@ async function openClient(id) {
 }
 
 function renderClientDetail() {
+  // Clear topnav nav links when inside a client
+  document.getElementById('topnav-links').innerHTML = '';
+  document.getElementById('topnav-new-client-btn').style.display = 'none';
+
   const c      = state.currentClient;
   const isComp = c.entity_type !== 'commission_earner';
   const tab    = state.clientTab;
