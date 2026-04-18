@@ -1360,7 +1360,7 @@ function _brandHeader(title, clientName, currentLabel, priorLabel) {
         <div class="stmt-brand-logo"><span class="stmt-brand-rand">Rand</span><span class="stmt-brand-sense">Sense</span></div>
         <div class="stmt-brand-slogan">Making Cents of it all</div>
       </div>
-      <div class="stmt-brand-practice">Your Practice Name</div>
+      <div class="stmt-brand-practice">Matthew Le Roux</div>
     </div>
     <div class="stmt-report-meta">
       <div class="stmt-report-title">${escHtml(title || '')}</div>

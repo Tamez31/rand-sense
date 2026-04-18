@@ -90,7 +90,7 @@ function printStatement(title, clientName, financialYear, period, bodyHTML) {
           </div>
           <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#D4F5E2;margin-top:3px;">Making Cents of it all</div>
         </div>
-        <div style="font-size:11px;color:#D4F5E2;text-align:right;">Your Practice Name</div>
+        <div style="font-size:11px;color:#D4F5E2;text-align:right;">Matthew Le Roux</div>
       </div>
       <div style="padding:24px;background:#FFFFFF;">
         <div style="margin-bottom:20px;">
@@ -615,7 +615,6 @@ function exportUnclassifiedPDF(transactions, clientName, financialYear) {
   const th   = 'padding:6px 8px;text-align:left;background:#145A32;color:#FFFFFF;border:1px solid #145A32;font-weight:600;font-size:8.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
   const td   = 'padding:6px 8px;border:1px solid #C8E6C9;vertical-align:top;';
   const tdR  = 'padding:6px 8px;border:1px solid #C8E6C9;text-align:right;font-family:monospace;vertical-align:top;';
-  const tdBl = 'padding:6px 8px;border:1px solid #C8E6C9;min-width:130px;background:#D4F5E2;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
   const mhd  = 'padding:5px 8px;background:#D4F5E2;color:#145A32;font-weight:700;font-size:8.5pt;text-transform:uppercase;letter-spacing:0.05em;border:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
 
   const _fmtDate = iso => {
@@ -634,31 +633,38 @@ function exportUnclassifiedPDF(transactions, clientName, financialYear) {
   let body = `
     <div style="margin-bottom:16px;padding:10px 14px;background:#D4F5E2;border:1px solid #C8E6C9;border-radius:4px;font-size:9.5pt;color:#145A32;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
       <strong>${unc.length} transaction${unc.length !== 1 ? 's' : ''} require${unc.length === 1 ? 's' : ''} your attention.</strong>
-      Please complete the <em>Client Response</em> column for each item and return this document.
+      Please review each item below and respond indicating what it relates to and whether it is Business or Personal.
     </div>`;
 
   // ── Table ──────────────────────────────────────────────────
+  const cbStyle = 'display:inline-block;width:12px;height:12px;border:1.5px solid #145A32;border-radius:2px;margin-right:4px;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const indicatorStyle = 'padding:4px 8px 6px;border:1px solid #C8E6C9;border-top:none;background:#F0F9F4;font-size:8.5pt;color:#145A32;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+
   body += `<table style="${tbl}">
     <thead>
       <tr>
-        <th style="${th}width:11%;">Date</th>
-        <th style="${th}width:44%;">Description</th>
-        <th style="${th}width:14%;text-align:right;">Amount</th>
-        <th style="${th}width:31%;">Client Response</th>
+        <th style="${th}width:12%;">Date</th>
+        <th style="${th}width:58%;">Description</th>
+        <th style="${th}width:30%;text-align:right;">Amount</th>
       </tr>
     </thead>
     <tbody>`;
 
   for (const [monthKey, txs] of monthGroups) {
-    body += `<tr><td colspan="4" style="${mhd}">${escapeHTML(monthKey)}</td></tr>`;
+    body += `<tr><td colspan="3" style="${mhd}">${escapeHTML(monthKey)}</td></tr>`;
     for (const t of txs) {
-      const amt    = t.amount || 0;
-      const color  = amt >= 0 ? 'color:#1a7a30;' : 'color:#c0392b;';
+      const amt   = t.amount || 0;
+      const color = amt >= 0 ? 'color:#1a7a30;' : 'color:#c0392b;';
       body += `<tr>
         <td style="${td}">${_fmtDate(t.date)}</td>
         <td style="${td}">${escapeHTML(t.description)}</td>
         <td style="${tdR}${color}">${_fmtAmt(amt)}</td>
-        <td style="${tdBl}"></td>
+      </tr>
+      <tr>
+        <td colspan="3" style="${indicatorStyle}">
+          <span style="${cbStyle}"></span>Business &nbsp;&nbsp;&nbsp;
+          <span style="${cbStyle}"></span>Personal
+        </td>
       </tr>`;
     }
   }
@@ -667,13 +673,12 @@ function exportUnclassifiedPDF(transactions, clientName, financialYear) {
 
   // ── Footer instructions ────────────────────────────────────
   body += `
-    <div style="margin-top:24px;padding:12px 14px;background:#F0F9F4;border:1px solid #C8E6C9;border-radius:4px;font-size:9pt;color:#145A32;font-style:italic;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      <strong style="font-style:normal;">Instructions to client:</strong> Please complete the Client Response column for each
-      transaction listed above. Indicate what each item relates to — for example:
-      &ldquo;telephone expense&rdquo;, &ldquo;loan repayment&rdquo;, &ldquo;owner&rsquo;s drawings&rdquo;, &ldquo;sale of goods&rdquo;, etc.
-      Return this document so we can finalise your financial statements.
+    <div style="margin-top:24px;padding:12px 14px;background:#F0F9F4;border:1px solid #C8E6C9;border-radius:4px;font-size:9pt;color:#145A32;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <strong>Instructions to client:</strong> Please review each transaction below and respond via WhatsApp or email indicating:
+      1. What the transaction relates to, and 2. Whether it is Business or Personal.
+      This will allow us to finalise your financial statements.
       <br/><br/>
-      Prepared by: [Practice Name]
+      Prepared by: Matthew Le Roux
     </div>`;
 
   printStatement(
