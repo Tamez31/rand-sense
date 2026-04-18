@@ -323,6 +323,128 @@ const state = {
 };
 
 // ============================================================
+// SARS TAX TABLES — hardcoded for IRP6 provisional tax calculator
+// Source: SARS Budget / Tax Guide for each year
+// ============================================================
+const taxTables = {
+
+  // ── Individual income tax brackets ──────────────────────────
+  individual: {
+    2027: {
+      brackets: [
+        { min: 1,       max: 245100,   base: 0,      rate: 0.18 },
+        { min: 245101,  max: 383100,   base: 44118,  rate: 0.26 },
+        { min: 383101,  max: 530200,   base: 79998,  rate: 0.31 },
+        { min: 530201,  max: 695800,   base: 125599, rate: 0.36 },
+        { min: 695801,  max: 887000,   base: 185215, rate: 0.39 },
+        { min: 887001,  max: 1878600,  base: 259783, rate: 0.41 },
+        { min: 1878601, max: Infinity, base: 666339, rate: 0.45 },
+      ],
+      rebates:    { primary: 17820, secondary: 9765,  tertiary: 3249 },
+      thresholds: { under65: 99000, age65: 153250,    age75: 171300 },
+    },
+    2026: {
+      brackets: [
+        { min: 1,       max: 237100,   base: 0,      rate: 0.18 },
+        { min: 237101,  max: 370500,   base: 42678,  rate: 0.26 },
+        { min: 370501,  max: 512800,   base: 77362,  rate: 0.31 },
+        { min: 512801,  max: 673000,   base: 121475, rate: 0.36 },
+        { min: 673001,  max: 857900,   base: 179147, rate: 0.39 },
+        { min: 857901,  max: 1817000,  base: 251258, rate: 0.41 },
+        { min: 1817001, max: Infinity, base: 644489, rate: 0.45 },
+      ],
+      rebates:    { primary: 17235, secondary: 9444,  tertiary: 3145 },
+      thresholds: { under65: 95750, age65: 148217,    age75: 165689 },
+    },
+    2025: {
+      brackets: [
+        { min: 1,       max: 237100,   base: 0,      rate: 0.18 },
+        { min: 237101,  max: 370500,   base: 42678,  rate: 0.26 },
+        { min: 370501,  max: 512800,   base: 77362,  rate: 0.31 },
+        { min: 512801,  max: 673000,   base: 121475, rate: 0.36 },
+        { min: 673001,  max: 857900,   base: 179147, rate: 0.39 },
+        { min: 857901,  max: 1817000,  base: 251258, rate: 0.41 },
+        { min: 1817001, max: Infinity, base: 644489, rate: 0.45 },
+      ],
+      rebates:    { primary: 17235, secondary: 9444,  tertiary: 3145 },
+      thresholds: { under65: 95750, age65: 148217,    age75: 165689 },
+    },
+    2024: {
+      brackets: [
+        { min: 1,       max: 237100,   base: 0,      rate: 0.18 },
+        { min: 237101,  max: 370500,   base: 42678,  rate: 0.26 },
+        { min: 370501,  max: 512800,   base: 77362,  rate: 0.31 },
+        { min: 512801,  max: 673000,   base: 121475, rate: 0.36 },
+        { min: 673001,  max: 857900,   base: 179147, rate: 0.39 },
+        { min: 857901,  max: 1817000,  base: 251258, rate: 0.41 },
+        { min: 1817001, max: Infinity, base: 644489, rate: 0.45 },
+      ],
+      rebates:    { primary: 17235, secondary: 9444,  tertiary: 3145 },
+      thresholds: { under65: 95750, age65: 148217,    age75: 165689 },
+    },
+    2023: {
+      brackets: [
+        { min: 1,       max: 226000,   base: 0,      rate: 0.18 },
+        { min: 226001,  max: 353100,   base: 40680,  rate: 0.26 },
+        { min: 353101,  max: 488700,   base: 73726,  rate: 0.31 },
+        { min: 488701,  max: 641400,   base: 115762, rate: 0.36 },
+        { min: 641401,  max: 817600,   base: 170734, rate: 0.39 },
+        { min: 817601,  max: 1731600,  base: 239452, rate: 0.41 },
+        { min: 1731601, max: Infinity, base: 614192, rate: 0.45 },
+      ],
+      rebates:    { primary: 16425, secondary: 9000,  tertiary: 2997 },
+      thresholds: { under65: 91250, age65: 141250,    age75: 157900 },
+    },
+  },
+
+  // ── Company flat rate ────────────────────────────────────────
+  company: { 2027: 0.27, 2026: 0.27, 2025: 0.27, 2024: 0.27, 2023: 0.28 },
+
+  // ── Small Business Corporation (SBC) sliding scale ──────────
+  sbc: {
+    2027: [
+      { min: 1,      max: 99000,    base: 0,     rate: 0    },
+      { min: 99001,  max: 365000,   base: 0,     rate: 0.07 },
+      { min: 365001, max: 550000,   base: 18620, rate: 0.21 },
+      { min: 550001, max: Infinity, base: 57470, rate: 0.27 },
+    ],
+    2026: [
+      { min: 1,      max: 95750,    base: 0,     rate: 0    },
+      { min: 95751,  max: 365000,   base: 0,     rate: 0.07 },
+      { min: 365001, max: 550000,   base: 18848, rate: 0.21 },
+      { min: 550001, max: Infinity, base: 57698, rate: 0.27 },
+    ],
+    2025: [
+      { min: 1,      max: 95750,    base: 0,     rate: 0    },
+      { min: 95751,  max: 365000,   base: 0,     rate: 0.07 },
+      { min: 365001, max: 550000,   base: 18848, rate: 0.21 },
+      { min: 550001, max: Infinity, base: 57698, rate: 0.27 },
+    ],
+    2024: [
+      { min: 1,      max: 95750,    base: 0,     rate: 0    },
+      { min: 95751,  max: 365000,   base: 0,     rate: 0.07 },
+      { min: 365001, max: 550000,   base: 18848, rate: 0.21 },
+      { min: 550001, max: Infinity, base: 57698, rate: 0.27 },
+    ],
+    2023: [
+      { min: 1,      max: 95750,    base: 0,     rate: 0    },
+      { min: 95751,  max: 365000,   base: 0,     rate: 0.07 },
+      { min: 365001, max: 550000,   base: 18848, rate: 0.21 },
+      { min: 550001, max: Infinity, base: 57698, rate: 0.27 },
+    ],
+  },
+
+  // ── Medical tax credits (monthly per member) ─────────────────
+  medicalCredits: {
+    2027: { first2members: 364, additional: 246 },
+    2026: { first2members: 347, additional: 234 },
+    2025: { first2members: 347, additional: 234 },
+    2024: { first2members: 347, additional: 234 },
+    2023: { first2members: 347, additional: 234 },
+  },
+};
+
+// ============================================================
 // PIN MANAGEMENT
 // ============================================================
 const PIN_KEY = 'rs_pin';
@@ -567,6 +689,7 @@ function renderClientDetail() {
         Transactions${unreadCount>0?`<span class="subnav-count">${unreadCount}</span>`:''}
       </button>
       <button class="subnav-tab ${tab==='reports'?'active':''}" onclick="setClientTab('reports')">Reports</button>
+      <button class="subnav-tab ${tab==='irp6'?'active':''}" onclick="setClientTab('irp6')">IRP6</button>
       <button class="subnav-tab ${tab==='settings'?'active':''}" onclick="setClientTab('settings')">Settings</button>
     </div>`;
 
@@ -587,6 +710,7 @@ function renderClientDetail() {
   let tabContent = '';
   if      (tab === 'transactions') tabContent = renderTransactionsList();
   else if (tab === 'reports')      tabContent = renderReportsTab();
+  else if (tab === 'irp6')         tabContent = renderIRP6Tab();
   else if (tab === 'settings')     tabContent = renderSettingsTab();
 
   setContent(`
@@ -2205,6 +2329,19 @@ function downloadOBTemplate() {
   const a    = document.createElement('a');
   a.href=url; a.download='opening-balances-template.csv';
   a.click(); URL.revokeObjectURL(url);
+}
+
+// ── IRP6 Provisional Tax tab ───────────────────────────────────
+function renderIRP6Tab() {
+  const years = Object.keys(taxTables.individual).sort((a,b) => b-a).join(', ');
+  return `
+    <div class="card">
+      <div class="card-title">IRP6 Provisional Tax</div>
+      <div class="info-box green" style="margin-bottom:0;">
+        <strong>Coming in next build.</strong><br/>
+        Tax tables loaded for years: ${years}.
+      </div>
+    </div>`;
 }
 
 // ============================================================
