@@ -1357,8 +1357,14 @@ function _brandHeader(title, clientName, currentLabel, priorLabel) {
   return `
     <div class="stmt-brand-bar">
       <div class="stmt-brand-left">
-        <div class="stmt-brand-logo"><span class="stmt-brand-rand">Rand</span><span class="stmt-brand-sense">Sense</span></div>
-        <div class="stmt-brand-slogan">Making Cents of it all</div>
+        ${(function(){
+          try {
+            const logo = localStorage.getItem('rs_practice_logo');
+            if (logo) return `<img src="${logo}" alt="Practice logo" style="max-height:48px;max-width:160px;object-fit:contain;display:block;"/>`;
+          } catch(e) {}
+          return `<div class="stmt-brand-logo"><span class="stmt-brand-rand">Rand</span><span class="stmt-brand-sense">Sense</span></div>
+                  <div class="stmt-brand-slogan">Making Cents of it all</div>`;
+        })()}
       </div>
       <div class="stmt-brand-practice">${(function(){ try { return getPracticeAccountant() || 'Matthew Le Roux'; } catch(e) { return 'Matthew Le Roux'; } })()}</div>
     </div>

@@ -485,19 +485,32 @@ const PracticeSettings = {
 
   async save(data) {
     const sb = getClient();
-    const existing = unwrap(await sb.from('practice_settings').select('id').limit(1));
+    // Check for existing row
+    const selectResult = await sb.from('practice_settings').select('id').limit(1);
+    if (selectResult.error) {
+      console.error('practice_settings select error:', selectResult.error);
+      throw new Error(selectResult.error.message);
+    }
+    const existing = selectResult.data || [];
+
     if (existing.length > 0) {
-      const rows = unwrap(
-        await sb
-          .from('practice_settings')
-          .update({ ...data, updated_at: new Date().toISOString() })
-          .eq('id', existing[0].id)
-          .select()
-      );
-      return rows[0];
+      const updateResult = await sb
+        .from('practice_settings')
+        .update({ ...data, updated_at: new Date().toISOString() })
+        .eq('id', existing[0].id)
+        .select();
+      if (updateResult.error) {
+        console.error('practice_settings update error:', updateResult.error);
+        throw new Error(updateResult.error.message);
+      }
+      return (updateResult.data || [])[0];
     } else {
-      const rows = unwrap(await sb.from('practice_settings').insert([data]).select());
-      return rows[0];
+      const insertResult = await sb.from('practice_settings').insert([data]).select();
+      if (insertResult.error) {
+        console.error('practice_settings insert error:', insertResult.error);
+        throw new Error(insertResult.error.message);
+      }
+      return (insertResult.data || [])[0];
     }
   },
 };

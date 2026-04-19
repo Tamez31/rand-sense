@@ -3163,11 +3163,29 @@ function showSettings() {
 }
 
 function renderSettingsPage() {
-  const ps = state.practice || {};
+  const ps   = state.practice || {};
   const logo = localStorage.getItem('rs_practice_logo') || '';
-  const logoPreview = logo
-    ? `<div style="margin-top:10px;"><img src="${escH(logo)}" alt="Practice logo" style="max-height:80px;max-width:240px;border-radius:6px;border:1px solid #C8E6C9;padding:4px;background:#fff;"/></div>`
-    : '';
+  const accountant = ps.accountant_name || 'Matthew Le Roux';
+
+  // PDF header preview — mirrors export.js printStatement header exactly
+  const logoBlock = logo
+    ? `<div><img src="${escH(logo)}" alt="Practice logo" style="max-height:52px;max-width:180px;object-fit:contain;display:block;"/></div>`
+    : `<div>
+        <div style="display:flex;align-items:baseline;">
+          <span style="font-weight:900;font-size:18px;color:#FFFFFF;line-height:1;">Rand</span>
+          <span style="font-weight:300;font-size:18px;color:#A8E6C1;line-height:1;">Sense</span>
+        </div>
+        <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#D4F5E2;margin-top:3px;">Making Cents of it all</div>
+       </div>`;
+
+  const headerPreview = `
+    <div style="background:#145A32;padding:14px 20px;display:flex;align-items:flex-start;justify-content:space-between;border-radius:8px 8px 0 0;-webkit-print-color-adjust:exact;">
+      ${logoBlock}
+      <div style="font-size:11px;color:#D4F5E2;text-align:right;">${escH(accountant)}</div>
+    </div>
+    <div style="background:#1E8449;padding:5px 20px;border-radius:0 0 8px 8px;">
+      <span style="color:#FFFFFF;font-size:9px;">Making Cents of it all &mdash; RandSense</span>
+    </div>`;
 
   setContent(`
     <div class="page-header">
@@ -3208,16 +3226,19 @@ function renderSettingsPage() {
         </div>
       </div>
 
-      <div style="margin-top:24px;border-top:1px solid #C8E6C9;padding-top:20px;">
-        <div class="settings-section-title">Practice Logo <span style="color:#999;font-weight:400;font-size:0.85rem;">(optional — stored locally)</span></div>
-        <div class="form-group" style="margin-top:12px;">
-          <label class="form-label">Upload logo</label>
-          <input type="file" id="ps-logo-file" accept="image/*" onchange="onLogoFileSelected(this)" style="display:none;"/>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <button class="btn btn-ghost" onclick="document.getElementById('ps-logo-file').click()">&#128247; Choose image…</button>
-            ${logo ? `<button class="btn btn-ghost" style="color:#C0392B;" onclick="removePracticeLogo()">&#10005; Remove logo</button>` : ''}
-          </div>
-          ${logoPreview}
+      <div style="margin-top:28px;border-top:1px solid #C8E6C9;padding-top:22px;">
+        <div class="settings-section-title">Practice Logo <span style="color:#999;font-weight:400;font-size:0.85rem;">(optional — stored in this browser)</span></div>
+        <div class="form-hint" style="margin:6px 0 14px;">If no logo is uploaded, the default RandSense green wordmark appears on all PDFs.</div>
+
+        <div style="margin-bottom:16px;">
+          <div class="form-label" style="margin-bottom:8px;">PDF header preview</div>
+          ${headerPreview}
+        </div>
+
+        <input type="file" id="ps-logo-file" accept="image/*" onchange="onLogoFileSelected(this)" style="display:none;"/>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-ghost" onclick="document.getElementById('ps-logo-file').click()">&#128247; ${logo ? 'Replace logo…' : 'Upload logo…'}</button>
+          ${logo ? `<button class="btn btn-ghost" style="color:#C0392B;" onclick="removePracticeLogo()">&#10005; Remove — use default wordmark</button>` : ''}
         </div>
       </div>
 
@@ -3256,11 +3277,14 @@ async function savePracticeSettings() {
   showLoading('Saving settings…');
   try {
     const saved = await DB.PracticeSettings.save(data);
-    state.practice = saved;
+    if (saved) state.practice = saved;
     toast('Practice settings saved.', 'success');
     renderSettingsPage();
   } catch(e) {
-    toast('Error saving settings: ' + e.message, 'error');
+    console.error('Practice settings save error:', e);
+    const isRLS = e.message && (e.message.includes('row-level security') || e.message.includes('permission denied'));
+    const hint  = isRLS ? ' — RLS may be blocking this. Run in Supabase SQL editor: ALTER TABLE practice_settings DISABLE ROW LEVEL SECURITY;' : '';
+    toast('Error saving settings: ' + e.message + hint, 'error');
   } finally {
     hideLoading();
   }

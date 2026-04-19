@@ -16,6 +16,26 @@ function _practiceBy() {
   try { return getPracticeAccountant() || 'Matthew Le Roux'; } catch(e) { return 'Matthew Le Roux'; }
 }
 
+// Returns the left-side logo block for PDF headers.
+// If a custom logo is uploaded (stored in localStorage) it renders as an <img>.
+// Otherwise renders the default RandSense green wordmark.
+function _practiceLogoHTML() {
+  try {
+    const logo = localStorage.getItem('rs_practice_logo');
+    if (logo) {
+      return `<div><img src="${logo}" alt="Practice logo" style="max-height:52px;max-width:180px;object-fit:contain;display:block;"/></div>`;
+    }
+  } catch(e) {}
+  return `
+    <div>
+      <div style="display:flex;align-items:baseline;">
+        <span style="font-weight:900;font-size:18px;color:#FFFFFF;line-height:1;">Rand</span>
+        <span style="font-weight:300;font-size:18px;color:#A8E6C1;line-height:1;">Sense</span>
+      </div>
+      <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#D4F5E2;margin-top:3px;">Making Cents of it all</div>
+    </div>`;
+}
+
 // ── Shared helpers ────────────────────────────────────────────
 
 function todayDMY() {
@@ -90,13 +110,7 @@ function printStatement(title, clientName, financialYear, period, bodyHTML) {
   target.innerHTML = `
     <div style="font-family:'Poppins',sans-serif;color:#1A1A1A;font-size:11pt;margin:0;padding:0;">
       <div style="${barStyle}">
-        <div>
-          <div style="display:flex;align-items:baseline;">
-            <span style="font-weight:900;font-size:18px;color:#FFFFFF;line-height:1;">Rand</span>
-            <span style="font-weight:300;font-size:18px;color:#A8E6C1;line-height:1;">Sense</span>
-          </div>
-          <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#D4F5E2;margin-top:3px;">Making Cents of it all</div>
-        </div>
+        ${_practiceLogoHTML()}
         <div style="font-size:11px;color:#D4F5E2;text-align:right;">${_practiceBy()}</div>
       </div>
       <div style="padding:24px;background:#FFFFFF;">
@@ -750,13 +764,7 @@ function printVATReport(vatData) {
 
   const letterhead = (pageTitle) => `
     <div style="${bar}">
-      <div>
-        <div style="display:flex;align-items:baseline;">
-          <span style="font-weight:900;font-size:18px;color:#FFFFFF;line-height:1;">Rand</span>
-          <span style="font-weight:300;font-size:18px;color:#A8E6C1;line-height:1;">Sense</span>
-        </div>
-        <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#D4F5E2;margin-top:3px;">Making Cents of it all</div>
-      </div>
+      ${_practiceLogoHTML()}
       <div style="text-align:center;">
         <div style="color:#FFFFFF;font-weight:700;font-size:14px;">${escapeHTML(pageTitle)}</div>
         <div style="color:#D4F5E2;font-size:11px;margin-top:2px;">${escapeHTML(dateLabel)}</div>
@@ -1018,13 +1026,7 @@ function printIRP6PDF(params) {
 
   const letterhead = `
     <div style="${barSt}">
-      <div>
-        <div style="display:flex;align-items:baseline;">
-          <span style="font-weight:900;font-size:18px;color:#FFFFFF;line-height:1;">Rand</span>
-          <span style="font-weight:300;font-size:18px;color:#A8E6C1;line-height:1;">Sense</span>
-        </div>
-        <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#D4F5E2;margin-top:3px;">Making Cents of it all</div>
-      </div>
+      ${_practiceLogoHTML()}
       <div style="text-align:center;">
         <div style="color:#FFFFFF;font-weight:700;font-size:14px;">IRP6 Provisional Tax Return</div>
         <div style="color:#D4F5E2;font-size:11px;margin-top:2px;">${escapeHTML(clientName)} &mdash; ${periodLabel} &mdash; Tax Year ${r.year}</div>
@@ -1071,10 +1073,7 @@ function printIRP6PDF(params) {
   const summaryCard = `
     <div style="border:1px solid #C8E6C9;border-radius:4px;overflow:hidden;margin-bottom:20px;">
       <div style="background:#145A32;padding:0.85rem 1.25rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <div style="display:flex;align-items:baseline;">
-          <span style="font-weight:900;font-size:16px;color:#FFFFFF;line-height:1;">Rand</span>
-          <span style="font-weight:300;font-size:16px;color:#A8E6C1;line-height:1;">Sense</span>
-        </div>
+        ${_practiceLogoHTML()}
         <div style="color:#FFFFFF;font-weight:700;font-size:12px;">IRP6 Provisional Tax &mdash; ${periodLabel}</div>
         <div style="color:#D4F5E2;font-size:11px;">Tax Year ${r.year}</div>
       </div>
