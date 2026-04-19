@@ -157,6 +157,31 @@ const Transactions = {
     const years = [...new Set(rows.map(r => r.financial_year))].sort().reverse();
     return years;
   },
+
+  // Count of unclassified transactions for a client (header-only, no row data)
+  async countUnclassified(clientId) {
+    const sb = getClient();
+    const r  = await sb
+      .from('transactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .is('account_code', null);
+    if (r.error) throw new Error(r.error.message);
+    return r.count || 0;
+  },
+
+  // Most recent transaction date for a client (used on Practice Dashboard)
+  async lastImportDate(clientId) {
+    const sb = getClient();
+    const r  = await sb
+      .from('transactions')
+      .select('date')
+      .eq('client_id', clientId)
+      .order('date', { ascending: false })
+      .limit(1);
+    if (r.error) throw new Error(r.error.message);
+    return (r.data || [])[0]?.date || null;
+  },
 };
 
 // ============================================================

@@ -264,6 +264,70 @@ input, select, textarea { font-family: var(--font); }
   letter-spacing: 0.02em;
 }
 
+/* ── Practice Dashboard ──────────────────────────────────────── */
+.dash-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.dash-metric-card {
+  background: #145A32;
+  border-radius: 12px;
+  padding: 22px 24px;
+  color: #FFFFFF;
+  position: relative;
+  overflow: hidden;
+}
+.dash-metric-card::after {
+  content: '';
+  position: absolute;
+  right: -18px;
+  bottom: -18px;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+  pointer-events: none;
+}
+.dash-metric-value {
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.dash-metric-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #A8E6C1;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.dash-metric-card.amber { background: #946A00; }
+.dash-metric-card.red   { background: #922B21; }
+
+/* Status pills — used in dashboard table and client detail badges */
+.status-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.status-pill.green { background: #D4F5E2; color: #145A32; }
+.status-pill.amber { background: #FEF9E7; color: #946A00; border: 1px solid #F9E79F; }
+.status-pill.red   { background: #FDEDEC; color: #C0392B; border: 1px solid #F5B7B1; }
+.status-pill.muted { background: #F0F0F0; color: #999999; }
+
+@media (max-width: 900px) {
+  .dash-metrics { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .dash-metrics { grid-template-columns: 1fr 1fr; }
+}
+
 /* ── Main Layout ─────────────────────────────────────────────── */
 .main-wrap {
   max-width: 1100px;

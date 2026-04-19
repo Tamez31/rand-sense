@@ -292,7 +292,7 @@
 const state = {
   pin:            null,
   isSetup:        false,
-  activeTab:      'companies',   // 'companies' | 'commission'
+  activeTab:      'all',         // 'all' | 'companies' | 'commission'
   currentClient:  null,
   currentYear:    null,
   clientTab:      'transactions', // 'transactions' | 'reports' | 'settings'
@@ -305,6 +305,7 @@ const state = {
   unclassified:   [],
   openingBalances:[],
   pack:           null,          // last built financial pack
+  dashboardData:  {},            // { [clientId]: { unclassified, lastImport } }
   // Import flow state
   impFileList:    [],
   // Opening balances flow state
@@ -582,9 +583,25 @@ function setContent(html) {
 }
 
 async function loadDashboard() {
-  showLoading('Loading clients…');
+  showLoading('Loading…');
   try {
     state.clients = await DB.Clients.list();
+    if (state.activeTab === 'all' && state.clients.length > 0) {
+      // Fetch per-client stats in parallel for the Practice Dashboard
+      const stats = await Promise.allSettled(
+        state.clients.map(c => Promise.all([
+          DB.Transactions.countUnclassified(c.id),
+          DB.Transactions.lastImportDate(c.id),
+        ]))
+      );
+      state.dashboardData = {};
+      stats.forEach((r, i) => {
+        const id = state.clients[i].id;
+        state.dashboardData[id] = r.status === 'fulfilled'
+          ? { unclassified: r.value[0], lastImport: r.value[1] }
+          : { unclassified: 0, lastImport: null };
+      });
+    }
   } catch(e) {
     toast('Could not load clients: ' + e.message, 'error');
     state.clients = [];
@@ -603,9 +620,13 @@ function renderDashboard() {
 
   // Inject nav links into topnav
   document.getElementById('topnav-links').innerHTML = `
+    <button class="topnav-link ${tab==='all'?'active':''}" onclick="switchTab('all')">Dashboard</button>
     <button class="topnav-link ${tab==='companies'?'active':''}" onclick="switchTab('companies')">Companies</button>
     <button class="topnav-link ${tab==='commission'?'active':''}" onclick="switchTab('commission')">Commission Earners</button>`;
   document.getElementById('topnav-new-client-btn').style.display = '';
+
+  // Practice Dashboard replaces the home screen for the 'all' tab
+  if (tab === 'all') { renderPracticeDashboard(); return; }
 
   const cardsHTML = filtered.map(c => `
     <div class="client-card" onclick="openClient('${c.id}')">
@@ -641,7 +662,11 @@ function renderDashboard() {
 
 function switchTab(tab) {
   state.activeTab = tab;
-  renderDashboard();
+  if (tab === 'all') {
+    loadDashboard(); // reload with fresh per-client stats
+  } else {
+    renderDashboard();
+  }
 }
 
 // ============================================================
@@ -3139,6 +3164,175 @@ function entityLabel(type) {
 
 function bankLabel(bank) {
   return { absa:'ABSA', standard_bank:'Standard Bank', capitec:'Capitec', nedbank:'Nedbank' }[bank] || bank;
+}
+
+// ============================================================
+// PRACTICE DASHBOARD
+// ============================================================
+
+// VAT next-due-date status for a single client.
+// Returns null if client is not VAT active.
+// South African VAT is due on the 25th of the month following the period end.
+function _vatDashboardStatus(client) {
+  if (!client.vat_active) return null;
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const y = today.getFullYear();
+  const m = today.getMonth(); // 0-based
+
+  const period = client.vat_period || 'monthly';
+  let dueDate;
+
+  if (period === 'monthly') {
+    // Current period (last month) due 25th of this month
+    dueDate = new Date(y, m, 25);
+  } else if (period === '2monthly') {
+    // 2-month blocks: Jan-Feb → due Mar 25, Mar-Apr → due May 25, etc.
+    const block  = Math.floor(m / 2);
+    const dueMon = block * 2 + 2; // 0-based month index (may overflow Dec → handled by Date)
+    dueDate = new Date(y, dueMon, 25);
+  } else if (period === 'yearly') {
+    const fyeIdx = ['January','February','March','April','May','June',
+                    'July','August','September','October','November','December']
+                   .indexOf(client.financial_year_end);
+    if (fyeIdx < 0) return { badge: 'green', label: 'Up to date' };
+    // Due 25th of month after financial year end
+    dueDate = new Date(y, fyeIdx + 1, 25);
+    if (dueDate < today) dueDate = new Date(y + 1, fyeIdx + 1, 25);
+  }
+
+  if (!dueDate) return { badge: 'green', label: 'Up to date' };
+
+  const days = Math.ceil((dueDate - today) / 86400000);
+  const fmt  = dueDate.getDate() + '/' + String(dueDate.getMonth() + 1).padStart(2, '0');
+
+  if (days < 0)   return { badge: 'red',   label: 'Overdue' };
+  if (days <= 30) return { badge: 'amber', label: `Due ${fmt}` };
+  return { badge: 'green', label: 'Up to date' };
+}
+
+// Next IRP6 deadline status (SARS-universal — same for all clients).
+// First period: 31 August of current tax year - 1.
+// Second period: last day of February of current tax year.
+function _irp6DashboardStatus() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const y = today.getFullYear();
+  const m = today.getMonth();
+
+  // SA tax year runs March → February. March onwards means next tax year.
+  const taxYear = m >= 2 ? y + 1 : y;
+
+  const first  = _irp6DueDate(taxYear, 'first');
+  const second = _irp6DueDate(taxYear, 'second');
+
+  // Pick the nearest upcoming deadline
+  const upcoming = [first, second].filter(d => d.daysRemaining >= 0);
+  let best;
+  if (upcoming.length > 0) {
+    best = upcoming.reduce((a, b) => a.daysRemaining <= b.daysRemaining ? a : b);
+  } else {
+    // Both passed — roll to next tax year's first period
+    best = _irp6DueDate(taxYear + 1, 'first');
+  }
+
+  if (best.status === 'closed') return { badge: 'red',   label: 'Overdue' };
+  if (best.status === 'soon')   return { badge: 'amber', label: `Due ${best.formatted}` };
+  return { badge: 'green', label: best.formatted };
+}
+
+function renderPracticeDashboard() {
+  const clients = state.clients;
+  const data    = state.dashboardData || {};
+
+  // Compute per-client statuses (IRP6 is SARS-universal — same for every client)
+  const irp6 = _irp6DashboardStatus();
+  const rows  = clients.map(c => ({
+    c,
+    unclassified: (data[c.id] || {}).unclassified || 0,
+    lastImport:   (data[c.id] || {}).lastImport   || null,
+    vat:          _vatDashboardStatus(c),
+    irp6,
+  }));
+
+  // ── Metric counts ────────────────────────────────────────────
+  const needAttention = rows.filter(r => r.unclassified > 0).length;
+  const vatDue        = rows.filter(r => r.vat && (r.vat.badge === 'amber' || r.vat.badge === 'red')).length;
+  const irp6DueSoon   = (irp6.badge === 'amber' || irp6.badge === 'red') ? clients.length : 0;
+
+  const metricCards = `
+    <div class="dash-metrics">
+      <div class="dash-metric-card">
+        <div class="dash-metric-value">${clients.length}</div>
+        <div class="dash-metric-label">Active Clients</div>
+      </div>
+      <div class="dash-metric-card ${needAttention > 0 ? 'amber' : ''}">
+        <div class="dash-metric-value">${needAttention}</div>
+        <div class="dash-metric-label">Unclassified Transactions</div>
+      </div>
+      <div class="dash-metric-card ${vatDue > 0 ? 'amber' : ''}">
+        <div class="dash-metric-value">${vatDue}</div>
+        <div class="dash-metric-label">VAT Due This Month</div>
+      </div>
+      <div class="dash-metric-card ${irp6.badge === 'red' ? 'red' : irp6.badge === 'amber' ? 'amber' : ''}">
+        <div class="dash-metric-value" style="font-size:1.15rem;line-height:1.2;">${escH(irp6.label)}</div>
+        <div class="dash-metric-label">Next IRP6 Deadline</div>
+      </div>
+    </div>`;
+
+  // ── Table rows ───────────────────────────────────────────────
+  const tableRows = rows.length === 0
+    ? `<tr><td colspan="8" style="text-align:center;padding:32px;color:#999;">
+         No clients yet — add your first client using the button above.
+       </td></tr>`
+    : rows.map(({ c, unclassified, lastImport, vat, irp6: irp6s }) => {
+        const lastFmt      = lastImport ? fmtDate(lastImport) : '—';
+        const unclassHtml  = unclassified > 0
+          ? `<span style="color:#C0392B;font-weight:700;">${unclassified}</span>`
+          : `<span style="color:#999;">0</span>`;
+        const vatHtml  = vat
+          ? `<span class="status-pill ${vat.badge}">${escH(vat.label)}</span>`
+          : `<span class="status-pill muted">N/A</span>`;
+        const irp6Html = `<span class="status-pill ${irp6s.badge}">${escH(irp6s.label)}</span>`;
+        return `
+          <tr>
+            <td><strong style="color:#145A32;">${escH(c.name)}</strong></td>
+            <td><span class="tag">${entityLabel(c.entity_type)}</span></td>
+            <td style="color:#666;">${escH(c.financial_year_end)}</td>
+            <td style="color:#666;font-size:0.82rem;">${lastFmt}</td>
+            <td class="num">${unclassHtml}</td>
+            <td>${vatHtml}</td>
+            <td>${irp6Html}</td>
+            <td><button class="btn btn-ghost btn-sm" onclick="openClient('${c.id}')">Open &rarr;</button></td>
+          </tr>`;
+      }).join('');
+
+  setContent(`
+    <div class="page-header">
+      <div class="page-title">Practice Dashboard
+        <small>${clients.length} client${clients.length !== 1 ? 's' : ''}</small>
+      </div>
+    </div>
+    ${metricCards}
+    <div class="card" style="margin-bottom:0;padding:0;">
+      <div class="card-title" style="padding:18px 20px 0;">Client Status Overview</div>
+      <div class="table-wrap" style="margin-top:12px;border:none;border-radius:0 0 12px 12px;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Type</th>
+              <th>FYE</th>
+              <th>Last Import</th>
+              <th class="num">Unclassified</th>
+              <th>VAT Status</th>
+              <th>IRP6</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+    </div>`);
 }
 
 // ============================================================
