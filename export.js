@@ -987,12 +987,13 @@ function exportVATReportCSV(vatData) {
 }
 
 // ── IRP6 Provisional Tax PDF ──────────────────────────────────
-// params: { r, clientName, entityType, yearEndMonth, dueDates }
+// params: { r, clientName, entityType, firstDue, secondDue }
 //   r          — result object from calculateIRP6Individual() or calculateIRP6Company()
 //   entityType — 'commission_earner' | 'company_cc' | 'company_pty'
-//   dueDates   — { first, second } formatted strings
+//   firstDue / secondDue — objects from _irp6DueDate(): { code, formatted, daysRemaining, status }
 function printIRP6PDF(params) {
-  const { r, clientName, entityType, dueDates } = params;
+  const { r, clientName, entityType, firstDue, secondDue } = params;
+  const thisDue = r.period === 'first' ? firstDue : secondDue;
   const target = getPrintTarget();
 
   const isIndividual = entityType === 'commission_earner';
@@ -1047,6 +1048,19 @@ function printIRP6PDF(params) {
     lessRows += `<div style="${rowSt(bg)}">${sLbl('Less: First period payment made')}${sAmt('(' + fmt(r.firstPay) + ')', '#C0392B')}</div>`;
   }
 
+  // Due date warning colours for this period
+  const dueBg  = thisDue.status === 'closed' ? '#FEE2E2'
+               : thisDue.status === 'soon'   ? '#FEF9C3'
+               : '#D4F5E2';
+  const dueTxt = thisDue.status === 'closed' ? '#991B1B'
+               : thisDue.status === 'soon'   ? '#92400E'
+               : '#145A32';
+  const dueWarn = thisDue.status === 'closed'
+    ? `Submission period closed \u2014 ${thisDue.formatted}`
+    : thisDue.status === 'soon'
+    ? `Submission due soon \u2014 ${thisDue.daysRemaining} days remaining`
+    : `${thisDue.daysRemaining} days remaining`;
+
   const summaryCard = `
     <div style="border:1px solid #C8E6C9;border-radius:4px;overflow:hidden;margin-bottom:20px;">
       <div style="background:#145A32;padding:0.85rem 1.25rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
@@ -1058,6 +1072,7 @@ function printIRP6PDF(params) {
         <div style="color:#D4F5E2;font-size:11px;">Tax Year ${r.year}</div>
       </div>
       ${sRow('Client', escapeHTML(clientName))}
+      ${sRow('Submission period code', thisDue.code)}
       ${sRow('Tax year', String(r.year))}
       ${sRow('Payment period', periodLabel)}
       ${sRow('Entity type', entityLabel)}
@@ -1068,8 +1083,14 @@ function printIRP6PDF(params) {
         <span style="color:#FFFFFF;font-size:11pt;font-weight:700;">Amount payable to SARS</span>
         <span style="font-family:monospace;font-size:11pt;color:#FFFFFF;font-weight:700;">${fmt(r.amountDue)}</span>
       </div>
-      <div style="padding:8px 16px;background:#F0F9F4;font-size:8.5pt;color:#145A32;border-top:1px solid #C8E6C9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <strong>Due dates:</strong>&nbsp; First period due ${dueDates.first} &nbsp;&bull;&nbsp; Second period due ${dueDates.second}
+      <div style="padding:8px 16px;background:${dueBg};border-top:1px solid #C8E6C9;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div>
+          <div style="font-size:9pt;font-weight:700;color:${dueTxt};">Due: ${thisDue.formatted}</div>
+          <div style="font-size:8.5pt;color:${dueTxt};margin-top:1px;">${dueWarn}</div>
+        </div>
+        <div style="font-size:8pt;color:${dueTxt};text-align:right;">
+          P1 (${firstDue.code}): ${firstDue.formatted}<br/>P2 (${secondDue.code}): ${secondDue.formatted}
+        </div>
       </div>
     </div>`;
 

@@ -2335,41 +2335,64 @@ function downloadOBTemplate() {
 // Returns { first, second } formatted as "31 Aug 2026"
 // First period: last day of the month 6 months after year start
 // Second period: last day of the financial year end month
-function _irp6DueDates(yearEndMonthName, taxYear) {
-  const endIdx = _FY_MONTHS.indexOf(yearEndMonthName);
-  if (endIdx < 0) return { first: '', second: '' };
-  const yr           = parseInt(taxYear, 10);
-  const startMoIdx   = (endIdx + 1) % 12;
-  // December year end → year starts Jan of same year; all others → prior calendar year
-  const startYear    = endIdx === 11 ? yr : yr - 1;
-  // First period due = end of month 6 months from year start
-  const fpMoIdx      = (startMoIdx + 5) % 12;
-  const fpYear       = startYear + (startMoIdx + 5 >= 12 ? 1 : 0);
-  const fpDay        = new Date(fpYear, fpMoIdx + 1, 0).getDate();
-  // Second period due = last day of year-end month in taxYear
-  const spDay        = new Date(yr, endIdx + 1, 0).getDate();
-  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return {
-    first:  `${fpDay} ${mo[fpMoIdx]} ${fpYear}`,
-    second: `${spDay} ${mo[endIdx]} ${yr}`,
-  };
+// Returns SARS IRP6 due date info for a given taxYear and period.
+// First period  ([year]01): always 31 August of (taxYear - 1)
+// Second period ([year]02): always last day of February of taxYear (leap-year aware)
+function _irp6DueDate(taxYear, period) {
+  const yr = parseInt(taxYear, 10);
+  const MONTHS = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+  const code = period === 'first' ? `${yr}01` : `${yr}02`;
+
+  let dueDate;
+  if (period === 'first') {
+    dueDate = new Date(yr - 1, 7, 31);              // 31 August of (taxYear - 1)
+  } else {
+    const lastFeb = new Date(yr, 2, 0).getDate();   // day 0 of March = last of February
+    dueDate = new Date(yr, 1, lastFeb);
+  }
+
+  const formatted = `${dueDate.getDate()} ${MONTHS[dueDate.getMonth()]} ${dueDate.getFullYear()}`;
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const daysRemaining = Math.ceil((dueDate - today) / 86400000);
+
+  const status = daysRemaining < 0 ? 'closed' : daysRemaining <= 30 ? 'soon' : 'ok';
+
+  return { code, formatted, daysRemaining, status };
 }
 
 // ── IRP6 summary card renderer ─────────────────────────────────
 // Shared by both individual and company — shown above the step-by-step detail.
 function _renderIRP6SummaryCard(r, client, isCompany) {
-  const yearEndMonth = client.financial_year_end || 'February';
-  const due          = _irp6DueDates(yearEndMonth, r.year);
-  const fmt          = n => 'R\u00a0' + Math.abs(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = n => 'R\u00a0' + Math.abs(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const periodLabel  = r.period === 'first' ? 'First Period' : 'Second Period';
-  const entityLabel  = isCompany
+  const periodLabel = r.period === 'first' ? 'First Period' : 'Second Period';
+  const entityLabel = isCompany
     ? (r.compType === 'sbc' ? 'Small Business Corporation' : 'Company \u2014 Standard Rate')
     : 'Commission Earner \u2014 Individual';
 
-  const rowSt = bg => `padding:9px 16px;background:${bg};border-bottom:1px solid #C8E6C9;display:flex;justify-content:space-between;align-items:center;`;
-  const lbl   = txt => `<span style="font-size:0.85rem;color:#1A1A1A;">${txt}</span>`;
-  const amtSpan = (v, color, large) => `<span style="font-family:var(--font-mono);font-size:${large?'1rem':'0.85rem'};font-weight:${large?'700':'600'};color:${color||'#145A32'};">${v}</span>`;
+  // Correct SARS due dates
+  const thisDue   = _irp6DueDate(r.year, r.period);
+  const firstDue  = _irp6DueDate(r.year, 'first');
+  const secondDue = _irp6DueDate(r.year, 'second');
+
+  // Due date warning colours
+  const dueBg   = thisDue.status === 'closed' ? '#FEE2E2'
+                : thisDue.status === 'soon'   ? '#FEF9C3'
+                : '#D4F5E2';
+  const dueTxt  = thisDue.status === 'closed' ? '#991B1B'
+                : thisDue.status === 'soon'   ? '#92400E'
+                : '#145A32';
+  const dueWarn = thisDue.status === 'closed'
+    ? `Submission period closed \u2014 ${thisDue.formatted}`
+    : thisDue.status === 'soon'
+    ? `Submission due soon \u2014 ${thisDue.daysRemaining} days remaining`
+    : `${thisDue.daysRemaining} days remaining`;
+
+  const rowSt   = bg => `padding:9px 16px;background:${bg};border-bottom:1px solid #C8E6C9;display:flex;justify-content:space-between;align-items:center;`;
+  const lbl     = txt => `<span style="font-size:0.85rem;color:#1A1A1A;">${txt}</span>`;
+  const amtSpan = (v, color) => `<span style="font-family:var(--font-mono);font-size:0.85rem;font-weight:600;color:${color||'#145A32'};">${v}</span>`;
 
   let ri = 0;
   const row = (desc, val, color) => {
@@ -2400,6 +2423,7 @@ function _renderIRP6SummaryCard(r, client, isCompany) {
       </div>
 
       ${row('Client', escH(client.name))}
+      ${row('Submission period code', thisDue.code)}
       ${row('Tax year', String(r.year))}
       ${row('Payment period', periodLabel)}
       ${row('Entity type', entityLabel)}
@@ -2412,8 +2436,15 @@ function _renderIRP6SummaryCard(r, client, isCompany) {
         <span style="font-family:var(--font-mono);font-size:1rem;color:#FFFFFF;font-weight:700;">${fmt(r.amountDue)}</span>
       </div>
 
-      <div style="padding:10px 16px;background:#F0F9F4;font-size:0.82rem;color:#145A32;border-top:1px solid #C8E6C9;">
-        <strong>Due dates:</strong>&nbsp; First period due ${due.first} &nbsp;&bull;&nbsp; Second period due ${due.second}
+      <div style="padding:10px 16px;background:${dueBg};border-top:1px solid #C8E6C9;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div>
+          <div style="font-size:0.85rem;font-weight:700;color:${dueTxt};">Due: ${thisDue.formatted}</div>
+          <div style="font-size:0.78rem;color:${dueTxt};margin-top:2px;">${dueWarn}</div>
+        </div>
+        <div style="font-size:0.82rem;color:${dueTxt};text-align:right;">
+          P1 (${firstDue.code}): ${firstDue.formatted}<br/>
+          P2 (${secondDue.code}): ${secondDue.formatted}
+        </div>
       </div>
     </div>`;
 }
@@ -3007,14 +3038,14 @@ function _renderIRP6CompanyResult(r, client) {
 
 // ── printIRP6 — gather state and call PDF export ───────────────
 function printIRP6() {
-  const c    = state.currentClient;
+  const c   = state.currentClient;
   if (!c) return;
-  const isC  = c.entity_type === 'commission_earner';
-  const r    = isC ? calculateIRP6Individual() : calculateIRP6Company();
+  const isC = c.entity_type === 'commission_earner';
+  const r   = isC ? calculateIRP6Individual() : calculateIRP6Company();
   if (!r) { toast('Enter income details to generate the IRP6 report.', 'warning'); return; }
-  const yearEndMonth = c.financial_year_end || 'February';
-  const dueDates     = _irp6DueDates(yearEndMonth, r.year);
-  window.Export.printIRP6PDF({ r, clientName: c.name, entityType: c.entity_type, yearEndMonth, dueDates });
+  const firstDue  = _irp6DueDate(r.year, 'first');
+  const secondDue = _irp6DueDate(r.year, 'second');
+  window.Export.printIRP6PDF({ r, clientName: c.name, entityType: c.entity_type, firstDue, secondDue });
 }
 
 // ============================================================
