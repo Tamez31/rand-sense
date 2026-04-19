@@ -472,6 +472,37 @@ async function migrateLocalStorageToSupabase() {
 }
 
 // ============================================================
+// PRACTICE SETTINGS
+// Single-row table — one practice using this app.
+// ============================================================
+
+const PracticeSettings = {
+  async load() {
+    const sb = getClient();
+    const rows = unwrap(await sb.from('practice_settings').select('*').limit(1));
+    return rows[0] || null;
+  },
+
+  async save(data) {
+    const sb = getClient();
+    const existing = unwrap(await sb.from('practice_settings').select('id').limit(1));
+    if (existing.length > 0) {
+      const rows = unwrap(
+        await sb
+          .from('practice_settings')
+          .update({ ...data, updated_at: new Date().toISOString() })
+          .eq('id', existing[0].id)
+          .select()
+      );
+      return rows[0];
+    } else {
+      const rows = unwrap(await sb.from('practice_settings').insert([data]).select());
+      return rows[0];
+    }
+  },
+};
+
+// ============================================================
 // CLEAR ALL CLIENT DATA
 // Deletes transactions, bank rules, and opening balances for a
 // client, then resets vat_period to null so it can be re-set.
@@ -502,6 +533,7 @@ window.DB = {
   Rules,
   OpeningBalances,
   TaxTjomData,
+  PracticeSettings,
   migrateLocalStorageToSupabase,
   clearAllData,
 };

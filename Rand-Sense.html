@@ -50,6 +50,7 @@
     <div id="topnav-links" class="topnav-links"></div>
     <div class="topnav-spacer"></div>
     <button id="topnav-new-client-btn" class="topnav-new-client" style="display:none;" onclick="newClient()">+ New Client</button>
+    <button class="topnav-settings" onclick="showSettings()">&#9881; Settings</button>
     <button class="topnav-lock" onclick="lockApp()">&#128274; Lock</button>
   </nav>
   <div class="main-wrap">
@@ -310,6 +311,8 @@ const state = {
   obRows:         null,
   // Classify flow state
   cmTx:           null,
+  // Practice settings (loaded from Supabase on unlock)
+  practice: {},
   // Commission earner income override
   cmIncomeOverride: { active: false, amount: '' },
   // Commission earner home office split
@@ -519,6 +522,10 @@ function checkPIN() {
 function unlockApp() {
   document.getElementById('pin-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
+  // Load practice settings into state before rendering
+  DB.PracticeSettings.load()
+    .then(ps => { if (ps) state.practice = ps; })
+    .catch(() => {});
   loadDashboard();
   // Run localStorage migration silently on first unlock
   DB.migrateLocalStorageToSupabase().catch(() => {});
@@ -3132,6 +3139,131 @@ function entityLabel(type) {
 
 function bankLabel(bank) {
   return { absa:'ABSA', standard_bank:'Standard Bank', capitec:'Capitec', nedbank:'Nedbank' }[bank] || bank;
+}
+
+// ============================================================
+// PRACTICE SETTINGS HELPERS — called by export.js / financial-outputs.js
+// ============================================================
+function getPracticeAccountant() {
+  return (state.practice && state.practice.accountant_name) || 'Matthew Le Roux';
+}
+function getPracticeName() {
+  return (state.practice && state.practice.practice_name) || 'Your Practice Name';
+}
+
+// ============================================================
+// PRACTICE SETTINGS PAGE
+// ============================================================
+function showSettings() {
+  state.currentClient = null;
+  state.clientTab = 'transactions';
+  document.getElementById('topnav-links').innerHTML = '';
+  document.getElementById('topnav-new-client-btn').style.display = 'none';
+  renderSettingsPage();
+}
+
+function renderSettingsPage() {
+  const ps = state.practice || {};
+  const logo = localStorage.getItem('rs_practice_logo') || '';
+  const logoPreview = logo
+    ? `<div style="margin-top:10px;"><img src="${escH(logo)}" alt="Practice logo" style="max-height:80px;max-width:240px;border-radius:6px;border:1px solid #C8E6C9;padding:4px;background:#fff;"/></div>`
+    : '';
+
+  setContent(`
+    <div class="page-header">
+      <button class="btn btn-ghost" style="margin-right:12px;" onclick="loadDashboard()">&#8592; Back</button>
+      <div class="page-title">Practice Settings</div>
+    </div>
+
+    <div class="settings-card">
+      <div class="settings-section-title">Practice Details</div>
+      <div class="form-grid" style="margin-top:16px;">
+        <div class="form-group span-2">
+          <label class="form-label">Practice name</label>
+          <input class="form-control" id="ps-practice-name" value="${escH(ps.practice_name||'')}" placeholder="e.g. Le Roux Accounting"/>
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Accountant full name</label>
+          <input class="form-control" id="ps-accountant-name" value="${escH(ps.accountant_name||'')}" placeholder="e.g. Matthew Le Roux"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">WhatsApp number</label>
+          <input class="form-control" id="ps-whatsapp" value="${escH(ps.whatsapp||'')}" placeholder="e.g. 082 000 0000"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email address</label>
+          <input class="form-control" id="ps-email" type="email" value="${escH(ps.email||'')}" placeholder="e.g. info@practice.co.za"/>
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Physical address</label>
+          <input class="form-control" id="ps-address" value="${escH(ps.address||'')}" placeholder="e.g. 12 Main Road"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Town and province</label>
+          <input class="form-control" id="ps-town-province" value="${escH(ps.town_province||'')}" placeholder="e.g. Cape Town, Western Cape"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">SARS tax practitioner number <span style="color:#999;font-weight:400;">(optional)</span></label>
+          <input class="form-control" id="ps-tax-number" value="${escH(ps.tax_practitioner_number||'')}" placeholder="e.g. PR-0000000"/>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;border-top:1px solid #C8E6C9;padding-top:20px;">
+        <div class="settings-section-title">Practice Logo <span style="color:#999;font-weight:400;font-size:0.85rem;">(optional — stored locally)</span></div>
+        <div class="form-group" style="margin-top:12px;">
+          <label class="form-label">Upload logo</label>
+          <input type="file" id="ps-logo-file" accept="image/*" onchange="onLogoFileSelected(this)" style="display:none;"/>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <button class="btn btn-ghost" onclick="document.getElementById('ps-logo-file').click()">&#128247; Choose image…</button>
+            ${logo ? `<button class="btn btn-ghost" style="color:#C0392B;" onclick="removePracticeLogo()">&#10005; Remove logo</button>` : ''}
+          </div>
+          ${logoPreview}
+        </div>
+      </div>
+
+      <div style="margin-top:28px;">
+        <button class="btn btn-primary" style="min-width:140px;" onclick="savePracticeSettings()">Save Settings</button>
+      </div>
+    </div>`);
+}
+
+function onLogoFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    localStorage.setItem('rs_practice_logo', e.target.result);
+    renderSettingsPage();
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePracticeLogo() {
+  localStorage.removeItem('rs_practice_logo');
+  renderSettingsPage();
+}
+
+async function savePracticeSettings() {
+  const data = {
+    practice_name:           document.getElementById('ps-practice-name').value.trim(),
+    accountant_name:         document.getElementById('ps-accountant-name').value.trim(),
+    whatsapp:                document.getElementById('ps-whatsapp').value.trim(),
+    email:                   document.getElementById('ps-email').value.trim(),
+    address:                 document.getElementById('ps-address').value.trim(),
+    town_province:           document.getElementById('ps-town-province').value.trim(),
+    tax_practitioner_number: document.getElementById('ps-tax-number').value.trim(),
+  };
+  showLoading('Saving settings…');
+  try {
+    const saved = await DB.PracticeSettings.save(data);
+    state.practice = saved;
+    toast('Practice settings saved.', 'success');
+    renderSettingsPage();
+  } catch(e) {
+    toast('Error saving settings: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
 }
 
 // ============================================================

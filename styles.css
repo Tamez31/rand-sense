@@ -236,6 +236,33 @@ input, select, textarea { font-family: var(--font); }
   transition: background .15s;
 }
 .topnav-lock:hover { background: rgba(255,255,255,.15); }
+.topnav-settings {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.4);
+  color: #FFFFFF;
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: var(--font);
+  transition: background .15s;
+}
+.topnav-settings:hover { background: rgba(255,255,255,.15); }
+
+/* ── Settings Page ───────────────────────────────────────────── */
+.settings-card {
+  background: #FFFFFF;
+  border: 1px solid #C8E6C9;
+  border-radius: 12px;
+  padding: 28px 32px;
+  max-width: 680px;
+}
+.settings-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #145A32;
+  letter-spacing: 0.02em;
+}
 
 /* ── Main Layout ─────────────────────────────────────────────── */
 .main-wrap {

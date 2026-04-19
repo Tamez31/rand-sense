@@ -9,6 +9,13 @@
 // Amounts use the South African locale (R 1 234.56).
 // ============================================================
 
+// ── Practice helpers ──────────────────────────────────────────
+// Reads from app state so PDFs always reflect current settings.
+
+function _practiceBy() {
+  try { return getPracticeAccountant() || 'Matthew Le Roux'; } catch(e) { return 'Matthew Le Roux'; }
+}
+
 // ── Shared helpers ────────────────────────────────────────────
 
 function todayDMY() {
@@ -90,7 +97,7 @@ function printStatement(title, clientName, financialYear, period, bodyHTML) {
           </div>
           <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#D4F5E2;margin-top:3px;">Making Cents of it all</div>
         </div>
-        <div style="font-size:11px;color:#D4F5E2;text-align:right;">Matthew Le Roux</div>
+        <div style="font-size:11px;color:#D4F5E2;text-align:right;">${_practiceBy()}</div>
       </div>
       <div style="padding:24px;background:#FFFFFF;">
         <div style="margin-bottom:20px;">
@@ -678,7 +685,7 @@ function exportUnclassifiedPDF(transactions, clientName, financialYear) {
       1. What the transaction relates to, and 2. Whether it is Business or Personal.
       This will allow us to finalise your financial statements.
       <br/><br/>
-      Prepared by: Matthew Le Roux
+      Prepared by: ${_practiceBy()}
     </div>`;
 
   printStatement(
@@ -754,7 +761,7 @@ function printVATReport(vatData) {
         <div style="color:#FFFFFF;font-weight:700;font-size:14px;">${escapeHTML(pageTitle)}</div>
         <div style="color:#D4F5E2;font-size:11px;margin-top:2px;">${escapeHTML(dateLabel)}</div>
       </div>
-      <div style="text-align:right;color:#D4F5E2;font-size:11px;">Matthew Le Roux</div>
+      <div style="text-align:right;color:#D4F5E2;font-size:11px;">${_practiceBy()}</div>
     </div>`;
 
   const clientInfo = `
@@ -1022,10 +1029,10 @@ function printIRP6PDF(params) {
         <div style="color:#FFFFFF;font-weight:700;font-size:14px;">IRP6 Provisional Tax Return</div>
         <div style="color:#D4F5E2;font-size:11px;margin-top:2px;">${escapeHTML(clientName)} &mdash; ${periodLabel} &mdash; Tax Year ${r.year}</div>
       </div>
-      <div style="text-align:right;color:#D4F5E2;font-size:11px;">Matthew Le Roux</div>
+      <div style="text-align:right;color:#D4F5E2;font-size:11px;">${_practiceBy()}</div>
     </div>`;
 
-  const footer = `<div style="${botSt}"><span style="color:#FFFFFF;font-size:9px;font-family:'Poppins',sans-serif;">Making Cents of it all &mdash; RandSense &mdash; Prepared by: Matthew Le Roux</span></div>`;
+  const footer = `<div style="${botSt}"><span style="color:#FFFFFF;font-size:9px;font-family:'Poppins',sans-serif;">Making Cents of it all &mdash; RandSense &mdash; Prepared by: ${_practiceBy()}</span></div>`;
 
   // ── Summary card ──────────────────────────────────────────────
   const rowSt  = bg => `padding:8px 16px;background:${bg};border-bottom:1px solid #C8E6C9;display:flex;justify-content:space-between;font-size:9.5pt;`;
@@ -1183,7 +1190,7 @@ function printIRP6PDF(params) {
     <div style="margin-top:20px;padding:12px 16px;border:1px solid #C8E6C9;border-radius:4px;background:#F0F9F4;font-size:8.5pt;color:#666666;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
       <strong>Disclaimer:</strong> This is an estimate based on current financials. Final tax liability may differ.
       Please verify with your tax practitioner before submission.<br/>
-      <span style="font-size:8pt;">Prepared by: Matthew Le Roux &mdash; Generated: ${todayDMY()}</span>
+      <span style="font-size:8pt;">Prepared by: ${_practiceBy()} &mdash; Generated: ${todayDMY()}</span>
     </div>`;
 
   target.innerHTML = `
