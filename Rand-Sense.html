@@ -3282,8 +3282,10 @@ async function savePracticeSettings() {
     renderSettingsPage();
   } catch(e) {
     console.error('Practice settings save error:', e);
-    const isRLS = e.message && (e.message.includes('row-level security') || e.message.includes('permission denied'));
-    const hint  = isRLS ? ' — RLS may be blocking this. Run in Supabase SQL editor: ALTER TABLE practice_settings DISABLE ROW LEVEL SECURITY;' : '';
+    const isKeyMissing = e.message && e.message.includes('Service role key not set');
+    const hint = isKeyMissing
+      ? ' Open supabase-client.js and replace SUPABASE_SERVICE_KEY with your service role key.'
+      : '';
     toast('Error saving settings: ' + e.message + hint, 'error');
   } finally {
     hideLoading();

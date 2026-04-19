@@ -1,19 +1,51 @@
 // ============================================================
 // supabase-client.js — Rand Sense data layer
 // All Supabase reads/writes go through this module.
-// Only the publishable key is used here — never the secret key.
+//
+// Two Supabase clients:
+//   getClient()      — publishable (anon) key, used for all client data
+//   getAdminClient() — service role key, used only for practice_settings
+//                      (bypasses RLS and GRANT; safe for single-user app)
 // ============================================================
 
 const SUPABASE_URL = 'https://tdmvypmwibnqfhvqhzxs.supabase.co';
+
+// Publishable (anon) key — used for all client data (clients, transactions, etc.)
+// Subject to RLS and table GRANT permissions.
 const SUPABASE_KEY = 'sb_publishable_BueRizNjkXMlAm4XOSnWfQ_omfe001x';
 
-let _sb = null;
+// Service role key — used ONLY for practice_settings.
+// Bypasses RLS and GRANT restrictions entirely.
+// Safe here: Rand Sense is a single-user PIN-protected local app.
+// Find it: Supabase Dashboard → Settings → API → service_role (secret)
+// !! REPLACE THE VALUE BELOW WITH YOUR SERVICE ROLE KEY !!
+const SUPABASE_SERVICE_KEY = 'REPLACE_WITH_SERVICE_ROLE_KEY';
+
+let _sb      = null;
+let _sbAdmin = null;
 
 function getClient() {
   if (!_sb) {
     _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   }
   return _sb;
+}
+
+// Admin client — service role, bypasses RLS. Only used for practice_settings.
+function getAdminClient() {
+  if (!_sbAdmin) {
+    if (SUPABASE_SERVICE_KEY === 'REPLACE_WITH_SERVICE_ROLE_KEY') {
+      throw new Error(
+        'Service role key not set. Open supabase-client.js and replace ' +
+        'SUPABASE_SERVICE_KEY with your key from: ' +
+        'Supabase Dashboard → Settings → API → service_role (secret)'
+      );
+    }
+    _sbAdmin = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return _sbAdmin;
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -477,15 +509,21 @@ async function migrateLocalStorageToSupabase() {
 // ============================================================
 
 const PracticeSettings = {
+  // Uses service role key so RLS and GRANT restrictions are bypassed entirely.
   async load() {
-    const sb = getClient();
-    const rows = unwrap(await sb.from('practice_settings').select('*').limit(1));
-    return rows[0] || null;
+    const sb = getAdminClient();
+    const result = await sb.from('practice_settings').select('*').limit(1);
+    if (result.error) {
+      console.error('practice_settings load error:', result.error);
+      throw new Error(result.error.message);
+    }
+    return (result.data || [])[0] || null;
   },
 
   async save(data) {
-    const sb = getClient();
-    // Check for existing row
+    const sb = getAdminClient();
+
+    // Step 1: check for existing row
     const selectResult = await sb.from('practice_settings').select('id').limit(1);
     if (selectResult.error) {
       console.error('practice_settings select error:', selectResult.error);
@@ -494,6 +532,7 @@ const PracticeSettings = {
     const existing = selectResult.data || [];
 
     if (existing.length > 0) {
+      // Step 2a: update
       const updateResult = await sb
         .from('practice_settings')
         .update({ ...data, updated_at: new Date().toISOString() })
@@ -505,7 +544,11 @@ const PracticeSettings = {
       }
       return (updateResult.data || [])[0];
     } else {
-      const insertResult = await sb.from('practice_settings').insert([data]).select();
+      // Step 2b: insert first row
+      const insertResult = await sb
+        .from('practice_settings')
+        .insert([data])
+        .select();
       if (insertResult.error) {
         console.error('practice_settings insert error:', insertResult.error);
         throw new Error(insertResult.error.message);
