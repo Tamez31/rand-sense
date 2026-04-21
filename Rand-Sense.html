@@ -263,6 +263,31 @@
   </div>
 </div>
 
+<!-- Notes / Urgent Flag Modal -->
+<div class="modal-overlay" id="notes-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="notes-modal-title">Client Notes</div>
+      <button class="modal-close" onclick="closeModal('notes-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <label class="toggle-row" style="margin-bottom:6px;">
+        <input type="checkbox" id="nm-urgent"/>
+        <span style="font-weight:600;color:#C0392B;">Mark as urgent</span>
+      </label>
+      <div class="form-hint" style="margin-bottom:18px;">Urgent clients show a red flag and sort to the top of the dashboard.</div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-control" id="nm-notes" rows="5" placeholder="e.g. Awaiting bank statements for March…" style="resize:vertical;min-height:100px;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('notes-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveClientNote()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div id="toast-container"></div>
 
@@ -306,6 +331,9 @@ const state = {
   openingBalances:[],
   pack:           null,          // last built financial pack
   dashboardData:  {},            // { [clientId]: { unclassified, lastImport } }
+  dashboardSearch: '',
+  dashboardSort:   { col: 'name', dir: 'asc' },
+  _notesClientId:  null,
   // Import flow state
   impFileList:    [],
   // Opening balances flow state
@@ -3240,24 +3268,129 @@ function _irp6DashboardStatus() {
   return { badge: 'green', label: best.formatted };
 }
 
-function renderPracticeDashboard() {
-  const clients = state.clients;
-  const data    = state.dashboardData || {};
+// AFS (Annual Financial Statements) status for company clients only.
+// "Done" if the most recent import falls within the current financial year.
+function _afsDashboardStatus(client, lastImport) {
+  if (!['company_cc','company_pty'].includes(client.entity_type)) return null;
+  const MONTHS = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+  const fyeIdx = MONTHS.indexOf(client.financial_year_end);
+  if (fyeIdx < 0) return { badge: 'amber', label: 'Pending' };
 
-  // Compute per-client statuses (IRP6 is SARS-universal — same for every client)
+  const today = new Date(); today.setHours(0,0,0,0);
+  const m = today.getMonth(); // 0-based
+  const y = today.getFullYear();
+
+  // Current FY ends in the next occurrence of the FYE month.
+  // If we haven't passed FYE this calendar year yet, it ends this year; otherwise next year.
+  const fyeYear = m <= fyeIdx ? y : y + 1;
+  const fyStart = new Date(fyeYear - 1, fyeIdx + 1, 1); // 1st of month after FYE (prev year)
+  const fyEnd   = new Date(fyeYear, fyeIdx + 1, 0);     // last day of FYE month
+
+  if (!lastImport) return { badge: 'amber', label: 'Pending' };
+  const importDate = new Date(lastImport);
+  return (importDate >= fyStart && importDate <= fyEnd)
+    ? { badge: 'green', label: 'Done' }
+    : { badge: 'amber', label: 'Pending' };
+}
+
+// Returns an HTML string for the Last Import cell with recency colouring.
+function _recencyCell(lastImport) {
+  if (!lastImport) return `<span style="color:#999;">—</span>`;
+  const days = Math.floor((Date.now() - new Date(lastImport)) / 86400000);
+  const fmt  = fmtDate(lastImport);
+  if (days <= 30) return `<span class="recency-ok" title="${days}d ago">${fmt}</span>`;
+  if (days <= 90) return `<span class="recency-warn" title="${days}d ago">${fmt} <span style="font-size:0.75em;">(${days}d ago)</span></span>`;
+  return `<span class="recency-stale" title="${days}d ago">${fmt} <span style="font-size:0.75em;">(${days}d ago)</span></span>`;
+}
+
+function dashSearch(val) {
+  state.dashboardSearch = val;
+  renderPracticeDashboard();
+}
+
+function dashSort(col) {
+  if (state.dashboardSort.col === col) {
+    state.dashboardSort.dir = state.dashboardSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.dashboardSort.col = col;
+    state.dashboardSort.dir = 'asc';
+  }
+  renderPracticeDashboard();
+}
+
+function openNotesPopup(clientId) {
+  const c = state.clients.find(x => x.id === clientId);
+  if (!c) return;
+  state._notesClientId = clientId;
+  document.getElementById('notes-modal-title').textContent = c.name + ' — Notes';
+  document.getElementById('nm-urgent').checked = !!c.urgent;
+  document.getElementById('nm-notes').value    = c.notes || '';
+  openModal('notes-modal');
+}
+
+async function saveClientNote() {
+  const id = state._notesClientId;
+  if (!id) return;
+  const urgent = document.getElementById('nm-urgent').checked;
+  const notes  = document.getElementById('nm-notes').value.trim();
+  showLoading('Saving…');
+  try {
+    const updated = await DB.Clients.update(id, { urgent, notes });
+    const idx = state.clients.findIndex(c => c.id === id);
+    if (idx >= 0 && updated) state.clients[idx] = { ...state.clients[idx], ...updated };
+    toast('Client note saved.', 'success');
+    closeModal('notes-modal');
+    renderPracticeDashboard();
+  } catch(e) {
+    toast('Error saving note: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+function renderPracticeDashboard() {
+  const clients   = state.clients;
+  const data      = state.dashboardData || {};
+  const search    = (state.dashboardSearch || '').toLowerCase().trim();
+  const sortState = state.dashboardSort   || { col: 'name', dir: 'asc' };
+
   const irp6 = _irp6DashboardStatus();
-  const rows  = clients.map(c => ({
+  let rows = clients.map(c => ({
     c,
     unclassified: (data[c.id] || {}).unclassified || 0,
     lastImport:   (data[c.id] || {}).lastImport   || null,
     vat:          _vatDashboardStatus(c),
     irp6,
+    afs:          _afsDashboardStatus(c, (data[c.id] || {}).lastImport || null),
   }));
 
-  // ── Metric counts ────────────────────────────────────────────
-  const needAttention = rows.filter(r => r.unclassified > 0).length;
-  const vatDue        = rows.filter(r => r.vat && (r.vat.badge === 'amber' || r.vat.badge === 'red')).length;
-  const irp6DueSoon   = (irp6.badge === 'amber' || irp6.badge === 'red') ? clients.length : 0;
+  // Search filter
+  if (search) rows = rows.filter(r => r.c.name.toLowerCase().includes(search));
+
+  // Column sorter (applied within urgent / non-urgent groups)
+  const colSorter = (a, b) => {
+    const { col, dir } = sortState;
+    const d = dir === 'asc' ? 1 : -1;
+    if (col === 'name')         return d * a.c.name.localeCompare(b.c.name);
+    if (col === 'type')         return d * (a.c.entity_type||'').localeCompare(b.c.entity_type||'');
+    if (col === 'fye')          return d * (a.c.financial_year_end||'').localeCompare(b.c.financial_year_end||'');
+    if (col === 'lastImport')   return d * ((a.lastImport||'').localeCompare(b.lastImport||''));
+    if (col === 'unclassified') return d * (a.unclassified - b.unclassified);
+    if (col === 'vat')          return d * ((a.vat?.badge||'').localeCompare(b.vat?.badge||''));
+    if (col === 'afs')          return d * ((a.afs?.badge||'').localeCompare(b.afs?.badge||''));
+    return 0;
+  };
+
+  // Urgent clients always sort to the top
+  const sorted = [
+    ...rows.filter(r =>  r.c.urgent).sort(colSorter),
+    ...rows.filter(r => !r.c.urgent).sort(colSorter),
+  ];
+
+  // ── Metric counts (always based on all clients, not filtered view) ──
+  const needAttention = clients.filter(c => (data[c.id]||{}).unclassified > 0).length;
+  const vatDue        = clients.filter(c => { const v = _vatDashboardStatus(c); return v && (v.badge==='amber'||v.badge==='red'); }).length;
 
   const metricCards = `
     <div class="dash-metrics">
@@ -3273,35 +3406,56 @@ function renderPracticeDashboard() {
         <div class="dash-metric-value">${vatDue}</div>
         <div class="dash-metric-label">VAT Due This Month</div>
       </div>
-      <div class="dash-metric-card ${irp6.badge === 'red' ? 'red' : irp6.badge === 'amber' ? 'amber' : ''}">
+      <div class="dash-metric-card ${irp6.badge==='red' ? 'red' : irp6.badge==='amber' ? 'amber' : ''}">
         <div class="dash-metric-value" style="font-size:1.15rem;line-height:1.2;">${escH(irp6.label)}</div>
         <div class="dash-metric-label">Next IRP6 Deadline</div>
       </div>
     </div>`;
 
+  // Sortable header helper
+  const th = (col, label, extraCls = '') => {
+    const active = sortState.col === col;
+    const cls    = `th-sort${active ? ' ' + sortState.dir : ''} ${extraCls}`.trim();
+    return `<th class="${cls}" onclick="dashSort('${col}')">${label}</th>`;
+  };
+
   // ── Table rows ───────────────────────────────────────────────
-  const tableRows = rows.length === 0
-    ? `<tr><td colspan="8" style="text-align:center;padding:32px;color:#999;">
-         No clients yet — add your first client using the button above.
+  const tableRows = sorted.length === 0
+    ? `<tr><td colspan="10" style="text-align:center;padding:32px;color:#999;">
+         ${search ? 'No clients match your search.' : 'No clients yet — add your first client using the button above.'}
        </td></tr>`
-    : rows.map(({ c, unclassified, lastImport, vat, irp6: irp6s }) => {
-        const lastFmt      = lastImport ? fmtDate(lastImport) : '—';
-        const unclassHtml  = unclassified > 0
+    : sorted.map(({ c, unclassified, lastImport, vat, irp6: irp6s, afs }) => {
+        const unclassHtml = unclassified > 0
           ? `<span style="color:#C0392B;font-weight:700;">${unclassified}</span>`
           : `<span style="color:#999;">0</span>`;
         const vatHtml  = vat
           ? `<span class="status-pill ${vat.badge}">${escH(vat.label)}</span>`
           : `<span class="status-pill muted">N/A</span>`;
         const irp6Html = `<span class="status-pill ${irp6s.badge}">${escH(irp6s.label)}</span>`;
+        const afsHtml  = afs
+          ? `<span class="status-pill ${afs.badge}">${escH(afs.label)}</span>`
+          : `<span style="color:#CCC;font-size:0.8rem;">—</span>`;
+        const flagHtml = c.urgent
+          ? `<button class="flag-btn" title="Edit notes / remove urgent flag" onclick="openNotesPopup('${c.id}')">&#x1F6A9;</button>`
+          : `<button class="flag-btn" title="Add note or mark as urgent" onclick="openNotesPopup('${c.id}')" style="color:#CCC;">&#x2691;</button>`;
+        const rowBg = c.urgent ? 'background:#FFF5F5;' : '';
+        const noteSnippet = c.notes
+          ? `<div style="font-size:0.71rem;color:#888;margin-top:2px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escH(c.notes)}">${escH(c.notes)}</div>`
+          : '';
         return `
-          <tr>
-            <td><strong style="color:#145A32;">${escH(c.name)}</strong></td>
+          <tr style="${rowBg}">
+            <td>
+              <strong style="color:#145A32;">${escH(c.name)}</strong>
+              ${noteSnippet}
+            </td>
             <td><span class="tag">${entityLabel(c.entity_type)}</span></td>
             <td style="color:#666;">${escH(c.financial_year_end)}</td>
-            <td style="color:#666;font-size:0.82rem;">${lastFmt}</td>
+            <td style="font-size:0.82rem;">${_recencyCell(lastImport)}</td>
             <td class="num">${unclassHtml}</td>
             <td>${vatHtml}</td>
             <td>${irp6Html}</td>
+            <td>${afsHtml}</td>
+            <td style="width:40px;text-align:center;">${flagHtml}</td>
             <td><button class="btn btn-ghost btn-sm" onclick="openClient('${c.id}')">Open &rarr;</button></td>
           </tr>`;
       }).join('');
@@ -3314,18 +3468,24 @@ function renderPracticeDashboard() {
     </div>
     ${metricCards}
     <div class="card" style="margin-bottom:0;padding:0;">
-      <div class="card-title" style="padding:18px 20px 0;">Client Status Overview</div>
+      <div class="dash-toolbar">
+        <div class="card-title">Client Status Overview</div>
+        <input class="dash-search" type="search" placeholder="&#128269; Search clients…"
+               value="${escH(search)}" oninput="dashSearch(this.value)"/>
+      </div>
       <div class="table-wrap" style="margin-top:12px;border:none;border-radius:0 0 12px 12px;">
         <table class="data-table">
           <thead>
             <tr>
-              <th>Client</th>
-              <th>Type</th>
-              <th>FYE</th>
-              <th>Last Import</th>
-              <th class="num">Unclassified</th>
-              <th>VAT Status</th>
+              ${th('name','Client')}
+              ${th('type','Type')}
+              ${th('fye','FYE')}
+              ${th('lastImport','Last Import')}
+              ${th('unclassified','Unclassified','num')}
+              ${th('vat','VAT Status')}
               <th>IRP6</th>
+              ${th('afs','AFS Status')}
+              <th style="width:40px;"></th>
               <th></th>
             </tr>
           </thead>
