@@ -570,6 +570,72 @@ async function clearAllData(clientId) {
 }
 
 // ============================================================
+// INVOICES
+// ============================================================
+
+const Invoices = {
+  async list() {
+    const sb = getClient();
+    return unwrap(
+      await sb.from('invoices').select('*').order('created_at', { ascending: false })
+    );
+  },
+
+  async create(data) {
+    const sb   = getClient();
+    const rows = unwrap(await sb.from('invoices').insert([data]).select());
+    return rows[0];
+  },
+
+  async update(id, data) {
+    const sb   = getClient();
+    const rows = unwrap(
+      await sb.from('invoices')
+        .update({ ...data, updated_at: new Date().toISOString() })
+        .eq('id', id).select()
+    );
+    return rows[0];
+  },
+
+  async delete(id) {
+    const sb = getClient();
+    unwrap(await sb.from('invoices').delete().eq('id', id));
+  },
+
+  async nextNumber() {
+    const sb   = getClient();
+    const year = new Date().getFullYear();
+    const r    = await sb
+      .from('invoices')
+      .select('invoice_number')
+      .like('invoice_number', `RS-${year}-%`);
+    if (r.error) throw new Error(r.error.message);
+    const count = (r.data || []).length;
+    return `RS-${year}-${String(count + 1).padStart(3, '0')}`;
+  },
+};
+
+// ============================================================
+// INVOICE LINES
+// ============================================================
+
+const InvoiceLines = {
+  async createBatch(invoiceId, lines) {
+    const sb   = getClient();
+    const rows = lines.map(l => ({ ...l, invoice_id: invoiceId }));
+    return unwrap(await sb.from('invoice_lines').insert(rows).select());
+  },
+
+  async list(invoiceId) {
+    const sb = getClient();
+    return unwrap(
+      await sb.from('invoice_lines').select('*')
+        .eq('invoice_id', invoiceId).order('created_at')
+    );
+  },
+};
+
+// ============================================================
 // EXPORTS — attach to window for access from other scripts
 // ============================================================
 
@@ -581,6 +647,8 @@ window.DB = {
   OpeningBalances,
   TaxTjomData,
   PracticeSettings,
+  Invoices,
+  InvoiceLines,
   migrateLocalStorageToSupabase,
   clearAllData,
 };

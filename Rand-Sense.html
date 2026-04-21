@@ -650,7 +650,8 @@ function renderDashboard() {
   document.getElementById('topnav-links').innerHTML = `
     <button class="topnav-link ${tab==='all'?'active':''}" onclick="switchTab('all')">Dashboard</button>
     <button class="topnav-link ${tab==='companies'?'active':''}" onclick="switchTab('companies')">Companies</button>
-    <button class="topnav-link ${tab==='commission'?'active':''}" onclick="switchTab('commission')">Commission Earners</button>`;
+    <button class="topnav-link ${tab==='commission'?'active':''}" onclick="switchTab('commission')">Commission Earners</button>
+    <button class="topnav-link ${tab==='invoices'?'active':''}" onclick="switchTab('invoices')">Invoices</button>`;
   document.getElementById('topnav-new-client-btn').style.display = '';
 
   // Practice Dashboard replaces the home screen for the 'all' tab
@@ -691,7 +692,9 @@ function renderDashboard() {
 function switchTab(tab) {
   state.activeTab = tab;
   if (tab === 'all') {
-    loadDashboard(); // reload with fresh per-client stats
+    loadDashboard();
+  } else if (tab === 'invoices') {
+    loadInvoiceList();
   } else {
     renderDashboard();
   }
@@ -3637,6 +3640,375 @@ async function savePracticeSettings() {
   } catch(e) {
     console.error('Practice settings save error:', e);
     toast('Error saving settings: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+// ============================================================
+// INVOICING MODULE
+// ============================================================
+
+const QUICK_SERVICES = [
+  { label: 'ITR12 Simple',         price: 550  },
+  { label: 'ITR12 Complex',        price: 850  },
+  { label: 'IRP6 per submission',  price: 200  },
+  { label: 'ITR12 + IRP6 Bundle',  price: 950  },
+  { label: 'SARS RFR & Disputes',  price: 1000 },
+  { label: 'AFS Micro',            price: 2500 },
+  { label: 'AFS Small',            price: 4500 },
+  { label: 'AFS Medium',           price: 9000 },
+  { label: 'ITR14',                price: 800  },
+  { label: 'VAT201',               price: 450  },
+];
+
+function _fmtZAR(n) {
+  return 'R\u00a0' + Number(n||0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function _todayISO() { return new Date().toISOString().split('T')[0]; }
+function _addDaysISO(iso, days) {
+  const d = new Date(iso); d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
+function _renderInvNav() {
+  const tab = state.activeTab;
+  document.getElementById('topnav-links').innerHTML = `
+    <button class="topnav-link ${tab==='all'?'active':''}" onclick="switchTab('all')">Dashboard</button>
+    <button class="topnav-link ${tab==='companies'?'active':''}" onclick="switchTab('companies')">Companies</button>
+    <button class="topnav-link ${tab==='commission'?'active':''}" onclick="switchTab('commission')">Commission Earners</button>
+    <button class="topnav-link ${tab==='invoices'?'active':''}" onclick="switchTab('invoices')">Invoices</button>`;
+  document.getElementById('topnav-new-client-btn').style.display = 'none';
+}
+
+async function loadInvoiceList() {
+  showLoading('Loading invoices…');
+  try {
+    if (!state.clients.length) state.clients = await DB.Clients.list();
+    const invoices = await DB.Invoices.list();
+    renderInvoiceList(invoices);
+  } catch(e) {
+    toast('Error loading invoices: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+function renderInvoiceList(invoices) {
+  _renderInvNav();
+  const clientMap = {};
+  state.clients.forEach(c => { clientMap[c.id] = c.name; });
+
+  const statusPill = s => {
+    const label = s.charAt(0).toUpperCase() + s.slice(1);
+    return `<span class="status-pill inv-status-${s}">${label}</span>`;
+  };
+
+  const rows = invoices.length === 0
+    ? `<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">
+         No invoices yet — create your first invoice above.
+       </td></tr>`
+    : invoices.map(inv => `
+        <tr>
+          <td><strong style="color:#145A32;">${escH(inv.invoice_number)}</strong></td>
+          <td>${escH(clientMap[inv.client_id] || '—')}</td>
+          <td style="font-size:0.82rem;color:#666;">${fmtDate(inv.invoice_date)}</td>
+          <td style="font-size:0.82rem;color:#666;">${fmtDate(inv.due_date)}</td>
+          <td>${statusPill(inv.status)}</td>
+          <td class="num">${_fmtZAR(inv.total)}</td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="deleteInvoice('${inv.id}')">Delete</button>
+          </td>
+        </tr>`).join('');
+
+  setContent(`
+    <div class="page-header">
+      <div class="page-title">Invoices
+        <small>${invoices.length} invoice${invoices.length !== 1 ? 's' : ''}</small>
+      </div>
+      <button class="btn btn-primary" onclick="openNewInvoice()">+ New Invoice</button>
+    </div>
+    <div class="card" style="padding:0;">
+      <div class="table-wrap" style="border:none;border-radius:12px;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Client</th>
+              <th>Invoice Date</th>
+              <th>Due Date</th>
+              <th>Status</th>
+              <th class="num">Total</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`);
+}
+
+let _invLineKey = 0;
+
+async function openNewInvoice() {
+  showLoading('Preparing invoice…');
+  let invNum = 'RS-' + new Date().getFullYear() + '-001';
+  try {
+    invNum = await DB.Invoices.nextNumber();
+  } catch(e) { /* keep default */ }
+  finally { hideLoading(); }
+  state._invNumber = invNum;
+  renderNewInvoice();
+}
+
+function renderNewInvoice() {
+  _invLineKey = 0;
+  _renderInvNav();
+  const today  = _todayISO();
+  const due    = _addDaysISO(today, 30);
+  const invNum = state._invNumber || ('RS-' + new Date().getFullYear() + '-001');
+
+  const clientOpts = state.clients.map(c =>
+    `<option value="${c.id}">${escH(c.name)}</option>`
+  ).join('');
+
+  const quickBtns = QUICK_SERVICES.map(s =>
+    `<button class="btn btn-ghost btn-xs inv-quick-btn"
+       onclick="quickAddLine('${escH(s.label).replace(/'/g,"\\'")}',${s.price})">
+       ${escH(s.label)} &mdash; ${_fmtZAR(s.price)}
+     </button>`
+  ).join('');
+
+  setContent(`
+    <div class="page-header">
+      <button class="btn btn-ghost" style="margin-right:12px;" onclick="loadInvoiceList()">&#8592; Back</button>
+      <div class="page-title">New Invoice</div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">Invoice Details</div>
+      <div class="inv-grid">
+        <div class="form-group">
+          <label class="form-label">Client <span class="req">*</span></label>
+          <select class="form-control" id="inv-client">
+            <option value="">— Select client —</option>
+            ${clientOpts}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Invoice Number</label>
+          <input class="form-control" id="inv-number" value="${escH(invNum)}"
+                 style="color:#145A32;font-weight:700;letter-spacing:.02em;"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Invoice Date</label>
+          <input class="form-control" id="inv-date" type="date" value="${today}"
+                 onchange="onInvDateChange(this.value)"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Due Date</label>
+          <input class="form-control" id="inv-due" type="date" value="${due}"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">Line Items</div>
+      <div style="margin-top:2px;margin-bottom:4px;font-size:0.78rem;color:#888;">Quick add a service:</div>
+      <div class="inv-quick-grid">${quickBtns}</div>
+      <div class="table-wrap" style="border:1px solid #C8E6C9;border-radius:8px;">
+        <table class="inv-lines-table">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th style="width:80px;text-align:right;">Qty</th>
+              <th style="width:140px;text-align:right;">Unit Price (R)</th>
+              <th style="width:140px;text-align:right;">Line Total</th>
+              <th style="width:44px;"></th>
+            </tr>
+          </thead>
+          <tbody id="inv-lines-body"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:12px;" onclick="addInvoiceLine('',1,0)">+ Add Line</button>
+    </div>
+
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:20px;">
+      <div class="card" style="flex:1;min-width:260px;margin-bottom:0;">
+        <div class="card-title">Notes</div>
+        <textarea class="form-control" id="inv-notes" rows="4"
+          placeholder="e.g. Please use invoice number as payment reference. EFT to FNB cheque account 123 456 789."
+          style="margin-top:12px;resize:vertical;"></textarea>
+      </div>
+      <div class="card" style="min-width:300px;max-width:340px;margin-bottom:0;">
+        <div class="card-title">Summary</div>
+        <div style="margin-top:14px;">
+          <div class="inv-total-row">
+            <span>Subtotal</span>
+            <span class="inv-total-amount" id="inv-subtotal">R&nbsp;0.00</span>
+          </div>
+          <div class="inv-total-row" style="gap:12px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.87rem;">
+              <input type="checkbox" id="inv-vat-toggle" onchange="updateInvoiceTotals()"
+                     style="accent-color:#145A32;cursor:pointer;width:15px;height:15px;"/>
+              VAT (15%)
+            </label>
+            <span class="inv-total-amount" id="inv-vat-amount">R&nbsp;0.00</span>
+          </div>
+          <div class="inv-total-row grand">
+            <span>Total Due</span>
+            <span class="inv-total-amount" id="inv-total">R&nbsp;0.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row right" style="margin-bottom:48px;">
+      <button class="btn btn-ghost" onclick="loadInvoiceList()">Cancel</button>
+      <button class="btn btn-secondary" onclick="saveInvoice('draft')">Save as Draft</button>
+      <button class="btn btn-primary" onclick="saveInvoice('sent')">Save &amp; Send</button>
+    </div>`);
+
+  addInvoiceLine('', 1, 0);
+}
+
+function addInvoiceLine(desc, qty, price) {
+  const key   = ++_invLineKey;
+  const tbody = document.getElementById('inv-lines-body');
+  if (!tbody) return;
+  const tr = document.createElement('tr');
+  tr.dataset.key = key;
+  tr.innerHTML = `
+    <td style="min-width:180px;">
+      <input class="inv-input" placeholder="Service or description…"
+             value="${escH(String(desc||''))}" oninput="updateInvoiceTotals()"/>
+    </td>
+    <td>
+      <input class="inv-input" type="number" min="0" step="0.01"
+             value="${parseFloat(qty)||1}" style="text-align:right;width:68px;"
+             oninput="updateLineTotal(this);updateInvoiceTotals()"/>
+    </td>
+    <td>
+      <input class="inv-input" type="number" min="0" step="0.01"
+             value="${parseFloat(price)||''}" placeholder="0.00"
+             style="text-align:right;width:120px;"
+             oninput="updateLineTotal(this);updateInvoiceTotals()"/>
+    </td>
+    <td class="inv-line-total">${_fmtZAR((parseFloat(qty)||1)*(parseFloat(price)||0))}</td>
+    <td style="text-align:center;">
+      <button class="icon-btn danger" title="Remove line" onclick="removeInvoiceLine(this)">&#10005;</button>
+    </td>`;
+  tbody.appendChild(tr);
+  updateInvoiceTotals();
+}
+
+function updateLineTotal(input) {
+  const tr = input.closest('tr');
+  if (!tr) return;
+  const nums  = tr.querySelectorAll('input[type=number]');
+  const qty   = parseFloat(nums[0]?.value) || 0;
+  const price = parseFloat(nums[1]?.value) || 0;
+  const cell  = tr.querySelector('.inv-line-total');
+  if (cell) cell.textContent = _fmtZAR(qty * price);
+}
+
+function removeInvoiceLine(btn) {
+  btn.closest('tr').remove();
+  updateInvoiceTotals();
+}
+
+function quickAddLine(desc, price) {
+  addInvoiceLine(desc, 1, price);
+}
+
+function updateInvoiceTotals() {
+  const tbody = document.getElementById('inv-lines-body');
+  if (!tbody) return;
+  let subtotal = 0;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const nums  = tr.querySelectorAll('input[type=number]');
+    const qty   = parseFloat(nums[0]?.value) || 0;
+    const price = parseFloat(nums[1]?.value) || 0;
+    subtotal += qty * price;
+  });
+  const vatOn  = document.getElementById('inv-vat-toggle')?.checked;
+  const vatAmt = vatOn ? subtotal * 0.15 : 0;
+  const total  = subtotal + vatAmt;
+  const el = id => document.getElementById(id);
+  if (el('inv-subtotal'))  el('inv-subtotal').textContent  = _fmtZAR(subtotal);
+  if (el('inv-vat-amount')) el('inv-vat-amount').textContent = _fmtZAR(vatAmt);
+  if (el('inv-total'))     el('inv-total').textContent     = _fmtZAR(total);
+}
+
+function onInvDateChange(val) {
+  const dueEl = document.getElementById('inv-due');
+  if (dueEl && val) dueEl.value = _addDaysISO(val, 30);
+}
+
+async function saveInvoice(status) {
+  const clientId = document.getElementById('inv-client')?.value;
+  const invNum   = document.getElementById('inv-number')?.value.trim();
+  const invDate  = document.getElementById('inv-date')?.value;
+  const dueDate  = document.getElementById('inv-due')?.value;
+  const notes    = document.getElementById('inv-notes')?.value.trim();
+  const vatOn    = document.getElementById('inv-vat-toggle')?.checked;
+
+  if (!clientId) { toast('Please select a client.', 'error'); return; }
+  if (!invNum)   { toast('Invoice number is required.', 'error'); return; }
+  if (!invDate)  { toast('Invoice date is required.', 'error'); return; }
+
+  const tbody = document.getElementById('inv-lines-body');
+  const lines = [];
+  tbody?.querySelectorAll('tr').forEach(tr => {
+    const descInput = tr.querySelector('input:not([type=number])');
+    const nums      = tr.querySelectorAll('input[type=number]');
+    const desc  = descInput?.value.trim() || '';
+    const qty   = parseFloat(nums[0]?.value) || 0;
+    const price = parseFloat(nums[1]?.value) || 0;
+    if (desc || price > 0) {
+      lines.push({ description: desc || '(no description)', quantity: qty, unit_price: price, line_total: qty * price });
+    }
+  });
+
+  if (lines.length === 0) { toast('Add at least one line item.', 'error'); return; }
+
+  const subtotal = lines.reduce((s, l) => s + l.line_total, 0);
+  const vatAmt   = vatOn ? subtotal * 0.15 : 0;
+  const total    = subtotal + vatAmt;
+
+  showLoading('Saving invoice…');
+  try {
+    const inv = await DB.Invoices.create({
+      invoice_number: invNum,
+      client_id:      clientId,
+      invoice_date:   invDate,
+      due_date:       dueDate,
+      status,
+      subtotal,
+      vat_amount: vatAmt,
+      total,
+      notes: notes || null,
+    });
+    await DB.InvoiceLines.createBatch(inv.id, lines);
+    const verb = status === 'draft' ? 'saved as draft' : 'saved and sent';
+    toast(`Invoice ${invNum} ${verb}.`, 'success');
+    loadInvoiceList();
+  } catch(e) {
+    toast('Error saving invoice: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function deleteInvoice(id) {
+  if (!confirm('Delete this invoice? This cannot be undone.')) return;
+  showLoading('Deleting…');
+  try {
+    await DB.Invoices.delete(id);
+    toast('Invoice deleted.', 'success');
+    loadInvoiceList();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
   } finally {
     hideLoading();
   }
