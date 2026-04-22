@@ -352,6 +352,8 @@ const state = {
   _vatQuickSelect: null,       // active quick-select key or null for custom
   // Prior year transactions (cached for comparative columns on all reports)
   priorTransactions:   [],
+  // Finalized ITR12 invoice for the current commission earner + year (null = not finalized)
+  _itr12Invoice:       null,
 };
 
 // ============================================================
@@ -726,6 +728,9 @@ async function openClient(id) {
     state.priorTransactions = state.currentYear
       ? await DB.Transactions.listByYear(id, priorYear).catch(() => [])
       : [];
+    state._itr12Invoice = (state.currentClient.entity_type === 'commission_earner' && state.currentYear)
+      ? await DB.Invoices.findByClientServiceYear(id, 'ITR12', state.currentYear).catch(() => null)
+      : null;
   } catch(e) {
     toast('Error loading client: ' + e.message, 'error');
     hideLoading();
@@ -800,13 +805,17 @@ async function onYearChange(year) {
   showLoading('Loading year…');
   try {
     const priorYear = String(parseInt(year, 10) - 1);
+    const c = state.currentClient;
     [state.transactions, state.unclassified, state.openingBalances, state.priorTransactions] =
       await Promise.all([
-        DB.Transactions.listByYear(state.currentClient.id, year),
-        DB.Transactions.listUnclassified(state.currentClient.id),
-        DB.OpeningBalances.list(state.currentClient.id, year),
-        DB.Transactions.listByYear(state.currentClient.id, priorYear).catch(() => []),
+        DB.Transactions.listByYear(c.id, year),
+        DB.Transactions.listUnclassified(c.id),
+        DB.OpeningBalances.list(c.id, year),
+        DB.Transactions.listByYear(c.id, priorYear).catch(() => []),
       ]);
+    state._itr12Invoice = (c.entity_type === 'commission_earner')
+      ? await DB.Invoices.findByClientServiceYear(c.id, 'ITR12', year).catch(() => null)
+      : null;
   } catch(e) { toast(e.message,'error'); }
   hideLoading();
   renderClientDetail();
@@ -1197,6 +1206,34 @@ function renderReportsTab() {
       </div>`;
   }
 
+  // ITR12 finalize / lock state (commission earner IS tab only)
+  const itr12Inv    = (isC && rt === 'IS') ? state._itr12Invoice : null;
+  const isLocked    = itr12Inv && ['finalized','sent','paid'].includes(itr12Inv.status);
+  const isFinalized = itr12Inv && itr12Inv.status === 'finalized';
+  const isSentOrPaid = itr12Inv && (itr12Inv.status === 'sent' || itr12Inv.status === 'paid');
+
+  const itr12Banner = isLocked ? `
+    <div style="background:#A8E6C1;border-radius:8px;padding:12px 18px;margin-bottom:14px;display:flex;align-items:center;gap:12px;font-size:0.87rem;font-weight:600;color:#145A32;">
+      <span>Return ${escH(state.currentYear)} finalized &mdash; Invoice ${escH(itr12Inv.invoice_number)} created.</span>
+      ${isSentOrPaid ? `<span style="background:#145A32;color:#fff;border-radius:4px;padding:2px 10px;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;">Locked</span>` : ''}
+    </div>` : '';
+
+  const finalizeSection = (isC && rt === 'IS') ? (() => {
+    if (isFinalized) {
+      return `<div style="margin-top:16px;display:flex;justify-content:flex-end;">
+        <button class="revise-return-btn" style="background:#fff;border:2px solid #145A32;color:#145A32;font-family:Poppins,sans-serif;font-weight:600;font-size:0.88rem;padding:10px 22px;border-radius:8px;cursor:pointer;" onclick="reviseReturn()">
+          Revise Return ${escH(state.currentYear)}
+        </button>
+      </div>`;
+    }
+    if (isSentOrPaid) return '';
+    return `<div style="margin-top:16px;display:flex;justify-content:flex-end;">
+      <button style="background:#145A32;color:#fff;font-family:Poppins,sans-serif;font-weight:600;font-size:0.88rem;padding:10px 22px;border-radius:8px;cursor:pointer;border:none;" onclick="finalizeReturn()">
+        Finalize Return
+      </button>
+    </div>`;
+  })() : '';
+
   const content = `<div id="report-body"><div class="empty-state">
     <div class="empty-state-icon">&#128202;</div>
     <div class="empty-state-title">Loading…</div>
@@ -1205,7 +1242,7 @@ function renderReportsTab() {
   // Auto-generate on tab render
   setTimeout(() => generateReport(), 50);
 
-  return `<div>${toolbar}${incomeOverrideBar}${homeOfficeBar}${vatFilterBar}<div class="card">${content}</div></div>`;
+  return `<div id="reports-tab-content">${itr12Banner}${toolbar}${incomeOverrideBar}${homeOfficeBar}${vatFilterBar}<div class="card">${content}</div>${finalizeSection}</div>`;
 }
 
 function toggleIncomeOverride(active) {
@@ -1245,6 +1282,68 @@ function setHomeOfficePct(val) {
 function setReportType(type) {
   state.reportType = type;
   setClientTab('reports');
+}
+
+// ── ITR12 Finalize / Revise ────────────────────────────────────
+
+function _enforceReportReadOnly() {
+  const container = document.getElementById('reports-tab-content');
+  if (!container) return;
+  container.querySelectorAll('input, select, textarea, button:not(.revise-return-btn)').forEach(el => {
+    el.disabled = true;
+    if (el.tagName === 'BUTTON') el.style.opacity = '0.45';
+  });
+}
+
+async function finalizeReturn() {
+  const c = state.currentClient;
+  if (!c || c.entity_type !== 'commission_earner') return;
+  const year = state.currentYear;
+  showLoading('Finalizing…');
+  try {
+    const invNum = await DB.Invoices.nextSequentialNumber();
+    const inv = await DB.Invoices.create({
+      invoice_number: invNum,
+      client_id:      c.id,
+      service_type:   'ITR12',
+      tax_year:       year,
+      brochure_price: 550,
+      final_amount:   550,
+      discount:       0,
+      status:         'finalized',
+      finalized_date: new Date().toISOString(),
+      invoice_date:   new Date().toISOString().slice(0, 10),
+      subtotal:       550,
+      vat_amount:     0,
+      total:          550,
+    });
+    state._itr12Invoice = inv;
+    toast(`Return ${year} finalized — Invoice ${invNum} created.`, 'success');
+    setClientTab('reports');
+  } catch(e) {
+    toast('Error finalizing return: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function reviseReturn() {
+  const c = state.currentClient;
+  if (!c || c.entity_type !== 'commission_earner') return;
+  const inv = state._itr12Invoice;
+  if (!inv || inv.status !== 'finalized') return;
+  const year = state.currentYear;
+  showLoading('Re-opening…');
+  try {
+    await DB.Invoices.deleteByClientServiceYear(c.id, 'ITR12', year);
+    state._itr12Invoice = null;
+    toast(`Return ${year} re-opened for editing.`, 'success');
+    setClientTab('reports');
+  } catch(e) {
+    toast('Error revising return: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
 }
 
 // ── VAT date range helpers ─────────────────────────────────────
@@ -1576,6 +1675,9 @@ async function generateReport() {
         const r = F.buildCommissionIS(txs, hz, state.cmIncomeOverride, state.cmHomeOffice);
         el.innerHTML = r.ok ? F.renderCommissionIS(r.data, hz) : `<div class="info-box red">${escH(r.error)}</div>`;
         state._commissionIS = r.ok ? r.data : null;
+        if (state._itr12Invoice && ['finalized','sent','paid'].includes(state._itr12Invoice.status)) {
+          _enforceReportReadOnly();
+        }
       } else if (rt === 'TB') {
         // Build synthetic COA from ITR12 categories
         const synthCOA = [

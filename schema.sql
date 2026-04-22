@@ -142,4 +142,61 @@ create trigger trg_taxtjom_updated_at
   before update on tax_tjom_data
   for each row execute function update_updated_at();
 
+-- ============================================================
+-- TABLE: invoices
+-- Rand Sense practice invoices (manual + finalized ITR12 returns)
+-- ============================================================
+
+create table if not exists invoices (
+  id             uuid primary key default gen_random_uuid(),
+  invoice_number text not null unique,
+  client_id      uuid references clients(id) on delete set null,
+  invoice_date   date,
+  due_date       date,
+  status         text not null default 'draft'
+                   check (status in ('draft','sent','paid','finalized')),
+  subtotal       numeric default 0,
+  vat_amount     numeric default 0,
+  total          numeric default 0,
+  notes          text,
+  -- ITR12 / service-specific fields
+  service_type   text,   -- e.g. 'ITR12', 'Annual Financial Statements', 'VAT201'
+  tax_year       text,   -- e.g. '2024'
+  brochure_price numeric,
+  final_amount   numeric,
+  discount       numeric default 0,
+  finalized_date timestamptz,
+  created_at     timestamptz default now(),
+  updated_at     timestamptz default now()
+);
+
+-- TABLE: invoice_lines
+create table if not exists invoice_lines (
+  id          uuid primary key default gen_random_uuid(),
+  invoice_id  uuid references invoices(id) on delete cascade,
+  description text not null,
+  qty         numeric default 1,
+  unit_price  numeric not null,
+  line_total  numeric not null,
+  created_at  timestamptz default now()
+);
+
+create index if not exists idx_invoices_client    on invoices(client_id);
+create index if not exists idx_invoices_status    on invoices(status);
+create index if not exists idx_invoicelines_inv   on invoice_lines(invoice_id);
+
+alter table invoices       disable row level security;
+alter table invoice_lines  disable row level security;
+
+-- ============================================================
+-- MIGRATION: add ITR12 columns to existing invoices table
+-- Run this once if invoices table already exists without these columns.
+-- ============================================================
+-- alter table invoices add column if not exists service_type   text;
+-- alter table invoices add column if not exists tax_year       text;
+-- alter table invoices add column if not exists brochure_price numeric;
+-- alter table invoices add column if not exists final_amount   numeric;
+-- alter table invoices add column if not exists discount       numeric default 0;
+-- alter table invoices add column if not exists finalized_date timestamptz;
+
 -- Done. All tables ready.
