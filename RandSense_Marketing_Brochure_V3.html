@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RandSense — Making Cents of it all</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Poppins', sans-serif; background: #f5f5f5; padding: 2rem; }
+  .brochure { max-width: 680px; margin: 0 auto; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 32px rgba(0,0,0,0.10); }
+  .hero { background: linear-gradient(135deg, #145A32, #1E8449); padding: 3rem 2rem; text-align: center; }
+  .logo-text { font-size: 48px; font-weight: 900; color: #fff; letter-spacing: -1px; }
+  .logo-text span { font-weight: 300; color: #A8E6C1; }
+  .slogan { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #D4F5E2; margin-top: 6px; }
+  .hero-tagline { font-size: 32px; font-weight: 900; color: #fff; margin-top: 2rem; line-height: 1.25; letter-spacing: -0.5px; }
+  .badge-row { display: flex; justify-content: center; gap: 10px; margin-top: 1.5rem; flex-wrap: wrap; }
+  .badge { background: rgba(255,255,255,0.15); color: #fff; font-size: 11px; font-weight: 500; padding: 5px 16px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.3); }
+  .body { background: #F0F9F4; padding: 1.5rem; }
+  .section { margin-bottom: 1.5rem; }
+  .section-title { font-size: 11px; font-weight: 700; color: #145A32; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 1rem; text-align: center; }
+  .services-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .service-card { background: #fff; border: 1px solid #C8E6C9; border-radius: 12px; padding: 1rem 1.25rem; }
+  .service-name { font-size: 13px; font-weight: 700; color: #145A32; margin-bottom: 4px; }
+  .service-desc { font-size: 11px; color: #666; line-height: 1.5; margin-bottom: 8px; }
+  .price-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .your-price { font-size: 16px; font-weight: 900; color: #145A32; }
+  .market-price { font-size: 10px; color: #999; text-decoration: line-through; }
+  .saving-badge { display: inline-block; font-size: 10px; background: #D4F5E2; color: #145A32; padding: 2px 8px; border-radius: 10px; font-weight: 700; margin-top: 6px; }
+  .full-service-card { background: #fff; border: 1px solid #C8E6C9; border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+  .full-service-header { background: #D4F5E2; padding: 8px 14px; font-size: 11px; font-weight: 700; color: #145A32; text-transform: uppercase; letter-spacing: 0.08em; }
+  .full-service-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 14px; border-bottom: 1px solid #F0F9F4; }
+  .full-service-row:last-child { border-bottom: none; }
+  .full-service-name { font-size: 12px; color: #333; }
+  .full-your { font-size: 13px; font-weight: 700; color: #145A32; text-align: right; }
+  .full-market { font-size: 10px; color: #999; text-decoration: line-through; text-align: right; }
+  .full-save { font-size: 10px; color: #1E8449; font-weight: 600; text-align: right; }
+  .why-section { background: #fff; border: 1px solid #C8E6C9; border-radius: 12px; padding: 1.25rem 1.5rem; }
+  .why-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+  .why-row:last-child { margin-bottom: 0; }
+  .why-dot { width: 8px; height: 8px; border-radius: 50%; background: #145A32; flex-shrink: 0; margin-top: 4px; }
+  .why-text { font-size: 12px; color: #444; line-height: 1.6; }
+  .why-text strong { color: #145A32; }
+  .contact-section { background: linear-gradient(135deg, #145A32, #1E8449); border-radius: 12px; padding: 2rem; text-align: center; margin-top: 1rem; }
+  .contact-title { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 0.4rem; }
+  .contact-sub { font-size: 11px; color: #D4F5E2; margin-bottom: 1.25rem; }
+  .contact-name { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  .contact-wa-label { font-size: 10px; color: rgba(255,255,255,0.6); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.1em; }
+  .contact-wa { font-size: 26px; font-weight: 900; color: #A8E6C1; letter-spacing: 2px; }
+  .fine-print { font-size: 9px; color: #999; text-align: center; padding: 0.75rem 1.5rem; line-height: 1.6; background: #fff; }
+  .footer-bar { background: #1E8449; padding: 0.75rem 1.5rem; text-align: center; }
+  .footer-text { font-size: 9px; color: #fff; letter-spacing: 0.15em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="brochure">
+
+  <div class="hero">
+    <div class="logo-text">Rand<span>Sense</span></div>
+    <div class="slogan">Making Cents of it all</div>
+    <div class="hero-tagline">No jargon.<br>No long waits.<br>Just results.</div>
+    <div class="badge-row">
+      <span class="badge">Individuals</span>
+      <span class="badge">Commission Earners</span>
+      <span class="badge">Small Businesses</span>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <div class="section">
+      <div class="section-title">Individual and commission earner services</div>
+      <div class="services-grid">
+
+        <div class="service-card">
+          <div class="service-name">ITR12 Tax Return</div>
+          <div class="service-desc">Individual income tax return submitted to SARS. Commission earners, salary workers, freelancers.</div>
+          <div class="price-row">
+            <div class="your-price">R550 — R850</div>
+            <div class="market-price">R1,500+</div>
+          </div>
+          <div class="saving-badge">Save up to 63%</div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-name">IRP6 Provisional Tax</div>
+          <div class="service-desc">First and second period provisional tax submissions. Never miss a SARS deadline again.</div>
+          <div class="price-row">
+            <div class="your-price">R150 — R200</div>
+            <div class="market-price">R800+</div>
+          </div>
+          <div class="saving-badge">Save up to 80%</div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-name">ITR12 + IRP6 Bundle</div>
+          <div class="service-desc">Annual tax package — ITR12 plus both IRP6 periods. Best value for provisional taxpayers.</div>
+          <div class="price-row">
+            <div class="your-price">R950</div>
+            <div class="market-price">R2,400 — R5,000</div>
+          </div>
+          <div class="saving-badge">Save up to R4,050</div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-name">SARS RFR and Disputes</div>
+          <div class="service-desc">Request for reasons and dispute resolution. Full 3 month monitoring process handled for you.</div>
+          <div class="price-row">
+            <div class="your-price">R1,000</div>
+            <div class="market-price">R3,000 — R6,000</div>
+          </div>
+          <div class="saving-badge">Save up to R5,000</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Small business services</div>
+
+      <div class="full-service-card">
+        <div class="full-service-header">Annual Financial Statements</div>
+        <div class="full-service-row">
+          <div class="full-service-name">Micro business — under R1m turnover</div>
+          <div>
+            <div class="full-your">R2,000 — R2,500</div>
+            <div class="full-market">Market: R5,000 — R10,000</div>
+            <div class="full-save">Save up to R7,500</div>
+          </div>
+        </div>
+        <div class="full-service-row">
+          <div class="full-service-name">Small business — R1m to R5m turnover</div>
+          <div>
+            <div class="full-your">R3,500 — R4,500</div>
+            <div class="full-market">Market: R8,000 — R18,000</div>
+            <div class="full-save">Save up to R13,500</div>
+          </div>
+        </div>
+        <div class="full-service-row">
+          <div class="full-service-name">Medium business — R5m to R10m turnover</div>
+          <div>
+            <div class="full-your">R7,500 — R9,000</div>
+            <div class="full-market">Market: R15,000 — R30,000</div>
+            <div class="full-save">Save up to R22,500</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="full-service-card">
+        <div class="full-service-header">Tax and Compliance</div>
+        <div class="full-service-row">
+          <div class="full-service-name">ITR14 — business income tax return</div>
+          <div>
+            <div class="full-your">R600 — R1,000</div>
+            <div class="full-market">Market: R1,500 — R6,000</div>
+            <div class="full-save">Save up to R5,000</div>
+          </div>
+        </div>
+        <div class="full-service-row">
+          <div class="full-service-name">IRP6 — provisional tax per submission</div>
+          <div>
+            <div class="full-your">R200</div>
+            <div class="full-market">Market: R800 — R1,200</div>
+            <div class="full-save">Save up to R1,000</div>
+          </div>
+        </div>
+        <div class="full-service-row">
+          <div class="full-service-name">VAT201 — per VAT period submission</div>
+          <div>
+            <div class="full-your">R450</div>
+            <div class="full-market">Market: R500 — R1,500</div>
+            <div class="full-save">Save up to R1,050</div>
+          </div>
+        </div>
+        <div class="full-service-row">
+          <div class="full-service-name">SARS RFR and Disputes</div>
+          <div>
+            <div class="full-your">R1,000 once off</div>
+            <div class="full-market">Market: R3,000 — R6,000</div>
+            <div class="full-save">Save up to R5,000</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Why RandSense</div>
+      <div class="why-section">
+        <div class="why-row">
+          <div class="why-dot"></div>
+          <div class="why-text"><strong>Significant savings on every service</strong> — professional quality at a price that makes sense for everyone.</div>
+        </div>
+        <div class="why-row">
+          <div class="why-dot"></div>
+          <div class="why-text"><strong>Plain language, no jargon</strong> — everything explained in a way you actually understand.</div>
+        </div>
+        <div class="why-row">
+          <div class="why-dot"></div>
+          <div class="why-text"><strong>WhatsApp first</strong> — reach me directly, no waiting room. Just real help when you need it.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="contact-section">
+      <div class="contact-title">Ready to make cents of your finances?</div>
+      <div class="contact-sub">Just send me a WhatsApp — I will take it from there</div>
+      <div class="contact-name">Matthew (Matty)</div>
+      <div class="contact-wa-label">WhatsApp</div>
+      <div class="contact-wa">076 140 8717</div>
+    </div>
+
+  </div>
+
+  <div class="fine-print">
+    RandSense is a registered accounting and tax services practice based in Paarl, Western Cape. All submissions are made via SARS eFiling in full compliance with South African tax legislation. Prices shown are inclusive of submission. Market price comparisons are based on published industry rates. Savings vary based on complexity of work. RandSense reserves the right to adjust pricing based on scope of work.
+  </div>
+
+  <div class="footer-bar">
+    <div class="footer-text">RandSense — Making Cents of it all — Paarl, Western Cape</div>
+  </div>
+
+</div>
+</body>
+</html>
