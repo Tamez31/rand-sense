@@ -602,6 +602,12 @@ const Invoices = {
     unwrap(await sb.from('invoices').delete().eq('id', id));
   },
 
+  async getById(id) {
+    const sb   = getClient();
+    const rows = unwrap(await sb.from('invoices').select('*').eq('id', id).limit(1));
+    return rows[0] || null;
+  },
+
   async nextNumber() {
     const sb   = getClient();
     const year = new Date().getFullYear();
@@ -654,6 +660,34 @@ const Invoices = {
 };
 
 // ============================================================
+// PAYMENTS
+// ============================================================
+
+const Payments = {
+  async create(data) {
+    const sb   = getClient();
+    const rows = unwrap(await sb.from('payments').insert([data]).select());
+    return rows[0];
+  },
+
+  async listByInvoice(invoiceId) {
+    const sb = getClient();
+    return unwrap(
+      await sb.from('payments').select('*')
+        .eq('invoice_id', invoiceId)
+        .order('payment_date')
+    );
+  },
+
+  async listAll() {
+    const sb = getClient();
+    return unwrap(
+      await sb.from('payments').select('*').order('payment_date', { ascending: false })
+    );
+  },
+};
+
+// ============================================================
 // INVOICE LINES
 // ============================================================
 
@@ -687,6 +721,7 @@ window.DB = {
   PracticeSettings,
   Invoices,
   InvoiceLines,
+  Payments,
   migrateLocalStorageToSupabase,
   clearAllData,
 };

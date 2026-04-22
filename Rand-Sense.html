@@ -288,6 +288,52 @@
   </div>
 </div>
 
+<!-- Payment Received Modal -->
+<div class="modal-overlay" id="payment-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Record Payment</div>
+      <button class="modal-close" onclick="closeModal('payment-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:18px;">
+        <div>
+          <div style="font-size:0.75rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px;">Client</div>
+          <div style="font-weight:600;color:#1A1A1A;" id="pm-client-name">—</div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px;">Invoice</div>
+          <div style="font-weight:600;color:#145A32;" id="pm-invoice-number">—</div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px;">Invoice Total</div>
+          <div style="font-weight:600;" id="pm-total">—</div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px;">Already Paid</div>
+          <div style="font-weight:600;" id="pm-paid">—</div>
+        </div>
+        <div style="grid-column:1/-1;">
+          <div style="font-size:0.75rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px;">Amount Outstanding</div>
+          <div style="font-weight:700;font-size:1.1rem;color:#C0392B;" id="pm-outstanding">—</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Payment Amount Received (R)</label>
+        <div class="r-wrap">
+          <span class="r-pre">R</span>
+          <input class="form-control" type="number" id="pm-amount" min="0.01" step="0.01" placeholder="0.00"/>
+        </div>
+      </div>
+      <div class="info-box red" id="pm-error" style="display:none;margin-top:10px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('payment-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmPayment()">Confirm Payment</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div id="toast-container"></div>
 
@@ -354,6 +400,8 @@ const state = {
   priorTransactions:   [],
   // Finalized ITR12 invoice for the current commission earner + year (null = not finalized)
   _itr12Invoice:       null,
+  // Payment modal state
+  _paymentModal:       null,
 };
 
 // ============================================================
@@ -1295,29 +1343,65 @@ function _enforceReportReadOnly() {
   });
 }
 
+function _showFinalizeWarning(msg) {
+  let banner = document.getElementById('finalize-warning-banner');
+  if (!banner) {
+    const container = document.getElementById('reports-tab-content');
+    if (!container) return;
+    banner = document.createElement('div');
+    banner.id = 'finalize-warning-banner';
+    banner.style.cssText = 'background:#FDEDEC;border:1.5px solid #E74C3C;border-radius:8px;padding:12px 18px;margin-top:12px;font-size:0.87rem;font-weight:600;color:#C0392B;';
+    container.appendChild(banner);
+  }
+  banner.textContent = msg;
+  banner.style.display = '';
+}
+
 async function finalizeReturn() {
   const c = state.currentClient;
   if (!c || c.entity_type !== 'commission_earner') return;
   const year = state.currentYear;
   showLoading('Finalizing…');
   try {
+    // Duplicate check
+    const existing = await DB.Invoices.findByClientServiceYear(c.id, 'ITR12', year);
+    if (existing) {
+      hideLoading();
+      _showFinalizeWarning('An invoice already exists for this return. Revise the existing invoice or contact support.');
+      return;
+    }
     const invNum = await DB.Invoices.nextSequentialNumber();
     const inv = await DB.Invoices.create({
-      invoice_number: invNum,
-      client_id:      c.id,
-      service_type:   'ITR12',
-      tax_year:       year,
-      brochure_price: 550,
-      final_amount:   550,
-      discount:       0,
-      status:         'finalized',
-      finalized_date: new Date().toISOString(),
-      invoice_date:   new Date().toISOString().slice(0, 10),
-      subtotal:       550,
-      vat_amount:     0,
-      total:          550,
+      invoice_number:    invNum,
+      client_id:         c.id,
+      service_type:      'ITR12',
+      tax_year:          year,
+      brochure_price:    550,
+      final_amount:      550,
+      discount:          0,
+      status:            'finalized',
+      finalized_date:    new Date().toISOString(),
+      invoice_date:      new Date().toISOString().slice(0, 10),
+      subtotal:          550,
+      vat_amount:        0,
+      total:             550,
+      amount_paid:       0,
+      amount_outstanding: 550,
     });
     state._itr12Invoice = inv;
+    // Update pending_invoice so dashboard shows Payment Received button
+    const pi = {
+      stage:              'invoiced',
+      invoice_id:         inv.id,
+      invoice_number:     invNum,
+      status:             'finalized',
+      price:              550,
+      amount_outstanding: 550,
+    };
+    await DB.Clients.update(c.id, { pending_invoice: pi });
+    state.currentClient = { ...c, pending_invoice: pi };
+    const idx = state.clients.findIndex(x => x.id === c.id);
+    if (idx >= 0) state.clients[idx] = { ...state.clients[idx], pending_invoice: pi };
     toast(`Return ${year} finalized — Invoice ${invNum} created.`, 'success');
     setClientTab('reports');
   } catch(e) {
@@ -3517,7 +3601,9 @@ function renderPracticeDashboard() {
   const vatDue         = clients.filter(c => { const v = _vatDashboardStatus(c); return v && (v.badge==='amber'||v.badge==='red'); }).length;
   const outstanding    = clients.reduce((sum, c) => {
     const pi = c.pending_invoice;
-    return sum + (pi && pi.stage !== 'paid' ? (parseFloat(pi.price) || 0) : 0);
+    if (!pi) return sum;
+    const ao = parseFloat(pi.amount_outstanding);
+    return sum + (ao > 0 ? ao : 0);
   }, 0);
 
   const metricCards = `
@@ -3570,6 +3656,13 @@ function renderPracticeDashboard() {
         const invStatusHtml = invStatus
           ? `<span class="status-pill ${invStatus.badge}">${escH(invStatus.label)}</span>`
           : `<span class="status-pill muted">No invoice</span>`;
+        const pi = c.pending_invoice;
+        const showPayBtn = pi && pi.invoice_id
+          && (pi.status === 'finalized' || pi.status === 'partial')
+          && parseFloat(pi.amount_outstanding) > 0;
+        const payBtnHtml = showPayBtn
+          ? `<button class="btn btn-primary btn-sm" style="margin-left:4px;white-space:nowrap;" onclick="openPaymentModal('${c.id}')">Payment Received</button>`
+          : '';
         const flagHtml = c.urgent
           ? `<button class="flag-btn" title="Edit notes / remove urgent flag" onclick="openNotesPopup('${c.id}')">&#x1F6A9;</button>`
           : `<button class="flag-btn" title="Add note or mark as urgent" onclick="openNotesPopup('${c.id}')" style="color:#CCC;">&#x2691;</button>`;
@@ -3592,7 +3685,7 @@ function renderPracticeDashboard() {
             <td>${afsHtml}</td>
             <td>${invStatusHtml}</td>
             <td style="width:40px;text-align:center;">${flagHtml}</td>
-            <td><button class="btn btn-ghost btn-sm" onclick="openClient('${c.id}')">Open &rarr;</button></td>
+            <td style="white-space:nowrap;">${payBtnHtml}<button class="btn btn-ghost btn-sm" onclick="openClient('${c.id}')">Open &rarr;</button></td>
           </tr>`;
       }).join('');
 
@@ -3787,13 +3880,96 @@ async function savePracticeSettings() {
 // Returns { badge, label } or null (grey = no indicator).
 function _invStatusFromPendingInvoice(pi) {
   if (!pi) return null;
-  if (pi.stage === 'ready')    return { badge: 'amber', label: 'Ready to Invoice' };
+  // New-style: explicit status field takes precedence
+  if (pi.status === 'paid')      return null; // fully paid — no indicator
+  if (pi.status === 'partial')   return { badge: 'amber', label: 'Partial Payment' };
+  if (pi.status === 'finalized') return { badge: 'amber', label: 'Finalized' };
+  // Legacy stage-based
+  if (pi.stage === 'ready')      return { badge: 'amber', label: 'Ready to Invoice' };
   if (pi.stage === 'invoiced') {
     if (pi.due_date && pi.due_date < _todayISO()) return { badge: 'red',   label: 'Overdue' };
     return { badge: 'green', label: 'Invoiced' };
   }
-  if (pi.stage === 'overdue')  return { badge: 'red',   label: 'Overdue' };
+  if (pi.stage === 'overdue')    return { badge: 'red',   label: 'Overdue' };
   return null;
+}
+
+// ── Payment Received ──────────────────────────────────────────
+
+async function openPaymentModal(clientId) {
+  const c = state.clients.find(x => x.id === clientId);
+  if (!c || !c.pending_invoice?.invoice_id) return;
+  showLoading('Loading invoice…');
+  try {
+    const inv = await DB.Invoices.getById(c.pending_invoice.invoice_id);
+    if (!inv) { toast('Invoice not found.', 'error'); return; }
+    state._paymentModal = {
+      invoiceId:         inv.id,
+      clientId:          c.id,
+      amountPaid:        parseFloat(inv.amount_paid) || 0,
+      amountOutstanding: parseFloat(inv.amount_outstanding) || parseFloat(inv.total) || 0,
+    };
+    document.getElementById('pm-client-name').textContent    = c.name;
+    document.getElementById('pm-invoice-number').textContent = inv.invoice_number;
+    document.getElementById('pm-total').textContent          = _fmtZAR(inv.total);
+    document.getElementById('pm-paid').textContent           = _fmtZAR(inv.amount_paid || 0);
+    document.getElementById('pm-outstanding').textContent    = _fmtZAR(state._paymentModal.amountOutstanding);
+    document.getElementById('pm-amount').value               = '';
+    document.getElementById('pm-error').style.display        = 'none';
+    openModal('payment-modal');
+  } catch(e) {
+    toast('Error loading invoice: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function confirmPayment() {
+  const m = state._paymentModal;
+  if (!m) return;
+  const amt    = parseFloat(document.getElementById('pm-amount').value);
+  const errEl  = document.getElementById('pm-error');
+  if (!amt || amt <= 0) {
+    errEl.textContent  = 'Please enter a valid payment amount greater than zero.';
+    errEl.style.display = '';
+    return;
+  }
+  if (amt > m.amountOutstanding + 0.001) {
+    errEl.textContent  = `Payment cannot exceed amount outstanding (${_fmtZAR(m.amountOutstanding)}).`;
+    errEl.style.display = '';
+    return;
+  }
+  closeModal('payment-modal');
+  showLoading('Recording payment…');
+  try {
+    await DB.Payments.create({
+      invoice_id:   m.invoiceId,
+      client_id:    m.clientId,
+      amount_paid:  amt,
+      payment_date: new Date().toISOString(),
+    });
+    const newAmtPaid        = m.amountPaid + amt;
+    const newAmtOutstanding = Math.max(0, m.amountOutstanding - amt);
+    const newStatus         = newAmtOutstanding <= 0 ? 'paid' : 'partial';
+    const invUpdate = { amount_paid: newAmtPaid, amount_outstanding: newAmtOutstanding, status: newStatus };
+    if (newStatus === 'paid') invUpdate.paid_date = new Date().toISOString();
+    await DB.Invoices.update(m.invoiceId, invUpdate);
+    // Update pending_invoice on client
+    const c = state.clients.find(x => x.id === m.clientId);
+    if (c) {
+      const pi = { ...(c.pending_invoice || {}), status: newStatus, amount_outstanding: newAmtOutstanding };
+      if (newStatus === 'paid') pi.stage = 'paid';
+      await DB.Clients.update(m.clientId, { pending_invoice: pi });
+      const idx = state.clients.findIndex(x => x.id === m.clientId);
+      if (idx >= 0) state.clients[idx] = { ...state.clients[idx], pending_invoice: pi };
+    }
+    toast(`Payment of ${_fmtZAR(amt)} recorded${newStatus === 'paid' ? ' — invoice fully paid!' : '.'}`, 'success');
+    renderPracticeDashboard();
+  } catch(e) {
+    toast('Error recording payment: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
 }
 
 // Mark the current client as ready to invoice, save to Supabase,
@@ -3865,8 +4041,11 @@ async function loadInvoiceList() {
   showLoading('Loading invoices…');
   try {
     if (!state.clients.length) state.clients = await DB.Clients.list();
-    const invoices = await DB.Invoices.list();
-    renderInvoiceList(invoices);
+    const [invoices, payments] = await Promise.all([
+      DB.Invoices.list(),
+      DB.Payments.listAll(),
+    ]);
+    renderInvoiceList(invoices, payments);
   } catch(e) {
     toast('Error loading invoices: ' + e.message, 'error');
   } finally {
@@ -3874,32 +4053,59 @@ async function loadInvoiceList() {
   }
 }
 
-function renderInvoiceList(invoices) {
+function renderInvoiceList(invoices, payments) {
   _renderInvNav();
   const clientMap = {};
   state.clients.forEach(c => { clientMap[c.id] = c.name; });
 
+  // Group payments by invoice_id
+  const payMap = {};
+  (payments || []).forEach(p => {
+    if (!payMap[p.invoice_id]) payMap[p.invoice_id] = [];
+    payMap[p.invoice_id].push(p);
+  });
+
   const statusPill = s => {
-    const label = s.charAt(0).toUpperCase() + s.slice(1);
-    return `<span class="status-pill inv-status-${s}">${label}</span>`;
+    const labels = { draft: 'Draft', sent: 'Sent', finalized: 'Finalized', partial: 'Partial', paid: 'Paid' };
+    return `<span class="status-pill inv-status-${s}">${labels[s] || (s.charAt(0).toUpperCase() + s.slice(1))}</span>`;
   };
 
   const rows = invoices.length === 0
-    ? `<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">
+    ? `<tr><td colspan="8" style="text-align:center;padding:40px;color:#999;">
          No invoices yet — create your first invoice above.
        </td></tr>`
-    : invoices.map(inv => `
-        <tr>
-          <td><strong style="color:#145A32;">${escH(inv.invoice_number)}</strong></td>
-          <td>${escH(clientMap[inv.client_id] || '—')}</td>
-          <td style="font-size:0.82rem;color:#666;">${fmtDate(inv.invoice_date)}</td>
-          <td style="font-size:0.82rem;color:#666;">${fmtDate(inv.due_date)}</td>
-          <td>${statusPill(inv.status)}</td>
-          <td class="num">${_fmtZAR(inv.total)}</td>
-          <td>
-            <button class="btn btn-danger btn-sm" onclick="deleteInvoice('${inv.id}')">Delete</button>
-          </td>
-        </tr>`).join('');
+    : invoices.flatMap(inv => {
+        const invPayments = payMap[inv.id] || [];
+        const paidDateCell = inv.status === 'paid' && inv.paid_date
+          ? `<span style="font-size:0.78rem;color:#145A32;margin-left:6px;">(Paid ${fmtDate(inv.paid_date)})</span>` : '';
+        const mainRow = `
+          <tr>
+            <td><strong style="color:#145A32;">${escH(inv.invoice_number)}</strong></td>
+            <td>${escH(clientMap[inv.client_id] || '—')}</td>
+            <td style="font-size:0.82rem;color:#666;">${fmtDate(inv.invoice_date)}</td>
+            <td style="font-size:0.82rem;color:#666;">${fmtDate(inv.due_date)}</td>
+            <td>${statusPill(inv.status)}${paidDateCell}</td>
+            <td class="num">${_fmtZAR(inv.total)}</td>
+            <td class="num" style="color:${parseFloat(inv.amount_outstanding) > 0 ? '#C0392B' : '#999'};">
+              ${parseFloat(inv.amount_outstanding) > 0 ? _fmtZAR(inv.amount_outstanding) : '—'}
+            </td>
+            <td>
+              <button class="btn btn-danger btn-sm" onclick="deleteInvoice('${inv.id}')">Delete</button>
+            </td>
+          </tr>`;
+        const histRow = invPayments.length > 0
+          ? `<tr style="background:#F9FFF9;">
+               <td colspan="8" style="padding:6px 16px 10px 32px;">
+                 <div style="font-size:0.75rem;font-weight:600;color:#145A32;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em;">Payment History</div>
+                 ${invPayments.map(p =>
+                   `<div style="font-size:0.8rem;color:#444;margin-bottom:2px;">
+                      ${fmtDate(p.payment_date)} &mdash; ${_fmtZAR(p.amount_paid)}
+                    </div>`
+                 ).join('')}
+               </td>
+             </tr>` : '';
+        return [mainRow, histRow];
+      }).join('');
 
   setContent(`
     <div class="page-header">
@@ -3919,6 +4125,7 @@ function renderInvoiceList(invoices) {
               <th>Due Date</th>
               <th>Status</th>
               <th class="num">Total</th>
+              <th class="num">Outstanding</th>
               <th></th>
             </tr>
           </thead>

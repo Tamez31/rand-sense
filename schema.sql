@@ -160,14 +160,18 @@ create table if not exists invoices (
   total          numeric default 0,
   notes          text,
   -- ITR12 / service-specific fields
-  service_type   text,   -- e.g. 'ITR12', 'Annual Financial Statements', 'VAT201'
-  tax_year       text,   -- e.g. '2024'
-  brochure_price numeric,
-  final_amount   numeric,
-  discount       numeric default 0,
-  finalized_date timestamptz,
-  created_at     timestamptz default now(),
-  updated_at     timestamptz default now()
+  service_type      text,   -- e.g. 'ITR12', 'Annual Financial Statements', 'VAT201'
+  tax_year          text,   -- e.g. '2024'
+  brochure_price    numeric,
+  final_amount      numeric,
+  discount          numeric default 0,
+  finalized_date    timestamptz,
+  -- Payment tracking
+  amount_paid       numeric default 0,
+  amount_outstanding numeric default 0,
+  paid_date         timestamptz,
+  created_at        timestamptz default now(),
+  updated_at        timestamptz default now()
 );
 
 -- TABLE: invoice_lines
@@ -187,6 +191,33 @@ create index if not exists idx_invoicelines_inv   on invoice_lines(invoice_id);
 
 alter table invoices       disable row level security;
 alter table invoice_lines  disable row level security;
+
+-- ============================================================
+-- TABLE: payments
+-- Individual payment transactions against an invoice
+-- ============================================================
+
+create table if not exists payments (
+  id           uuid primary key default gen_random_uuid(),
+  invoice_id   uuid references invoices(id) on delete cascade,
+  client_id    uuid references clients(id) on delete set null,
+  amount_paid  numeric not null,
+  payment_date timestamptz default now(),
+  created_at   timestamptz default now()
+);
+
+create index if not exists idx_payments_invoice on payments(invoice_id);
+create index if not exists idx_payments_client  on payments(client_id);
+
+alter table payments disable row level security;
+
+-- ============================================================
+-- MIGRATION: add payment tracking columns to existing invoices table
+-- Run once if the invoices table already exists without these columns.
+-- ============================================================
+-- alter table invoices add column if not exists amount_paid        numeric default 0;
+-- alter table invoices add column if not exists amount_outstanding numeric default 0;
+-- alter table invoices add column if not exists paid_date          timestamptz;
 
 -- ============================================================
 -- MIGRATION: add ITR12 columns to existing invoices table
