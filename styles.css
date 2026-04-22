@@ -267,7 +267,7 @@ input, select, textarea { font-family: var(--font); }
 /* ── Practice Dashboard ──────────────────────────────────────── */
 .dash-metrics {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 14px;
   margin-bottom: 24px;
 }
@@ -462,10 +462,10 @@ input, select, textarea { font-family: var(--font); }
 .inv-status-paid    { background: #D4F5E2; color: #145A32; }
 .inv-status-overdue { background: #FDEDEC; color: #C0392B; border: 1px solid #F5B7B1; }
 
-@media (max-width: 900px) {
-  .dash-metrics { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 1100px) {
+  .dash-metrics { grid-template-columns: repeat(3, 1fr); }
 }
-@media (max-width: 560px) {
+@media (max-width: 700px) {
   .dash-metrics { grid-template-columns: 1fr 1fr; }
 }
 

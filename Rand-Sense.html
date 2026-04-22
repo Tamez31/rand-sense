@@ -1083,6 +1083,11 @@ function renderReportsTab() {
       <button class="btn btn-ghost btn-sm" onclick="printReport()">&#128424; PDF</button>
       <button class="btn btn-ghost btn-sm" onclick="csvReport()">&#8595; CSV</button>
       ${!isC ? `<button class="btn btn-dark btn-sm" onclick="generateFullPack()">Full Pack</button>` : ''}
+      <button class="btn btn-primary btn-sm"
+        onclick="triggerReadyToInvoice('${rt === 'VAT' ? 'VAT201' : 'Annual Financial Statements'} \u2014 ${state.currentYear}', ${rt === 'VAT' ? 450 : 0})"
+        title="Mark this work as done and open the invoice form">
+        &#10003; Ready to Invoice
+      </button>
     </div>`;
 
   // Income override bar — only shown for commission earners on the IS tab
@@ -2514,6 +2519,18 @@ function _renderIRP6SummaryCard(r, client, isCompany) {
 
 // ── IRP6 ecosystem helpers ─────────────────────────────────────
 
+// Shared "Ready to Invoice" button row used by both IRP6 branches.
+function _irp6ReadyToInvoiceBtn(year) {
+  const svc = `IRP6 per submission \u2014 ${year}`;
+  return `<div class="btn-row" style="justify-content:flex-end;margin-bottom:12px;">
+    <button class="btn btn-primary btn-sm"
+      onclick="triggerReadyToInvoice('${svc}', 200)"
+      title="Mark IRP6 work as done and open the invoice form">
+      &#10003; Ready to Invoice
+    </button>
+  </div>`;
+}
+
 // Compute net profit from current state.transactions via IS engine.
 // Returns { hasData, netProfit, txCount, latestDate, error }
 function _irp6GetFinancials() {
@@ -2627,7 +2644,7 @@ function renderIRP6Tab() {
       `<button class="subnav-tab ${compType===key?'active':''}" style="font-size:0.82rem;padding:7px 16px;"
         onclick="setIRP6CompType('${key}')">${lbl}</button>`;
 
-    return statusBar + `
+    return _irp6ReadyToInvoiceBtn(year) + statusBar + `
       <div class="card" style="margin-bottom:16px;">
         <div class="card-title">IRP6 Provisional Tax — Company</div>
 
@@ -2711,7 +2728,7 @@ function renderIRP6Tab() {
   const yearOpts = availIndiv
     .map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('');
 
-  return statusBar + `
+  return _irp6ReadyToInvoiceBtn(year) + statusBar + `
     <div class="card" style="margin-bottom:16px;">
       <div class="card-title">IRP6 Provisional Tax — Individual</div>
 
@@ -3366,6 +3383,7 @@ function renderPracticeDashboard() {
     vat:          _vatDashboardStatus(c),
     irp6,
     afs:          _afsDashboardStatus(c, (data[c.id] || {}).lastImport || null),
+    invStatus:    _invStatusFromPendingInvoice(c.pending_invoice),
   }));
 
   // Search filter
@@ -3382,6 +3400,7 @@ function renderPracticeDashboard() {
     if (col === 'unclassified') return d * (a.unclassified - b.unclassified);
     if (col === 'vat')          return d * ((a.vat?.badge||'').localeCompare(b.vat?.badge||''));
     if (col === 'afs')          return d * ((a.afs?.badge||'').localeCompare(b.afs?.badge||''));
+    if (col === 'invStatus')    return d * ((a.invStatus?.badge||'').localeCompare(b.invStatus?.badge||''));
     return 0;
   };
 
@@ -3392,8 +3411,12 @@ function renderPracticeDashboard() {
   ];
 
   // ── Metric counts (always based on all clients, not filtered view) ──
-  const needAttention = clients.filter(c => (data[c.id]||{}).unclassified > 0).length;
-  const vatDue        = clients.filter(c => { const v = _vatDashboardStatus(c); return v && (v.badge==='amber'||v.badge==='red'); }).length;
+  const needAttention  = clients.filter(c => (data[c.id]||{}).unclassified > 0).length;
+  const vatDue         = clients.filter(c => { const v = _vatDashboardStatus(c); return v && (v.badge==='amber'||v.badge==='red'); }).length;
+  const outstanding    = clients.reduce((sum, c) => {
+    const pi = c.pending_invoice;
+    return sum + (pi && pi.stage !== 'paid' ? (parseFloat(pi.price) || 0) : 0);
+  }, 0);
 
   const metricCards = `
     <div class="dash-metrics">
@@ -3413,6 +3436,10 @@ function renderPracticeDashboard() {
         <div class="dash-metric-value" style="font-size:1.15rem;line-height:1.2;">${escH(irp6.label)}</div>
         <div class="dash-metric-label">Next IRP6 Deadline</div>
       </div>
+      <div class="dash-metric-card ${outstanding > 0 ? '' : ''}">
+        <div class="dash-metric-value" style="font-size:${outstanding >= 10000 ? '1.1rem' : '1.4rem'};line-height:1.2;">${_fmtZAR(outstanding)}</div>
+        <div class="dash-metric-label">Outstanding Invoices</div>
+      </div>
     </div>`;
 
   // Sortable header helper
@@ -3424,10 +3451,10 @@ function renderPracticeDashboard() {
 
   // ── Table rows ───────────────────────────────────────────────
   const tableRows = sorted.length === 0
-    ? `<tr><td colspan="10" style="text-align:center;padding:32px;color:#999;">
+    ? `<tr><td colspan="11" style="text-align:center;padding:32px;color:#999;">
          ${search ? 'No clients match your search.' : 'No clients yet — add your first client using the button above.'}
        </td></tr>`
-    : sorted.map(({ c, unclassified, lastImport, vat, irp6: irp6s, afs }) => {
+    : sorted.map(({ c, unclassified, lastImport, vat, irp6: irp6s, afs, invStatus }) => {
         const unclassHtml = unclassified > 0
           ? `<span style="color:#C0392B;font-weight:700;">${unclassified}</span>`
           : `<span style="color:#999;">0</span>`;
@@ -3438,6 +3465,9 @@ function renderPracticeDashboard() {
         const afsHtml  = afs
           ? `<span class="status-pill ${afs.badge}">${escH(afs.label)}</span>`
           : `<span style="color:#CCC;font-size:0.8rem;">—</span>`;
+        const invStatusHtml = invStatus
+          ? `<span class="status-pill ${invStatus.badge}">${escH(invStatus.label)}</span>`
+          : `<span class="status-pill muted">No invoice</span>`;
         const flagHtml = c.urgent
           ? `<button class="flag-btn" title="Edit notes / remove urgent flag" onclick="openNotesPopup('${c.id}')">&#x1F6A9;</button>`
           : `<button class="flag-btn" title="Add note or mark as urgent" onclick="openNotesPopup('${c.id}')" style="color:#CCC;">&#x2691;</button>`;
@@ -3458,6 +3488,7 @@ function renderPracticeDashboard() {
             <td>${vatHtml}</td>
             <td>${irp6Html}</td>
             <td>${afsHtml}</td>
+            <td>${invStatusHtml}</td>
             <td style="width:40px;text-align:center;">${flagHtml}</td>
             <td><button class="btn btn-ghost btn-sm" onclick="openClient('${c.id}')">Open &rarr;</button></td>
           </tr>`;
@@ -3488,6 +3519,7 @@ function renderPracticeDashboard() {
               ${th('vat','VAT Status')}
               <th>IRP6</th>
               ${th('afs','AFS Status')}
+              ${th('invStatus','Invoice Status')}
               <th style="width:40px;"></th>
               <th></th>
             </tr>
@@ -3646,6 +3678,52 @@ async function savePracticeSettings() {
 }
 
 // ============================================================
+// INVOICE STATUS HELPERS
+// ============================================================
+
+// Derive the dashboard invoice status from a client's pending_invoice jsonb field.
+// Returns { badge, label } or null (grey = no indicator).
+function _invStatusFromPendingInvoice(pi) {
+  if (!pi) return null;
+  if (pi.stage === 'ready')    return { badge: 'amber', label: 'Ready to Invoice' };
+  if (pi.stage === 'invoiced') {
+    if (pi.due_date && pi.due_date < _todayISO()) return { badge: 'red',   label: 'Overdue' };
+    return { badge: 'green', label: 'Invoiced' };
+  }
+  if (pi.stage === 'overdue')  return { badge: 'red',   label: 'Overdue' };
+  return null;
+}
+
+// Mark the current client as ready to invoice, save to Supabase,
+// then navigate to the new-invoice screen with client and service pre-populated.
+async function triggerReadyToInvoice(service, price) {
+  const c = state.currentClient;
+  if (!c) return;
+  const pi = { stage: 'ready', service, price: parseFloat(price) || 0 };
+  showLoading('Saving…');
+  try {
+    await DB.Clients.update(c.id, { pending_invoice: pi });
+    // Mirror into in-memory state so the dashboard reflects it immediately
+    state.currentClient = { ...c, pending_invoice: pi };
+    const idx = state.clients.findIndex(x => x.id === c.id);
+    if (idx >= 0) state.clients[idx] = { ...state.clients[idx], pending_invoice: pi };
+    toast(`${service} marked as ready to invoice.`, 'success');
+    // Navigate to the invoice form with this client + service pre-filled
+    state._invPrefill = { clientId: c.id, service, price: parseFloat(price) || 0 };
+    state.activeTab   = 'invoices';
+    if (!state.clients.length) state.clients = await DB.Clients.list();
+    state._invNumber  = await DB.Invoices.nextNumber().catch(() => 'RS-' + new Date().getFullYear() + '-001');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+    hideLoading();
+    return;
+  }
+  hideLoading();
+  _renderInvNav();
+  renderNewInvoice();
+}
+
+// ============================================================
 // INVOICING MODULE
 // ============================================================
 
@@ -3764,12 +3842,14 @@ async function openNewInvoice() {
 function renderNewInvoice() {
   _invLineKey = 0;
   _renderInvNav();
-  const today  = _todayISO();
-  const due    = _addDaysISO(today, 30);
-  const invNum = state._invNumber || ('RS-' + new Date().getFullYear() + '-001');
+  const today   = _todayISO();
+  const due     = _addDaysISO(today, 30);
+  const invNum  = state._invNumber || ('RS-' + new Date().getFullYear() + '-001');
+  const prefill = state._invPrefill || null;
+  if (prefill) state._invPrefill = null; // consume once
 
   const clientOpts = state.clients.map(c =>
-    `<option value="${c.id}">${escH(c.name)}</option>`
+    `<option value="${c.id}" ${prefill?.clientId === c.id ? 'selected' : ''}>${escH(c.name)}</option>`
   ).join('');
 
   const quickBtns = QUICK_SERVICES.map(s =>
@@ -3869,7 +3949,11 @@ function renderNewInvoice() {
       <button class="btn btn-primary" onclick="saveInvoice('sent')">Save &amp; Send</button>
     </div>`);
 
-  addInvoiceLine('', 1, 0);
+  if (prefill?.service) {
+    addInvoiceLine(prefill.service, 1, prefill.price);
+  } else {
+    addInvoiceLine('', 1, 0);
+  }
 }
 
 function addInvoiceLine(desc, qty, price) {
@@ -3990,6 +4074,15 @@ async function saveInvoice(status) {
       notes: notes || null,
     });
     await DB.InvoiceLines.createBatch(inv.id, lines);
+
+    // Update client's pending_invoice to reflect the invoice is now raised
+    const piUpdate = { stage: 'invoiced', invoice_number: invNum, price: total, due_date: dueDate };
+    try {
+      await DB.Clients.update(clientId, { pending_invoice: piUpdate });
+      const idx = state.clients.findIndex(c => c.id === clientId);
+      if (idx >= 0) state.clients[idx] = { ...state.clients[idx], pending_invoice: piUpdate };
+    } catch(_) { /* non-critical — don't block the user */ }
+
     const verb = status === 'draft' ? 'saved as draft' : 'saved and sent';
     toast(`Invoice ${invNum} ${verb}.`, 'success');
     loadInvoiceList();
