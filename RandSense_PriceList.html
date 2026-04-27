@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RandSense Price List</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,700;0,900;1,400&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; padding: 20px; background: #d0d0d0; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; box-sizing: border-box; }
+    svg { display: block; font-family: 'Poppins', Arial, sans-serif; }
+  </style>
+</head>
+<body>
+<!--
+  Layout reference (viewBox height = 1548):
+  Header           y=0     h=120
+  Row 1            y=130   h=82   ITR12 Simple
+  Row 2            y=222   h=82   ITR12 Complex
+  Row 3            y=314   h=82   IRP6
+  Row 4            y=406   h=82   Bundle (dark green bg)
+  Row 5            y=498   h=82   SARS RFR
+  SB Header        y=600   h=40
+  AFS Subheader    y=640   h=28
+  Row 6            y=673   h=82   Micro
+  Row 7            y=765   h=82   Small
+  Row 8            y=857   h=82   Medium
+  T&C Subheader    y=959   h=28
+  Row 9            y=992   h=82   ITR14
+  Row 10           y=1084  h=82   IRP6 Business
+  Row 11           y=1176  h=82   VAT201
+  Row 12           y=1268  h=82   SARS RFR Business
+  Quote block      y=1365  h=115
+  Footer           y=1488  h=46
+  Accent strip     y=1534  h=8
+  End              y=1542  + 5px padding = 1547 → viewBox 1548
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 1548" width="680">
+  <defs>
+    <style>
+      text { font-family: 'Poppins', Arial, sans-serif; }
+    </style>
+    <filter id="row-shadow" x="-2%" y="-5%" width="104%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#00000012"/>
+    </filter>
+  </defs>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- BACKGROUND                                  -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect width="680" height="1548" fill="#F0F9F4"/>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- HEADER  y=0  h=120                          -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect width="680" height="120" fill="#145A32"/>
+  <!-- Brand name: "Rand" bold white, "Sense" light #A8E6C1 -->
+  <text x="340" y="65" text-anchor="middle" font-size="42" fill="white">
+    <tspan font-weight="900">Rand</tspan><tspan font-weight="300" fill="#A8E6C1">Sense</tspan>
+  </text>
+  <!-- Tagline in small caps -->
+  <text x="340" y="96" text-anchor="middle" font-size="12" font-variant="small-caps" fill="white" letter-spacing="3">MAKING CENTS OF IT ALL</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 1 — ITR12 Simple  y=130  h=82           -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="130" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="157" font-size="14" font-weight="700" fill="#145A32">ITR12 Simple</text>
+  <text x="655" y="157" text-anchor="end" font-size="16" font-weight="700" fill="#145A32">R400</text>
+  <text x="655" y="178" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R1 000</text>
+  <rect x="25" y="187" width="88" height="18" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="200" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 60%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 2 — ITR12 Complex  y=222  h=82          -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="222" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="246" font-size="14" font-weight="700" fill="#145A32">ITR12 Complex</text>
+  <text x="25" y="260" font-size="11" font-style="italic" fill="#666">Price depends on complexity</text>
+  <text x="655" y="246" text-anchor="end" font-size="15" font-weight="700" fill="#145A32">R650 – R1 250</text>
+  <text x="655" y="274" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R2 000</text>
+  <rect x="25" y="283" width="88" height="16" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="295" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 68%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 3 — IRP6  y=314  h=82                   -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="314" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="341" font-size="14" font-weight="700" fill="#145A32">IRP6</text>
+  <text x="655" y="341" text-anchor="end" font-size="15" font-weight="700" fill="#145A32">R150 – R200</text>
+  <text x="655" y="362" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R800</text>
+  <rect x="25" y="371" width="88" height="18" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="384" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 80%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 4 — Bundle (dark green bg)  y=406  h=82 -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="406" width="660" height="82" rx="6" fill="#145A32" filter="url(#row-shadow)"/>
+  <text x="25" y="433" font-size="14" font-weight="700" fill="white">ITR12 Complex + IRP6 Bundle</text>
+  <text x="655" y="433" text-anchor="end" font-size="16" font-weight="700" fill="#A8E6C1">R950</text>
+  <text x="655" y="454" text-anchor="end" font-size="11" fill="#A8E6C1" text-decoration="line-through">avg R2 400</text>
+  <rect x="25" y="463" width="88" height="18" rx="3" fill="#A8E6C1"/>
+  <text x="69" y="476" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 60%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 5 — SARS RFR  y=498  h=82               -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="498" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="525" font-size="14" font-weight="700" fill="#145A32">SARS RFR</text>
+  <text x="655" y="525" text-anchor="end" font-size="16" font-weight="700" fill="#145A32">R1 000</text>
+  <text x="655" y="546" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R3 000</text>
+  <rect x="25" y="555" width="88" height="18" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="568" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 67%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- SMALL BUSINESS SECTION HEADER  y=600  h=40  -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="0" y="600" width="680" height="40" fill="#145A32"/>
+  <text x="340" y="625" text-anchor="middle" font-size="15" font-weight="700" fill="white" letter-spacing="1">SMALL BUSINESS</text>
+
+  <!-- AFS SUBHEADER  y=640  h=28 -->
+  <rect x="0" y="640" width="680" height="28" fill="#1E8449"/>
+  <text x="340" y="659" text-anchor="middle" font-size="12" font-weight="600" fill="white" letter-spacing="0.5">Annual Financial Statements (AFS)</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 6 — Micro  y=673  h=82                  -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="673" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="700" font-size="14" font-weight="700" fill="#145A32">Micro Entity</text>
+  <text x="655" y="700" text-anchor="end" font-size="15" font-weight="700" fill="#145A32">R2 000 – R2 500</text>
+  <text x="655" y="721" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R8 000</text>
+  <rect x="25" y="730" width="88" height="18" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="743" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 75%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 7 — Small  y=765  h=82                  -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="765" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="792" font-size="14" font-weight="700" fill="#145A32">Small Entity</text>
+  <text x="655" y="792" text-anchor="end" font-size="15" font-weight="700" fill="#145A32">R3 500 – R4 500</text>
+  <text x="655" y="813" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R14 000</text>
+  <rect x="25" y="822" width="88" height="18" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="835" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 75%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 8 — Medium  y=857  h=82                 -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="857" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="884" font-size="14" font-weight="700" fill="#145A32">Medium Entity</text>
+  <text x="655" y="884" text-anchor="end" font-size="15" font-weight="700" fill="#145A32">R7 500 – R9 000</text>
+  <text x="655" y="905" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R25 000</text>
+  <rect x="25" y="914" width="88" height="18" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="927" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 70%</text>
+
+  <!-- TAX & COMPLIANCE SUBHEADER  y=959  h=28 -->
+  <rect x="0" y="959" width="680" height="28" fill="#1E8449"/>
+  <text x="340" y="978" text-anchor="middle" font-size="12" font-weight="600" fill="white" letter-spacing="0.5">Tax &amp; Compliance</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 9 — ITR14  y=992  h=82                  -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="992" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="1019" font-size="14" font-weight="700" fill="#145A32">ITR14</text>
+  <text x="655" y="1019" text-anchor="end" font-size="15" font-weight="700" fill="#145A32">R600 – R1 000</text>
+  <text x="655" y="1040" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R1 500</text>
+  <rect x="25" y="1049" width="88" height="18" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="1062" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 60%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 10 — IRP6 (Business)  y=1084  h=82      -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="1084" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="1111" font-size="14" font-weight="700" fill="#145A32">IRP6</text>
+  <text x="655" y="1111" text-anchor="end" font-size="16" font-weight="700" fill="#145A32">R200</text>
+  <text x="655" y="1132" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R800</text>
+  <rect x="25" y="1141" width="88" height="18" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="1154" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 75%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 11 — VAT201  y=1176  h=82               -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="1176" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="1203" font-size="14" font-weight="700" fill="#145A32">VAT201</text>
+  <text x="655" y="1203" text-anchor="end" font-size="16" font-weight="700" fill="#145A32">R450</text>
+  <text x="655" y="1224" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R500</text>
+  <rect x="25" y="1233" width="88" height="18" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="1246" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 10%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ROW 12 — SARS RFR (Business)  y=1268  h=82  -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="10" y="1268" width="660" height="82" rx="6" fill="white" filter="url(#row-shadow)"/>
+  <text x="25" y="1295" font-size="14" font-weight="700" fill="#145A32">SARS RFR</text>
+  <text x="655" y="1295" text-anchor="end" font-size="16" font-weight="700" fill="#145A32">R1 000</text>
+  <text x="655" y="1316" text-anchor="end" font-size="11" fill="#999" text-decoration="line-through">avg R3 000</text>
+  <rect x="25" y="1325" width="88" height="18" rx="3" fill="#D4F5E2"/>
+  <text x="69" y="1338" text-anchor="middle" font-size="10" font-weight="600" fill="#145A32">Save 67%</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- QUOTE BLOCK  y=1365  h=115                  -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="15" y="1365" width="650" height="115" rx="6" fill="#D4F5E2"/>
+  <!-- Dark green left border -->
+  <rect x="15" y="1365" width="5" height="115" rx="3" fill="#145A32"/>
+  <!-- Quote text via foreignObject for mixed bold/normal with auto-wrap -->
+  <foreignObject x="28" y="1365" width="622" height="115">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="font-family:'Poppins',Arial,sans-serif;font-size:13px;color:#1E8449;text-align:center;padding:14px 10px;line-height:1.65;box-sizing:border-box;">
+      <strong style="color:#145A32;font-weight:700;">10%</strong> of every <strong style="color:#145A32;font-weight:700;">Rand</strong> you pay is donated and invested into our under-privileged youth and communities as one of our <strong style="color:#145A32;font-weight:700;">KEY</strong> missions to help and grow our Community that raised us.
+    </div>
+  </foreignObject>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- FOOTER  y=1488  h=46                        -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="0" y="1488" width="680" height="46" fill="#145A32"/>
+  <text x="340" y="1517" text-anchor="middle" font-size="14" font-weight="700" fill="white">Matthew (Matty) — WhatsApp 076 140 8717</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ACCENT STRIP  y=1534  h=8                   -->
+  <!-- ══════════════════════════════════════════ -->
+  <rect x="0" y="1534" width="680" height="8" fill="#A8E6C1"/>
+
+</svg>
+</body>
+</html>
