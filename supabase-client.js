@@ -633,6 +633,25 @@ const Invoices = {
     return `RS-${String(max + 1).padStart(5, '0')}`;
   },
 
+  async listByClient(clientId) {
+    const sb = getClient();
+    return unwrap(
+      await sb.from('invoices')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false })
+    );
+  },
+
+  async listOutstanding() {
+    const sb = getClient();
+    return unwrap(
+      await sb.from('invoices')
+        .select('id,amount_outstanding')
+        .gt('amount_outstanding', 0)
+    );
+  },
+
   async findByClientServiceYear(clientId, serviceType, taxYear) {
     const sb   = getClient();
     const rows = unwrap(
