@@ -1,45 +1,692 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RandSense Marketing Brochure</title>
-    <link rel="stylesheet" href="styles.css">
-    <style>
-        /* Print styles */
-        @media print {
-            .btn-download {
-                display: none;
-            }
-        }
-        @media print {
-            body {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RandSense — Making Cents of It All</title>
+  <!-- Google Fonts — brochure renders correctly with sans-serif fallback if unavailable -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,700;0,900;1,400&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; scroll-behavior: smooth; }
+    body {
+      font-family: 'Poppins', Arial, sans-serif;
+      background: #F0F9F4;
+      color: #1A1A1A;
+      line-height: 1.6;
+    }
+    a { color: #145A32; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Download PDF button ────────────────────────────────────── */
+    .btn-download {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 999;
+      background: #145A32;
+      color: white;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-family: 'Poppins', Arial, sans-serif;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(20,90,50,0.3);
+      transition: background 0.15s;
+    }
+    .btn-download:hover { background: #1E8449; }
+
+    /* ── Layout helpers ─────────────────────────────────────────── */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    .section { padding: 68px 0; }
+    .section-white { background: #ffffff; }
+    .section-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .section-header h2 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #145A32;
+      margin-bottom: 10px;
+    }
+    .section-header p {
+      color: #555555;
+      font-size: 0.95rem;
+      max-width: 620px;
+      margin: 0 auto;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       HERO
+       ══════════════════════════════════════════════════════════════ */
+    .hero {
+      background: linear-gradient(145deg, #0D3B22 0%, #145A32 55%, #1E8449 100%);
+      padding: 80px 24px 64px;
+      text-align: center;
+      color: white;
+    }
+    .hero-brand {
+      font-size: 3.2rem;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .hero-rand  { font-weight: 900; color: #ffffff; }
+    .hero-sense { font-weight: 300; color: #A8E6C1; }
+    .hero-tagline {
+      font-size: 0.7rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #A8E6C1;
+      margin-bottom: 30px;
+    }
+    .hero-headline {
+      font-size: 1.85rem;
+      font-weight: 700;
+      color: #ffffff;
+      max-width: 640px;
+      margin: 0 auto 16px;
+      line-height: 1.25;
+    }
+    .hero-sub {
+      color: #D4F5E2;
+      font-size: 0.97rem;
+      max-width: 560px;
+      margin: 0 auto 36px;
+      line-height: 1.65;
+    }
+    .hero-cta {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 52px;
+    }
+    .cta-btn {
+      background: #A8E6C1;
+      color: #145A32;
+      padding: 13px 28px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      transition: background 0.15s;
+      display: inline-block;
+    }
+    .cta-btn:hover { background: #ffffff; text-decoration: none; }
+    .cta-ghost {
+      background: transparent;
+      border: 2px solid rgba(255,255,255,0.45);
+      color: white;
+      padding: 11px 26px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: border-color 0.15s, background 0.15s;
+      display: inline-block;
+    }
+    .cta-ghost:hover {
+      border-color: #A8E6C1;
+      background: rgba(168,230,193,0.1);
+      text-decoration: none;
+    }
+    /* Hero stats bar */
+    .hero-stats {
+      display: flex;
+      gap: 40px;
+      justify-content: center;
+      flex-wrap: wrap;
+      border-top: 1px solid rgba(168,230,193,0.3);
+      padding-top: 36px;
+    }
+    .hero-stat-value {
+      font-size: 1.7rem;
+      font-weight: 900;
+      color: #A8E6C1;
+      line-height: 1;
+    }
+    .hero-stat-label {
+      font-size: 0.75rem;
+      color: #D4F5E2;
+      margin-top: 4px;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SERVICE CARDS
+       ══════════════════════════════════════════════════════════════ */
+    .service-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 18px;
+    }
+    .service-card {
+      background: #ffffff;
+      border: 1px solid #C8E6C9;
+      border-radius: 12px;
+      padding: 24px 22px;
+      position: relative;
+      transition: box-shadow 0.15s, transform 0.1s;
+    }
+    .service-card:hover {
+      box-shadow: 0 4px 18px rgba(20,90,50,0.1);
+      transform: translateY(-2px);
+    }
+    .service-card.featured {
+      background: #145A32;
+      border-color: #145A32;
+    }
+    .service-name {
+      font-size: 0.93rem;
+      font-weight: 700;
+      color: #145A32;
+      margin-bottom: 6px;
+    }
+    .service-card.featured .service-name { color: #A8E6C1; }
+    .service-desc {
+      font-size: 0.78rem;
+      color: #666666;
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+    .service-card.featured .service-desc { color: #D4F5E2; }
+    .service-price {
+      font-size: 1.55rem;
+      font-weight: 900;
+      color: #145A32;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .service-card.featured .service-price { color: #ffffff; }
+    .service-avg {
+      font-size: 0.77rem;
+      color: #aaaaaa;
+      text-decoration: line-through;
+      margin-bottom: 10px;
+    }
+    .service-card.featured .service-avg { color: #A8E6C1; }
+    .service-badge {
+      display: inline-block;
+      background: #D4F5E2;
+      color: #145A32;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .service-card.featured .service-badge { background: #A8E6C1; }
+    .service-note {
+      font-size: 0.72rem;
+      color: #888888;
+      font-style: italic;
+      margin-top: 8px;
+    }
+    .service-card.featured .service-note { color: #D4F5E2; }
+    /* Best Value ribbon */
+    .best-value-tag {
+      position: absolute;
+      top: -1px;
+      right: 18px;
+      background: #A8E6C1;
+      color: #145A32;
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 0 0 8px 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Sub-section headers (AFS / Tax & Compliance) ─────────── */
+    .sub-section { margin-bottom: 44px; }
+    .sub-section:last-child { margin-bottom: 0; }
+    .sub-section-heading {
+      font-size: 0.97rem;
+      font-weight: 700;
+      color: #1E8449;
+      margin-bottom: 18px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #D4F5E2;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sub-section-heading::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 16px;
+      background: #145A32;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       WHY RANDSENSE
+       ══════════════════════════════════════════════════════════════ */
+    .why-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 20px;
+    }
+    .why-card {
+      background: #ffffff;
+      border: 1px solid #C8E6C9;
+      border-radius: 12px;
+      padding: 28px 22px;
+      text-align: center;
+    }
+    .why-icon  { font-size: 1.8rem; margin-bottom: 12px; }
+    .why-title { font-size: 0.9rem; font-weight: 700; color: #145A32; margin-bottom: 8px; }
+    .why-desc  { font-size: 0.78rem; color: #555555; line-height: 1.5; }
+
+    /* ══════════════════════════════════════════════════════════════
+       COMMUNITY GIVING
+       ══════════════════════════════════════════════════════════════ */
+    .section-community {
+      background: #145A32;
+    }
+    .section-community .section-header h2 { color: #A8E6C1; }
+    .section-community .section-header p  { color: #D4F5E2; }
+    .community-quote {
+      background: rgba(168,230,193,0.10);
+      border-left: 5px solid #A8E6C1;
+      border-radius: 0 12px 12px 0;
+      padding: 24px 28px;
+      max-width: 700px;
+      margin: 0 auto 36px;
+    }
+    .community-quote p {
+      font-size: 1rem;
+      color: #D4F5E2;
+      font-style: italic;
+      line-height: 1.75;
+    }
+    .community-quote strong {
+      color: #ffffff;
+      font-style: normal;
+    }
+    .community-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 660px;
+      margin: 0 auto;
+    }
+    .community-card {
+      background: rgba(168,230,193,0.08);
+      border: 1px solid rgba(168,230,193,0.25);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .community-card h4 { color: #A8E6C1; font-size: 0.92rem; margin-bottom: 8px; }
+    .community-card p  { color: #D4F5E2; font-size: 0.8rem; line-height: 1.55; }
+
+    /* ══════════════════════════════════════════════════════════════
+       CONTACT
+       ══════════════════════════════════════════════════════════════ */
+    .contact-card {
+      max-width: 440px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #C8E6C9;
+      border-radius: 16px;
+      padding: 40px 36px;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(20,90,50,0.08);
+    }
+    .contact-name {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #145A32;
+      margin-bottom: 4px;
+    }
+    .contact-role {
+      font-size: 0.82rem;
+      color: #666666;
+      margin-bottom: 28px;
+    }
+    .contact-wa-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #145A32;
+      color: white;
+      padding: 14px 30px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.97rem;
+      transition: background 0.15s;
+      margin-bottom: 10px;
+    }
+    .contact-wa-btn:hover { background: #1E8449; text-decoration: none; color: white; }
+    .contact-number {
+      font-size: 0.85rem;
+      color: #888888;
+      margin-bottom: 0;
+    }
+    .contact-divider {
+      margin: 24px 0 20px;
+      border: none;
+      border-top: 1px solid #C8E6C9;
+    }
+    .contact-tagline {
+      font-size: 0.8rem;
+      color: #888888;
+      line-height: 1.6;
+    }
+
+    /* ── Footer ─────────────────────────────────────────────────── */
+    .footer {
+      background: #145A32;
+      color: #A8E6C1;
+      text-align: center;
+      padding: 22px 24px;
+      font-size: 0.78rem;
+    }
+
+    /* ── Print styles ────────────────────────────────────────────── */
+    @media print {
+      .btn-download { display: none; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .section { padding: 44px 0; }
+      .service-card:hover { box-shadow: none; transform: none; }
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .hero-brand    { font-size: 2.4rem; }
+      .hero-headline { font-size: 1.5rem; }
+      .section       { padding: 52px 0; }
+      .community-grid { grid-template-columns: 1fr; }
+      .contact-card  { padding: 30px 20px; }
+      .hero-stats    { gap: 24px; }
+    }
+  </style>
 </head>
 <body>
-    <button class="btn-download" style="background-color: #145A32; color: white; font-family: 'Poppins', sans-serif; position: absolute; top: 20px; right: 20px;">Download as PDF</button>
-    <script>
-        document.querySelector('.btn-download').onclick = function() {
-            window.print();
-        };
-    </script>
-    <div class="brochure-body">
-        <div class="why-section">
-            <h2>Why RandSense</h2>
-            <!-- Existing content -->
+
+  <button class="btn-download" onclick="window.print()">&#8659; Download PDF</button>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       HERO SECTION
+       ══════════════════════════════════════════════════════════════ -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-brand">
+        <span class="hero-rand">Rand</span><span class="hero-sense">Sense</span>
+      </div>
+      <p class="hero-tagline">Making Cents of It All</p>
+      <h1 class="hero-headline">Affordable, Professional Tax &amp; Accounting for South Africans</h1>
+      <p class="hero-sub">
+        From simple tax returns to full company compliance — save up to 80% vs traditional accountant rates,
+        with expert service and zero hidden fees.
+      </p>
+      <div class="hero-cta">
+        <a href="#contact" class="cta-btn">Chat on WhatsApp</a>
+        <a href="#services" class="cta-ghost">View Services &amp; Pricing</a>
+      </div>
+      <div class="hero-stats">
+        <div>
+          <div class="hero-stat-value">Up to 80%</div>
+          <div class="hero-stat-label">Savings vs big-firm fees</div>
         </div>
-        <div class="community-giving" style="border-left: 5px solid #A8E6C1; padding: 10px; margin: 20px 0;">
-            <h3 style="color: #145A32;">Making Cents for Paarl</h3>
-            <p>10% of every paid invoice is donated equally to Heaven Night Shelter and Paulus Joubert High School in Paarl. When you use RandSense, your money does more than balance the books.</p>
+        <div>
+          <div class="hero-stat-value">10%</div>
+          <div class="hero-stat-label">Donated to community</div>
         </div>
-        <div class="contact-section">
-            <h2>Contact</h2>
-            <!-- Existing content -->
+        <div>
+          <div class="hero-stat-value">Flat Fees</div>
+          <div class="hero-stat-label">No hidden charges</div>
         </div>
+        <div>
+          <div class="hero-stat-value">WhatsApp</div>
+          <div class="hero-stat-label">Direct personal access</div>
+        </div>
+      </div>
     </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       INDIVIDUAL & COMMISSION EARNER SERVICES
+       ══════════════════════════════════════════════════════════════ -->
+  <section id="services" class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Individual &amp; Commission Earner Services</h2>
+        <p>Professional income tax returns and SARS dispute services for employees, commission earners, and self-employed individuals.</p>
+      </div>
+      <div class="service-grid">
+
+        <div class="service-card">
+          <div class="service-name">ITR12 Simple</div>
+          <div class="service-desc">Standard employee tax return with basic income and straightforward deductions.</div>
+          <div class="service-price">R400</div>
+          <div class="service-avg">avg R1 000</div>
+          <span class="service-badge">Save 60%</span>
+        </div>
+
+        <div class="service-card">
+          <div class="service-name">ITR12 Complex</div>
+          <div class="service-desc">Multiple income sources, rental income, investments, business income, or home office deductions.</div>
+          <div class="service-price">R650 – R1 250</div>
+          <div class="service-avg">avg R2 000</div>
+          <span class="service-badge">Save 68%</span>
+          <div class="service-note">Price depends on complexity</div>
+        </div>
+
+        <div class="service-card">
+          <div class="service-name">IRP6 Provisional Tax</div>
+          <div class="service-desc">Provisional tax return for commission earners, freelancers, and business owners subject to provisional tax.</div>
+          <div class="service-price">R150 – R200</div>
+          <div class="service-avg">avg R800</div>
+          <span class="service-badge">Save 80%</span>
+        </div>
+
+        <div class="service-card featured">
+          <div class="best-value-tag">Best Value</div>
+          <div class="service-name">ITR12 Complex + IRP6 Bundle</div>
+          <div class="service-desc">Complete tax solution for commission earners — your ITR12 return and both IRP6 provisional submissions bundled together.</div>
+          <div class="service-price">R950</div>
+          <div class="service-avg">avg R2 400</div>
+          <span class="service-badge">Save 60%</span>
+        </div>
+
+        <div class="service-card">
+          <div class="service-name">SARS RFR</div>
+          <div class="service-desc">Request for Reduced Assessment — we dispute and resolve incorrect or excessive SARS tax assessments on your behalf.</div>
+          <div class="service-price">R1 000</div>
+          <div class="service-avg">avg R3 000</div>
+          <span class="service-badge">Save 67%</span>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       SMALL BUSINESS SERVICES
+       ══════════════════════════════════════════════════════════════ -->
+  <section class="section section-white">
+    <div class="container">
+      <div class="section-header">
+        <h2>Small Business Services</h2>
+        <p>Complete accounting and tax compliance for micro, small, and medium entities — from annual financial statements to VAT returns and company tax.</p>
+      </div>
+
+      <!-- Annual Financial Statements -->
+      <div class="sub-section">
+        <div class="sub-section-heading">Annual Financial Statements (AFS)</div>
+        <div class="service-grid">
+          <div class="service-card">
+            <div class="service-name">Micro Entity</div>
+            <div class="service-desc">Annual financial statements for micro businesses with turnover under R1 million.</div>
+            <div class="service-price">R2 000 – R2 500</div>
+            <div class="service-avg">avg R8 000</div>
+            <span class="service-badge">Save 75%</span>
+          </div>
+          <div class="service-card">
+            <div class="service-name">Small Entity</div>
+            <div class="service-desc">Comprehensive AFS for small businesses with turnover under R10 million.</div>
+            <div class="service-price">R3 500 – R4 500</div>
+            <div class="service-avg">avg R14 000</div>
+            <span class="service-badge">Save 75%</span>
+          </div>
+          <div class="service-card">
+            <div class="service-name">Medium Entity</div>
+            <div class="service-desc">Full annual financial statements for medium-sized companies and close corporations.</div>
+            <div class="service-price">R7 500 – R9 000</div>
+            <div class="service-avg">avg R25 000</div>
+            <span class="service-badge">Save 70%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tax & Compliance -->
+      <div class="sub-section">
+        <div class="sub-section-heading">Tax &amp; Compliance</div>
+        <div class="service-grid">
+          <div class="service-card">
+            <div class="service-name">ITR14 Company Tax Return</div>
+            <div class="service-desc">Corporate income tax return for registered companies and close corporations.</div>
+            <div class="service-price">R600 – R1 000</div>
+            <div class="service-avg">avg R1 500</div>
+            <span class="service-badge">Save 60%</span>
+          </div>
+          <div class="service-card">
+            <div class="service-name">IRP6 Provisional Tax</div>
+            <div class="service-desc">Provisional tax submissions for companies and business owners — two returns per year.</div>
+            <div class="service-price">R200</div>
+            <div class="service-avg">avg R800</div>
+            <span class="service-badge">Save 75%</span>
+          </div>
+          <div class="service-card">
+            <div class="service-name">VAT201 Return</div>
+            <div class="service-desc">VAT return filing for VAT-registered businesses, submitted accurately and on time every period.</div>
+            <div class="service-price">R450</div>
+            <div class="service-avg">avg R500</div>
+            <span class="service-badge">Save 10%</span>
+          </div>
+          <div class="service-card">
+            <div class="service-name">SARS RFR</div>
+            <div class="service-desc">Business tax dispute — we request a reduced or corrected SARS assessment for your company.</div>
+            <div class="service-price">R1 000</div>
+            <div class="service-avg">avg R3 000</div>
+            <span class="service-badge">Save 67%</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       WHY RANDSENSE
+       ══════════════════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Why Choose RandSense?</h2>
+        <p>Quality tax and accounting services should be accessible to every South African — not only those who can afford large firm rates.</p>
+      </div>
+      <div class="why-grid">
+        <div class="why-card">
+          <div class="why-icon">💰</div>
+          <div class="why-title">Flat, Transparent Fees</div>
+          <div class="why-desc">No surprise invoices. The price you see is the price you pay — always.</div>
+        </div>
+        <div class="why-card">
+          <div class="why-icon">🎓</div>
+          <div class="why-title">Expert SA Tax Knowledge</div>
+          <div class="why-desc">Deep command of SARS requirements, provisional tax, and South African tax legislation.</div>
+        </div>
+        <div class="why-card">
+          <div class="why-icon">⚡</div>
+          <div class="why-title">Fast Turnaround</div>
+          <div class="why-desc">Deadline-focused service so you're never at risk of SARS penalties or late submission fees.</div>
+        </div>
+        <div class="why-card">
+          <div class="why-icon">📱</div>
+          <div class="why-title">Direct WhatsApp Access</div>
+          <div class="why-desc">Chat directly with your accountant via WhatsApp — no call centres, no ticket queues.</div>
+        </div>
+        <div class="why-card">
+          <div class="why-icon">🛡️</div>
+          <div class="why-title">SARS Dispute Support</div>
+          <div class="why-desc">We don't just file — we represent you if SARS issues an incorrect or excessive assessment.</div>
+        </div>
+        <div class="why-card">
+          <div class="why-icon">🤝</div>
+          <div class="why-title">Community-First Values</div>
+          <div class="why-desc">10% of every invoice is invested back into local communities and youth development in Paarl.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       COMMUNITY GIVING
+       ══════════════════════════════════════════════════════════════ -->
+  <section class="section section-community">
+    <div class="container">
+      <div class="section-header">
+        <h2>Making Cents for Our Community</h2>
+        <p>When you use RandSense, your money does more than balance the books.</p>
+      </div>
+      <div class="community-quote">
+        <p>
+          &#8220;<strong>10%</strong> of every <strong>Rand</strong> you pay is donated and invested into our under-privileged youth and communities as one of our <strong>KEY</strong> missions to help and grow our Community that raised us.&#8221;
+        </p>
+      </div>
+      <div class="community-grid">
+        <div class="community-card">
+          <h4>Heaven Night Shelter — Paarl</h4>
+          <p>Providing meals, shelter, and dignity to homeless and vulnerable people in the Paarl community.</p>
+        </div>
+        <div class="community-card">
+          <h4>Paulus Joubert High School — Paarl</h4>
+          <p>Investing in the next generation of young South Africans through educational support and resources.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       CONTACT
+       ══════════════════════════════════════════════════════════════ -->
+  <section id="contact" class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Get in Touch</h2>
+        <p>Ready to save on your taxes? Message directly on WhatsApp — no forms, no queues.</p>
+      </div>
+      <div class="contact-card">
+        <div class="contact-name">Matthew (Matty)</div>
+        <div class="contact-role">Tax Practitioner &amp; Founder, RandSense</div>
+        <div>
+          <a href="https://wa.me/27761408717" class="contact-wa-btn" target="_blank" rel="noopener noreferrer">
+            &#128241; WhatsApp Matty
+          </a>
+        </div>
+        <div class="contact-number">076 140 8717</div>
+        <hr class="contact-divider">
+        <div class="contact-tagline">
+          <strong style="color:#145A32;">RandSense</strong> — Making Cents of It All<br>
+          Serving South Africa with flat, affordable tax and accounting services.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    &copy; 2025 RandSense &middot; Making Cents of It All &middot; WhatsApp 076 140 8717 &middot; Paarl, South Africa
+  </footer>
+
 </body>
 </html>
