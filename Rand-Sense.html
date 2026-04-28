@@ -947,8 +947,112 @@ function renderClientInvoicesTab() {
             <tbody>${paymentRows}</tbody>
           </table>
         </div>
+        ${outstanding > 0 ? `
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid #E8F5E9;">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:10px;">Record Payment</div>
+          <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:160px;">
+              <label style="font-size:0.78rem;color:#555;display:block;margin-bottom:4px;">Amount Received</label>
+              <input id="inv-pay-amt-${inv.id}" type="number" min="0.01" step="0.01"
+                style="width:100%;padding:8px 10px;border:1px solid #C8E6C9;border-radius:6px;font-family:Poppins,sans-serif;font-size:0.9rem;color:#145A32;outline:none;"
+                placeholder="0.00" />
+              <div id="inv-pay-err-${inv.id}" style="display:none;color:#C0392B;font-size:0.78rem;margin-top:4px;"></div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:1px;flex-wrap:wrap;">
+              <button class="btn btn-sm"
+                style="background:#A8E6C1;color:#145A32;font-weight:700;border:none;padding:8px 14px;"
+                onclick="setInvoiceFullyPaid('${inv.id}', ${outstanding})">Fully Paid</button>
+              <button class="btn btn-sm"
+                style="background:#145A32;color:#fff;font-weight:700;border:none;padding:8px 14px;"
+                onclick="confirmInvoicePayment('${inv.id}', ${outstanding})">Confirm Payment</button>
+            </div>
+          </div>
+        </div>` : ''}
       </div>`;
   }).join('');
+}
+
+function setInvoiceFullyPaid(invoiceId, outstanding) {
+  const inp = document.getElementById('inv-pay-amt-' + invoiceId);
+  const err = document.getElementById('inv-pay-err-' + invoiceId);
+  if (!inp) return;
+  inp.value = parseFloat(outstanding).toFixed(2);
+  if (err) err.style.display = 'none';
+}
+
+async function confirmInvoicePayment(invoiceId, outstanding) {
+  const inp = document.getElementById('inv-pay-amt-' + invoiceId);
+  const err = document.getElementById('inv-pay-err-' + invoiceId);
+  if (!inp || !err) return;
+
+  const amount = parseFloat(inp.value);
+  if (!amount || amount <= 0) {
+    err.textContent = 'Amount must be greater than zero.';
+    err.style.display = 'block';
+    return;
+  }
+  if (amount > parseFloat(outstanding) + 0.001) {
+    err.textContent = 'Amount cannot exceed the outstanding balance of ' + _fmtZAR(outstanding) + '.';
+    err.style.display = 'block';
+    return;
+  }
+  err.style.display = 'none';
+
+  const c = state.currentClient;
+  showLoading('Recording payment…');
+  try {
+    const nowIso       = new Date().toISOString();
+    const newAmtPaid   = (parseFloat((state._clientInvoices||[]).find(i=>i.id===invoiceId)?.amount_paid)||0) + amount;
+    const newOutstanding = Math.max(0, parseFloat(outstanding) - amount);
+    const newStatus    = newOutstanding <= 0 ? 'paid' : 'partial';
+
+    await DB.Payments.create({
+      invoice_id:   invoiceId,
+      client_id:    c.id,
+      amount_paid:  amount,
+      payment_date: nowIso,
+    });
+
+    const invUpdate = {
+      amount_paid:        newAmtPaid,
+      amount_outstanding: newOutstanding,
+      status:             newStatus,
+    };
+    if (newStatus === 'paid') invUpdate.paid_date = nowIso;
+    await DB.Invoices.update(invoiceId, invUpdate);
+
+    // Refresh local invoice + payment state
+    const updatedInvs = await DB.Invoices.listByClient(c.id);
+    const byInv = {};
+    await Promise.all(updatedInvs.map(async inv => {
+      byInv[inv.id] = await DB.Payments.listByInvoice(inv.id).catch(() => []);
+    }));
+    state._clientInvoices = updatedInvs;
+    state._clientPayments = byInv;
+
+    // Refresh outstanding total on dashboard
+    try {
+      const rows = await DB.Invoices.listOutstanding();
+      state._outstandingTotal = rows.reduce((s, r) => s + (parseFloat(r.amount_outstanding) || 0), 0);
+    } catch(_) {}
+
+    // Sync pending_invoice on client record if applicable
+    const updatedInv = updatedInvs.find(i => i.id === invoiceId);
+    if (updatedInv) {
+      const idx = state.clients.findIndex(x => x.id === c.id);
+      if (idx >= 0) {
+        const pi = { ...(state.clients[idx].pending_invoice || {}), status: newStatus, amount_outstanding: newOutstanding };
+        if (newStatus === 'paid') { pi.stage = 'paid'; pi.paid_date = nowIso; }
+        state.clients[idx] = { ...state.clients[idx], pending_invoice: pi };
+      }
+    }
+
+    toast('Payment of ' + _fmtZAR(amount) + ' recorded.', 'success');
+  } catch(e) {
+    toast('Error recording payment: ' + e.message, 'error');
+  }
+  hideLoading();
+  renderClientDetail();
 }
 
 async function onYearChange(year) {
@@ -1473,7 +1577,7 @@ async function finalizeReturn() {
       _showFinalizeWarning('An invoice already exists for this return. Revise the existing invoice or contact support.');
       return;
     }
-    const invNum = await DB.Invoices.nextSequentialNumber();
+    const invNum = await DB.Invoices.nextNumber();
     const inv = await DB.Invoices.create({
       invoice_number:    invNum,
       client_id:         c.id,
@@ -4112,7 +4216,7 @@ async function triggerReadyToInvoice(service, price) {
     state._invPrefill = { clientId: c.id, service, price: parseFloat(price) || 0 };
     state.activeTab   = 'invoices';
     if (!state.clients.length) state.clients = await DB.Clients.list();
-    state._invNumber  = await DB.Invoices.nextNumber().catch(() => 'RS-' + new Date().getFullYear() + '-001');
+    state._invNumber  = await DB.Invoices.nextNumber().catch(() => 'RS-00001');
   } catch(e) {
     toast('Error: ' + e.message, 'error');
     hideLoading();
@@ -4261,7 +4365,7 @@ let _invLineKey = 0;
 
 async function openNewInvoice() {
   showLoading('Preparing invoice…');
-  let invNum = 'RS-' + new Date().getFullYear() + '-001';
+  let invNum = 'RS-00001';
   try {
     invNum = await DB.Invoices.nextNumber();
   } catch(e) { /* keep default */ }
@@ -4275,7 +4379,7 @@ function renderNewInvoice() {
   _renderInvNav();
   const today   = _todayISO();
   const due     = _addDaysISO(today, 30);
-  const invNum  = state._invNumber || ('RS-' + new Date().getFullYear() + '-001');
+  const invNum  = state._invNumber || 'RS-00001';
   const prefill = state._invPrefill || null;
   if (prefill) state._invPrefill = null; // consume once
 

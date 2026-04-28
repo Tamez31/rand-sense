@@ -609,29 +609,21 @@ const Invoices = {
   },
 
   async nextNumber() {
-    const sb   = getClient();
-    const year = new Date().getFullYear();
-    const r    = await sb
-      .from('invoices')
-      .select('invoice_number')
-      .like('invoice_number', `RS-${year}-%`);
-    if (r.error) throw new Error(r.error.message);
-    const count = (r.data || []).length;
-    return `RS-${year}-${String(count + 1).padStart(3, '0')}`;
-  },
-
-  // Sequential RS-00000 format (used for ITR12 finalize invoices)
-  async nextSequentialNumber() {
     const sb = getClient();
     const r  = await sb.from('invoices').select('invoice_number').like('invoice_number', 'RS-%');
     if (r.error) throw new Error(r.error.message);
     let max = 0;
     (r.data || []).forEach(row => {
-      const m = /^RS-(\d{5})$/.exec(row.invoice_number || '');
-      if (m) max = Math.max(max, parseInt(m[1], 10));
+      const num = row.invoice_number || '';
+      const m5  = /^RS-(\d{5})$/.exec(num);
+      const mY  = /^RS-\d{4}-(\d+)$/.exec(num);
+      if      (m5) max = Math.max(max, parseInt(m5[1], 10));
+      else if (mY) max = Math.max(max, parseInt(mY[1], 10));
     });
     return `RS-${String(max + 1).padStart(5, '0')}`;
   },
+
+  nextSequentialNumber() { return this.nextNumber(); },
 
   async listByClient(clientId) {
     const sb = getClient();
