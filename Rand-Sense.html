@@ -914,7 +914,7 @@ function renderClientInvoicesTab() {
   const fmtTs = iso => iso ? fmtDate(String(iso).slice(0, 10)) : '—';
   return invs.map(inv => {
     const payments    = (state._clientPayments || {})[inv.id] || [];
-    const outstanding = parseFloat(inv.amount_outstanding) || 0;
+    const outstanding = (inv.amount_outstanding != null) ? (parseFloat(inv.amount_outstanding) || 0) : (parseFloat(inv.total) || 0);
     const paidRow     = inv.status === 'paid' && inv.paid_date
       ? `<div style="font-size:0.78rem;color:#145A32;margin-top:4px;">Paid: ${fmtTs(inv.paid_date)}</div>` : '';
     const paymentRows = payments.length
@@ -4303,7 +4303,7 @@ function renderInvoiceList(invoices, payments) {
     : invoices.flatMap(inv => {
         const invPayments = payMap[inv.id] || [];
         const paidDateCell = inv.status === 'paid' && inv.paid_date
-          ? `<span style="font-size:0.78rem;color:#145A32;margin-left:6px;">(Paid ${fmtDate(inv.paid_date)})</span>` : '';
+          ? `<span style="font-size:0.78rem;color:#145A32;margin-left:6px;">(Paid ${fmtDate(String(inv.paid_date).slice(0, 10))})</span>` : '';
         const mainRow = `
           <tr>
             <td><strong style="color:#145A32;">${escH(inv.invoice_number)}</strong></td>
@@ -4325,7 +4325,7 @@ function renderInvoiceList(invoices, payments) {
                  <div style="font-size:0.75rem;font-weight:600;color:#145A32;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em;">Payment History</div>
                  ${invPayments.map(p =>
                    `<div style="font-size:0.8rem;color:#444;margin-bottom:2px;">
-                      ${fmtDate(p.payment_date)} &mdash; ${_fmtZAR(p.amount_paid)}
+                      ${fmtDate(String(p.payment_date).slice(0, 10))} &mdash; ${_fmtZAR(p.amount_paid)}
                     </div>`
                  ).join('')}
                </td>
@@ -4598,20 +4598,30 @@ async function saveInvoice(status) {
   showLoading('Saving invoice…');
   try {
     const inv = await DB.Invoices.create({
-      invoice_number: invNum,
-      client_id:      clientId,
-      invoice_date:   invDate,
-      due_date:       dueDate,
+      invoice_number:     invNum,
+      client_id:          clientId,
+      invoice_date:       invDate,
+      due_date:           dueDate,
       status,
       subtotal,
-      vat_amount: vatAmt,
+      vat_amount:         vatAmt,
       total,
-      notes: notes || null,
+      notes:              notes || null,
+      amount_paid:        0,
+      amount_outstanding: total,
     });
     await DB.InvoiceLines.createBatch(inv.id, lines);
 
     // Update client's pending_invoice to reflect the invoice is now raised
-    const piUpdate = { stage: 'invoiced', invoice_number: invNum, price: total, due_date: dueDate };
+    const piUpdate = {
+      stage:              'invoiced',
+      invoice_id:         inv.id,
+      invoice_number:     invNum,
+      status:             status,
+      price:              total,
+      due_date:           dueDate,
+      amount_outstanding: total,
+    };
     try {
       await DB.Clients.update(clientId, { pending_invoice: piUpdate });
       const idx = state.clients.findIndex(c => c.id === clientId);
