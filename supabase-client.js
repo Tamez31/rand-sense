@@ -60,6 +60,26 @@ const Clients = {
 // TRANSACTIONS
 // ============================================================
 
+// Supabase/PostgREST caps any single unpaginated request at 1000 rows
+// (server-side db-max-rows default). Any client-year with more than 1000
+// transactions was silently truncated to its first 1000 rows (by date) —
+// confirmed directly: FY2025 (1611 rows) cut off at 2024-10-01, FY2024
+// (1187 rows) cut off at 2023-12-30, both dropping the tail of the year
+// from every report built on top of listByYear/listByPeriod/listUnclassified.
+// Loop with .range() until a page returns fewer than pageSize rows.
+async function fetchAllPages(queryBuilder) {
+  const pageSize = 1000;
+  let all = [];
+  let offset = 0;
+  while (true) {
+    const page = unwrap(await queryBuilder.range(offset, offset + pageSize - 1));
+    all = all.concat(page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  return all;
+}
+
 const Transactions = {
   // Insert many at once (bank import batch)
   async insertBatch(rows) {
@@ -70,8 +90,8 @@ const Transactions = {
   // All transactions for a client in a financial year
   async listByYear(clientId, financialYear) {
     const sb = getClient();
-    return unwrap(
-      await sb
+    return fetchAllPages(
+      sb
         .from('transactions')
         .select('*')
         .eq('client_id', clientId)
@@ -83,8 +103,8 @@ const Transactions = {
   // All transactions for a client in a specific period
   async listByPeriod(clientId, financialYear, period) {
     const sb = getClient();
-    return unwrap(
-      await sb
+    return fetchAllPages(
+      sb
         .from('transactions')
         .select('*')
         .eq('client_id', clientId)
@@ -97,8 +117,8 @@ const Transactions = {
   // Unclassified transactions (no account_code) for a client
   async listUnclassified(clientId) {
     const sb = getClient();
-    return unwrap(
-      await sb
+    return fetchAllPages(
+      sb
         .from('transactions')
         .select('*')
         .eq('client_id', clientId)
@@ -227,6 +247,8 @@ const COA = {
       // Cost of Sales
       { client_id: clientId, account_code: '5001', account_name: 'Cost of Goods Sold',     account_type: 'cost_of_sales' },
       { client_id: clientId, account_code: '5002', account_name: 'Direct Labour',          account_type: 'cost_of_sales' },
+      { client_id: clientId, account_code: '5003', account_name: 'Funeral Expenses',       account_type: 'cost_of_sales' },
+      { client_id: clientId, account_code: '5004', account_name: 'Subcontractors',         account_type: 'cost_of_sales' },
       // Expenses
       { client_id: clientId, account_code: '6001', account_name: 'Accounting Fees',        account_type: 'expense' },
       { client_id: clientId, account_code: '6002', account_name: 'Advertising',            account_type: 'expense' },
@@ -256,6 +278,8 @@ const COA = {
       { client_id: clientId, account_code: '1300', account_name: 'Prepaid Expenses',       account_type: 'asset' },
       { client_id: clientId, account_code: '1500', account_name: 'Property, Plant & Equipment', account_type: 'asset' },
       { client_id: clientId, account_code: '1600', account_name: 'Accumulated Depreciation', account_type: 'asset' },
+      { client_id: clientId, account_code: '1700', account_name: 'Loan Receivable: LLN Gabler', account_type: 'asset' },
+      { client_id: clientId, account_code: '1710', account_name: 'Loan Receivable: HA Gabler',  account_type: 'asset' },
       // Liabilities
       { client_id: clientId, account_code: '2001', account_name: 'Trade Creditors',        account_type: 'liability' },
       { client_id: clientId, account_code: '2002', account_name: 'VAT Payable',            account_type: 'liability' },
@@ -719,6 +743,141 @@ const InvoiceLines = {
 };
 
 // ============================================================
+// INDIVIDUAL CONTACTS
+// Standalone table for personal/individual clients (tax returns,
+// personal invoicing) — separate from company/commission clients.
+// ============================================================
+
+const IndividualContacts = {
+  async list() {
+    const sb = getClient();
+    return unwrap(
+      await sb.from('individual_contacts').select('*').order('name')
+    );
+  },
+
+  async get(id) {
+    const sb   = getClient();
+    const rows = unwrap(await sb.from('individual_contacts').select('*').eq('id', id).limit(1));
+    return rows[0] || null;
+  },
+
+  async create(data) {
+    const sb   = getClient();
+    const rows = unwrap(await sb.from('individual_contacts').insert([data]).select());
+    return rows[0];
+  },
+
+  async update(id, data) {
+    const sb   = getClient();
+    const rows = unwrap(await sb.from('individual_contacts').update(data).eq('id', id).select());
+    return rows[0];
+  },
+
+  async delete(id) {
+    const sb = getClient();
+    unwrap(await sb.from('individual_contacts').delete().eq('id', id));
+  },
+};
+
+// ============================================================
+// JOURNALS — stored in the transactions table with source_bank='Journal'
+//
+// Sign convention (debit-positive):
+//   amount > 0  =  DEBIT  to account_code
+//   amount < 0  =  CREDIT to account_code
+//
+// period field holds the journal identifier: 'JNL-N' (N = sequential number)
+// description = 'JNL-N: {narration}' on every line of the same journal
+// Journal numbers are global per client (not per year, not resettable).
+// Posted journals are PERMANENT — no delete or edit is supported here.
+// ============================================================
+
+const _r2 = n => Math.round(((n || 0) + Number.EPSILON) * 100) / 100;
+
+const Journals = {
+  // Next unused journal number for this client (1-based, global across all years)
+  async nextNumber(clientId) {
+    const sb = getClient();
+    const rows = unwrap(
+      await sb
+        .from('transactions')
+        .select('period')
+        .eq('client_id', clientId)
+        .eq('source_bank', 'Journal')
+    );
+    if (!rows.length) return 1;
+    const nums = rows.map(r => parseInt((r.period || '').replace('JNL-', '')) || 0);
+    return Math.max(...nums) + 1;
+  },
+
+  // Post a new journal entry.
+  // lines = [{ account_code, account_name, debit, credit }, ...]
+  // Exactly one of debit/credit must be non-zero per line.
+  // Total debits must equal total credits (caller should validate first).
+  async post(clientId, financialYear, date, narration, lines) {
+    const num    = await Journals.nextNumber(clientId);
+    const period = `JNL-${num}`;
+    const desc   = `${period}: ${narration}`;
+
+    const rows = lines.map(l => ({
+      client_id:      clientId,
+      financial_year: financialYear,
+      date,
+      description:    desc,
+      period,
+      source_bank:    'Journal',
+      account_code:   l.account_code,
+      account_name:   l.account_name,
+      amount:         l.debit > 0 ? _r2(l.debit) : _r2(-l.credit),
+      vat_type:       'none',
+      vat_amount:     0,
+      is_reconciled:  false,
+      balance:        null,
+    }));
+
+    const sb = getClient();
+    unwrap(await sb.from('transactions').insert(rows).select());
+    return { number: num, period };
+  },
+
+  // All journal rows for a client, all years (grouped in JS by caller)
+  async listByClient(clientId) {
+    const sb = getClient();
+    const rows = unwrap(
+      await sb
+        .from('transactions')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('source_bank', 'Journal')
+    );
+    return _sortJournals(rows);
+  },
+
+  // Journal rows for a specific financial year
+  async listByYear(clientId, financialYear) {
+    const sb = getClient();
+    const rows = unwrap(
+      await sb
+        .from('transactions')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('financial_year', financialYear)
+        .eq('source_bank', 'Journal')
+    );
+    return _sortJournals(rows);
+  },
+};
+
+function _sortJournals(rows) {
+  return rows.slice().sort((a, b) => {
+    const na = parseInt((a.period || '').replace('JNL-', '')) || 0;
+    const nb = parseInt((b.period || '').replace('JNL-', '')) || 0;
+    return na - nb || (a.date || '').localeCompare(b.date || '');
+  });
+}
+
+// ============================================================
 // EXPORTS — attach to window for access from other scripts
 // ============================================================
 
@@ -733,6 +892,8 @@ window.DB = {
   Invoices,
   InvoiceLines,
   Payments,
+  IndividualContacts,
+  Journals,
   migrateLocalStorageToSupabase,
   clearAllData,
 };

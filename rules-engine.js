@@ -370,7 +370,13 @@ const ITR12_CATEGORIES = {
     { code: 'ITR-EXP-CEL',  name: 'Cell phone' },
     { code: 'ITR-EXP-DEP',  name: 'Depreciation / Wear & tear' },
     { code: 'ITR-EXP-ENT',  name: 'Entertainment' },
-    { code: 'ITR-EXP-HOM',  name: 'Home office' },
+    // Home office sub-items — individually classifiable for audit detail,
+    // but aggregated into ONE "Home office" line by buildCommissionIS()
+    // with a single shared business-use % applied once to their combined
+    // total (not three independent percentages). See group: 'home_office'.
+    { code: 'ITR-EXP-HOM-BND', name: 'Home Office - Bond Interest', group: 'home_office' },
+    { code: 'ITR-EXP-HOM-WTR', name: 'Home Office - Water',         group: 'home_office' },
+    { code: 'ITR-EXP-HOM-ELE', name: 'Home Office - Electricity',   group: 'home_office' },
     { code: 'ITR-EXP-INS',  name: 'Insurance' },
     { code: 'ITR-EXP-INT',  name: 'Internet' },
     { code: 'ITR-EXP-LEG',  name: 'Legal fees' },
@@ -379,15 +385,26 @@ const ITR12_CATEGORIES = {
     { code: 'ITR-EXP-PRI',  name: 'Printing & stationery' },
     { code: 'ITR-EXP-SAL',  name: 'Salaries & wages' },
     { code: 'ITR-EXP-SUB',  name: 'Subscriptions' },
-    { code: 'ITR-EXP-TRL',  name: 'Travel - local' },
-    { code: 'ITR-EXP-TRO',  name: 'Travel - overseas' },
+    // Travel sub-items — individually classifiable for audit detail, but
+    // aggregated into ONE "Travel" line by buildCommissionIS() with a single
+    // shared business-use % applied once to their combined total. See
+    // group: 'travel'.
+    { code: 'ITR-EXP-TRL',  name: 'Travel - local',    group: 'travel' },
+    { code: 'ITR-EXP-TRO',  name: 'Travel - overseas', group: 'travel' },
     { code: 'ITR-EXP-UNI',  name: 'Uniforms / protective clothing' },
     { code: 'ITR-EXP-OTH',  name: 'Other expenses' },
+  ],
+  // Personal/non-business transactions pulled through the business account
+  // (e.g. rent, groceries, personal purchases). Deliberately excluded from
+  // totalIncome/totalExpenses/netIncome in buildCommissionIS() — shown only
+  // as a memo total below the income statement, not part of the P&L.
+  personal: [
+    { code: 'ITR-PERS-DRW', name: 'Drawings (personal, non-deductible)' },
   ],
 };
 
 // Flat list for lookup by code
-const ITR12_ALL = [...ITR12_CATEGORIES.income, ...ITR12_CATEGORIES.expenses];
+const ITR12_ALL = [...ITR12_CATEGORIES.income, ...ITR12_CATEGORIES.expenses, ...ITR12_CATEGORIES.personal];
 function getITR12Category(code) {
   return ITR12_ALL.find(c => c.code === code) || null;
 }

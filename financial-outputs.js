@@ -95,10 +95,31 @@ function buildOpeningMap(openingBalances) {
 // Returns { ok, error, data }
 // data = { income, costOfSales, expenses, grossProfit, netProfit,
 //          revenue, totalExpenses, lines, comparativeAvailable }
-function buildIncomeStatement(transactions, coa, priorYearTransactions, hideZeros) {
+function buildIncomeStatement(transactions, coa, priorYearTransactions, hideZeros, staticComparatives) {
   try {
-    const txMap    = netByAccount(transactions);
-    const priorMap = netByAccount(priorYearTransactions || []);
+    // Journal entries are stored debit-positive (+DR, -CR). IS expects bank-perspective
+    // (negative = expense, positive = income), so flip the sign for journal rows only.
+    const flipJnl   = txns => txns.map(t => t.source_bank === 'Journal' ? {...t, amount: -(t.amount||0)} : t);
+    const txMap     = netByAccount(flipJnl(transactions));
+    const hasPriorTxs = (priorYearTransactions || []).some(t => t.account_code);
+    // Build priorMap: prefer live prior-year transactions; fall back to static comparatives
+    // stored in opening_balances (financial_year = prior year, IS account types only).
+    // financial_year='2025' rows for income/cost_of_sales/expense = FY2025 full-year P&L totals
+    // for static comparative display — NOT opening balances in the traditional sense.
+    let priorMap;
+    if (hasPriorTxs) {
+      priorMap = netByAccount(flipJnl(priorYearTransactions));
+    } else if ((staticComparatives || []).length > 0) {
+      const _coaByCode = new Map(coa.map(a => [a.account_code, a]));
+      priorMap = new Map();
+      for (const ob of staticComparatives) {
+        const type = _coaByCode.get(ob.account_code)?.account_type;
+        if (!['income','cost_of_sales','expense'].includes(type)) continue;
+        priorMap.set(ob.account_code, { net: r2(ob.amount) });
+      }
+    } else {
+      priorMap = new Map();
+    }
     const merged   = mergeWithCOA(coa, txMap, null);
 
     const incomeLines = merged
@@ -153,8 +174,7 @@ function buildIncomeStatement(transactions, coa, priorYearTransactions, hideZero
     const netProfit      = r2(grossProfit - totalExpenses);
     const netProfitCom   = r2(grossProfitCom - expCom);
 
-    // Comparative is available when prior year has at least one classified transaction
-    const comparativeAvailable = (priorYearTransactions || []).some(t => t.account_code);
+    const comparativeAvailable = hasPriorTxs || priorMap.size > 0;
 
     return {
       ok: true,
@@ -204,8 +224,18 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
       });
     }
 
-    // Bank account: net of all transactions (all account types flow through bank)
-    const bankTxNet = r2(transactions.reduce((s, t) => s + (t.amount || 0), 0));
+    // Bank account net: regular transactions use bank-perspective sign directly.
+    // Journal entries are balanced (sum = 0) so their total doesn't affect the bank,
+    // EXCEPT for journal lines explicitly posted to the bank account — those must be
+    // added separately (stored debit-positive: +DR bank = cash in, -CR bank = cash out).
+    const _coaByCodeBS = new Map(coa.map(a => [a.account_code, a]));
+    const _isBankCodeBS = code => code === '1001' ||
+      (_coaByCodeBS.get(code)?.account_name || '').toLowerCase().includes('bank');
+    const bankTxNet = r2(
+      transactions.filter(t => t.source_bank !== 'Journal').reduce((s,t) => s + (t.amount||0), 0) +
+      transactions.filter(t => t.source_bank === 'Journal' && _isBankCodeBS(t.account_code))
+                  .reduce((s,t) => s + (t.amount||0), 0)
+    );
 
     // Identify the retained earnings account by code or name
     const _isRE = a =>
@@ -329,9 +359,10 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
 //
 // Net cash movement = opening bank balance change
 // priorYearTransactions (optional): classified prior year transactions for comparative
-function buildCashFlow(transactions, coa, openingBalances, priorYearTransactions) {
+function buildCashFlow(transactions, coa, openingBalances, priorYearTransactions, staticComparatives) {
   try {
-    const txMap = netByAccount(transactions);
+    const flipJnl = txns => txns.map(t => t.source_bank === 'Journal' ? {...t, amount: -(t.amount||0)} : t);
+    const txMap = netByAccount(flipJnl(transactions));
 
     // Build a lookup: account_code → account_type from COA
     const typeByCode = new Map(coa.map(a => [a.account_code, a.account_type]));
@@ -371,8 +402,15 @@ function buildCashFlow(transactions, coa, openingBalances, priorYearTransactions
       }
     }
 
-    // Net cash movement = total of all transactions (change in bank balance)
-    const netMovement = r2(transactions.reduce((s, t) => s + (t.amount || 0), 0));
+    // Net cash movement: regular transactions only + journal lines posted to bank account.
+    const _coaByCodeCF = new Map(coa.map(a => [a.account_code, a]));
+    const _isBankCodeCF = code => code === '1001' ||
+      (_coaByCodeCF.get(code)?.account_name || '').toLowerCase().includes('bank');
+    const netMovement = r2(
+      transactions.filter(t => t.source_bank !== 'Journal').reduce((s,t) => s + (t.amount||0), 0) +
+      transactions.filter(t => t.source_bank === 'Journal' && _isBankCodeCF(t.account_code))
+                  .reduce((s,t) => s + (t.amount||0), 0)
+    );
 
     // Opening bank balance from opening balances
     const obMap = buildOpeningMap(openingBalances);
@@ -394,10 +432,12 @@ function buildCashFlow(transactions, coa, openingBalances, priorYearTransactions
     const reconciled = r2(Math.abs((operating + investing + financing) - netMovement)) <= 0.02;
 
     // ── Prior year comparative ─────────────────────────────────
-    const priorYearAvailable = (priorYearTransactions || []).some(t => t.account_code);
+    const hasPriorTxsCF     = (priorYearTransactions || []).some(t => t.account_code);
+    const hasStaticCF       = (staticComparatives || []).length > 0;
+    const priorYearAvailable = hasPriorTxsCF || hasStaticCF;
     let priorOperating = 0, priorInvesting = 0, priorFinancing = 0;
 
-    if (priorYearAvailable) {
+    if (hasPriorTxsCF) {
       const priorTxMap = netByAccount(priorYearTransactions);
       for (const [code, { name, net }] of priorTxMap.entries()) {
         const type = typeByCode.get(code);
@@ -411,10 +451,22 @@ function buildCashFlow(transactions, coa, openingBalances, priorYearTransactions
             priorFinancing = r2(priorFinancing + net); break;
         }
       }
+    } else if (hasStaticCF) {
+      // Static IS comparatives: sum all IS account amounts for prior-year operating.
+      // Stored bank-perspective (income positive, expenses negative); sum = net profit.
+      for (const ob of staticComparatives) {
+        const type = typeByCode.get(ob.account_code);
+        if (['income','cost_of_sales','expense'].includes(type)) {
+          priorOperating = r2(priorOperating + (ob.amount || 0));
+        }
+      }
     }
 
     const priorNetMovement = priorYearAvailable
-      ? r2((priorYearTransactions || []).reduce((s, t) => s + (t.amount || 0), 0))
+      ? r2(
+          (priorYearTransactions||[]).filter(t => t.source_bank !== 'Journal').reduce((s,t) => s + (t.amount||0), 0) +
+          (priorYearTransactions||[]).filter(t => t.source_bank === 'Journal' && _isBankCodeCF(t.account_code)).reduce((s,t) => s + (t.amount||0), 0)
+        )
       : 0;
 
     return {
@@ -452,7 +504,7 @@ function buildCashFlow(transactions, coa, openingBalances, priorYearTransactions
 //   Debit  — asset, expense, cost_of_sales
 //   Credit — income, liability, equity
 // priorYearTransactions (optional): classified prior year transactions for comparative columns
-function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netProfit, priorYearTransactions) {
+function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netProfit, priorYearTransactions, staticComparatives) {
   try {
     // COA lookup: code → { account_name, account_type }
     const coaByCode = new Map(coa.map(a => [a.account_code, a]));
@@ -488,6 +540,14 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
       const accName  = coaEntry?.account_name || t.account_name || t.account_code;
       const accType  = coaEntry?.account_type || 'expense';
 
+      if (t.source_bank === 'Journal') {
+        // Journal entries: post directly to the named account — no implicit bank leg.
+        // Stored convention: amount > 0 = debit to account, amount < 0 = credit to account.
+        if ((t.amount || 0) > 0) post(t.account_code, accName, accType, abs, 0);
+        else                      post(t.account_code, accName, accType, 0,   abs);
+        continue;
+      }
+
       if ((t.amount || 0) > 0) {
         // Money IN: DR Bank, CR classified account (income / asset / equity credit)
         post(bankCode,       bankName, 'asset',  abs, 0  );
@@ -497,6 +557,25 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
         post(t.account_code, accName,  accType,  abs, 0  );
         post(bankCode,       bankName, 'asset',  0,   abs);
       }
+    }
+
+    // Inject opening balances for balance-sheet accounts into the ledger.
+    // This ensures accounts with no transactions yet (e.g. loan receivables,
+    // equity at period start) still appear in the TB with their correct
+    // opening-balance figures. IS accounts (income/COS/expense) are excluded
+    // because their OB feeds the comparative IS, not the current-period TB.
+    // RE is included here so its opening balance carries through; the synthetic
+    // RE injection below is suppressed when OBs are present to avoid
+    // double-counting net profit.
+    for (const ob of (openingBalances || [])) {
+      if (!ob.account_code) continue;
+      const coaEntry = coaByCode.get(ob.account_code);
+      const accType  = coaEntry?.account_type || 'asset';
+      if (!['asset', 'liability', 'equity'].includes(accType)) continue;
+      const accName = coaEntry?.account_name || ob.account_name || ob.account_code;
+      const amt = r2(ob.amount || 0);
+      if (amt > 0)      post(ob.account_code, accName, accType, amt, 0);
+      else if (amt < 0) post(ob.account_code, accName, accType, 0, Math.abs(amt));
     }
 
     // Compute net balance per account and assign to debit or credit side.
@@ -525,9 +604,15 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
 
     const sort = arr => arr.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 
-    const filtered = hideZeros
-      ? lines.filter(l => l.debit !== 0 || l.credit !== 0)
-      : lines;
+    // NOTE: hideZeros must NEVER filter lines this early. Prior-year (comparative)
+    // values are only attached to each line later via _addPrior — filtering on
+    // current-year debit/credit here would silently drop any account whose
+    // CURRENT balance is zero but whose PRIOR balance is real (e.g. a liability
+    // fully offset by this year's journals but with a genuine FY2025 closing
+    // balance), corrupting both columns' totals. All group arrays below are
+    // built from the FULL unfiltered set; hideZeros is applied only to the
+    // final display arrays, after every total has already been computed.
+    const filtered = lines;
 
     // ── IS sub-groups ─────────────────────────────────────────
     const incomeLines = sort(filtered.filter(l => l.type === 'income'));
@@ -549,10 +634,13 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
     const equityLines = sort(filtered.filter(l => l.type === 'equity'));
 
     // ── Inject computed retained earnings into equity section ──
-    // Only when openingBalances and netProfit are supplied (company TB).
-    // The synthetic line is excluded from grand DR/CR totals so the
-    // transaction-based balance is not disturbed.
-    if (openingBalances !== undefined && netProfit !== undefined) {
+    // Only when openingBalances and netProfit are supplied (company TB) AND
+    // there are no opening balances. When OBs exist, RE was already posted
+    // into the ledger above (showing the opening balance); adding synthetic
+    // RE on top would double-count net profit against the IS accounts.
+    // Without OBs, this synthetic line plugs the gap between IS net profit
+    // and the equity section so the BS section of the TB visually balances.
+    if (openingBalances !== undefined && netProfit !== undefined && !(openingBalances || []).length) {
       const reAccount = coa.find(a =>
         a.is_active && a.account_type === 'equity' &&
         (a.account_code === '3002' || a.account_name.toLowerCase().includes('retained earnings'))
@@ -591,16 +679,19 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
     const balanceEffect    = r2(totalAssets - totalLiabilities - totalEquity);
 
     // ── Prior year double-entry ledger ────────────────────────
-    const priorYearAvailable = (priorYearTransactions || []).some(t => t.account_code);
+    const hasPriorTxsTB     = (priorYearTransactions || []).some(t => t.account_code);
+    const hasStaticTB       = (staticComparatives || []).length > 0;
+    const priorYearAvailable = hasPriorTxsTB || hasStaticTB;
     const priorLedger = new Map();
 
-    if (priorYearAvailable) {
-      const postPrior = (code, name, type, dr, cr) => {
-        if (!priorLedger.has(code)) priorLedger.set(code, { debit: 0, credit: 0 });
-        const e = priorLedger.get(code);
-        e.debit  = r2(e.debit  + dr);
-        e.credit = r2(e.credit + cr);
-      };
+    const _postPriorTB = (code, name, type, dr, cr) => {
+      if (!priorLedger.has(code)) priorLedger.set(code, { debit: 0, credit: 0 });
+      const e = priorLedger.get(code);
+      e.debit  = r2(e.debit  + dr);
+      e.credit = r2(e.credit + cr);
+    };
+
+    if (hasPriorTxsTB) {
       for (const t of (priorYearTransactions || [])) {
         if (!t.account_code) continue;
         const abs = Math.abs(t.amount || 0);
@@ -609,12 +700,43 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
         const accName  = coaEntry?.account_name || t.account_name || t.account_code;
         const accType  = coaEntry?.account_type || 'expense';
         if ((t.amount || 0) > 0) {
-          postPrior(bankCode, bankName, 'asset', abs, 0);
-          postPrior(t.account_code, accName, accType, 0, abs);
+          _postPriorTB(bankCode, bankName, 'asset', abs, 0);
+          _postPriorTB(t.account_code, accName, accType, 0, abs);
         } else {
-          postPrior(t.account_code, accName, accType, abs, 0);
-          postPrior(bankCode, bankName, 'asset', 0, abs);
+          _postPriorTB(t.account_code, accName, accType, abs, 0);
+          _postPriorTB(bankCode, bankName, 'asset', 0, abs);
         }
+      }
+    } else if (hasStaticTB) {
+      // Static IS comparatives: post IS accounts directly (no bank leg).
+      // Stored bank-perspective: income positive → CR, expense/COS negative → DR.
+      for (const ob of staticComparatives) {
+        if (!ob.account_code) continue;
+        const abs = Math.abs(ob.amount || 0);
+        if (abs === 0) continue;
+        const coaEntry = coaByCode.get(ob.account_code);
+        const accName  = coaEntry?.account_name || ob.account_name || ob.account_code;
+        const accType  = coaEntry?.account_type || 'expense';
+        if (!['income','cost_of_sales','expense'].includes(accType)) continue;
+        if ((ob.amount || 0) > 0) _postPriorTB(ob.account_code, accName, accType, 0, abs); // income → CR
+        else                       _postPriorTB(ob.account_code, accName, accType, abs, 0); // expense/COS → DR
+      }
+    }
+
+    // Balance Sheet prior-year comparative: the FY2026 opening balance IS the
+    // FY2025 closing balance, so post asset/liability/equity opening balances
+    // into the prior ledger too (mirrors the current-year injection above).
+    // Without this, BS lines have no entry in priorLedger and _addPrior zeroes them.
+    if (priorYearAvailable) {
+      for (const ob of (openingBalances || [])) {
+        if (!ob.account_code) continue;
+        const coaEntry = coaByCode.get(ob.account_code);
+        const accType  = coaEntry?.account_type || 'asset';
+        if (!['asset', 'liability', 'equity'].includes(accType)) continue;
+        const accName = coaEntry?.account_name || ob.account_name || ob.account_code;
+        const amt = r2(ob.amount || 0);
+        if (amt > 0)      _postPriorTB(ob.account_code, accName, accType, amt, 0);
+        else if (amt < 0) _postPriorTB(ob.account_code, accName, accType, 0, Math.abs(amt));
       }
     }
 
@@ -638,6 +760,9 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
     const priorTotalAssets      = r2(assetLines.reduce((s, l)   => s + l.priorDebit  - l.priorCredit, 0));
     const priorTotalLiabilities = r2(liabLines.reduce((s, l)    => s + l.priorCredit - l.priorDebit,  0));
     const priorTotalEquity      = r2(equityLines.reduce((s, l)  => s + l.priorCredit - l.priorDebit,  0));
+    // Accounting-equation check for the comparative column (FY2025 closing balances
+    // should always balance, since they come from the signed AFS).
+    const priorBalanceEffect    = r2(priorTotalAssets - priorTotalLiabilities - priorTotalEquity);
 
     // ── Grand totals ──────────────────────────────────────────
     // Synthetic retained earnings is excluded so DR=CR stays intact.
@@ -652,9 +777,23 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
     const priorTotalDebits  = r2(txLines.reduce((s, l) => s + l.priorDebit,  0));
     const priorTotalCredits = r2(txLines.reduce((s, l) => s + l.priorCredit, 0));
 
+    // ── hideZeros display filter ───────────────────────────────
+    // Applied ONLY now, after every total above has already been computed
+    // from the full unfiltered set. A line is hidden only when it has no
+    // balance in EITHER column — a real prior-year balance must never be
+    // suppressed just because the current-year balance happens to be zero.
+    const _hasBalance    = l => l.debit !== 0 || l.credit !== 0 || l.priorDebit !== 0 || l.priorCredit !== 0;
+    const _displayFilter = arr => hideZeros ? arr.filter(_hasBalance) : arr;
+    const dispIncomeLines = _displayFilter(incomeLines);
+    const dispCosLines    = _displayFilter(cosLines);
+    const dispExpLines    = _displayFilter(expLines);
+    const dispAssetLines  = _displayFilter(assetLines);
+    const dispLiabLines   = _displayFilter(liabLines);
+    const dispEquityLines = _displayFilter(equityLines);
+
     // Full line list for CSV/print (includes synthetic RE for display)
-    const allLines = [...incomeLines, ...cosLines, ...expLines,
-                      ...assetLines,  ...liabLines, ...equityLines];
+    const allLines = [...dispIncomeLines, ...dispCosLines, ...dispExpLines,
+                      ...dispAssetLines,  ...dispLiabLines, ...dispEquityLines];
 
     return {
       ok: true,
@@ -662,15 +801,15 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
       diff,
       data: {
         // IS sub-groups
-        incomeLines, cosLines, expLines,
+        incomeLines: dispIncomeLines, cosLines: dispCosLines, expLines: dispExpLines,
         grossIncome, totalCOS, grossProfit, totalExpenses, netProfit,
         // IS prior year subtotals
         priorGrossIncome, priorTotalCOS, priorGrossProfit, priorTotalExpenses, priorNetProfit,
         // BS sub-groups
-        assetLines, liabLines, equityLines,
+        assetLines: dispAssetLines, liabLines: dispLiabLines, equityLines: dispEquityLines,
         totalAssets, totalLiabilities, totalEquity, balanceEffect,
         // BS prior year subtotals
-        priorTotalAssets, priorTotalLiabilities, priorTotalEquity,
+        priorTotalAssets, priorTotalLiabilities, priorTotalEquity, priorBalanceEffect,
         // Grand totals
         totalDebits, totalCredits,
         priorTotalDebits, priorTotalCredits,
@@ -696,7 +835,14 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
 // homeOfficeOptions (optional): { active: boolean, businessPct: string|number }
 //   When active, ITR-EXP-HOM is split: only the business % appears on the
 //   statement. Full amount and calculation are preserved for verification.
-function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOptions) {
+//
+// travelOptions (optional): { active: boolean, businessPct: string|number }
+//   Same pattern as homeOfficeOptions, applied to the combined Travel
+//   (local + overseas) total.
+//
+// cellPhoneOptions (optional): { active: boolean, businessPct: string|number }
+//   Same pattern as homeOfficeOptions, applied to the Cell phone line.
+function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOptions, travelOptions, cellPhoneOptions) {
   try {
     const txMap = netByAccount(transactions);
 
@@ -706,7 +852,7 @@ function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOp
       cats.map(cat => {
         const entry = txMap.get(cat.code);
         const net   = entry ? r2(entry.net) : 0;
-        return { code: cat.code, name: cat.name, amount: net };
+        return { ...cat, amount: net }; // spread preserves extra fields like group
       });
 
     const bankIncomeLines = mapLines(ITR12_CATEGORIES.income);
@@ -733,24 +879,113 @@ function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOp
       ? hoPctRaw : null;
     const useHOSplit = hoPct !== null;
 
-    let hoSplitData = null; // populated when split fires on a non-zero HO line
+    let hoSplitData = null; // populated when split fires on a non-zero combined HO amount
 
-    const expenseLines = mapLines(ITR12_CATEGORIES.expenses)
+    // ── Home office aggregation ─────────────────────────────────
+    // Bond Interest / Water / Electricity are individually classifiable
+    // (group: 'home_office') for transaction-level audit detail, but SARS's
+    // ITR12 wants a single "Home office" figure — so they're summed into ONE
+    // combined amount here, with the business-use % applied ONCE to that
+    // combined total (not three independent percentages), then rendered as
+    // a single line in the same position the old single ITR-EXP-HOM code
+    // used to occupy.
+    const rawExpenseLines = mapLines(ITR12_CATEGORIES.expenses)
+      .map(l => ({ ...l, amount: r2(-l.amount) })); // negative tx amounts → positive display
+
+    const hoMembers    = rawExpenseLines.filter(l => l.group === 'home_office');
+    const hoFullAmount = r2(hoMembers.reduce((s, l) => s + l.amount, 0));
+    let   hoDisplayAmount = hoFullAmount;
+
+    if (useHOSplit && hoFullAmount > 0) {
+      const businessAmount = r2(hoFullAmount * hoPct / 100);
+      const personalAmount = r2(hoFullAmount - businessAmount);
+      hoSplitData = {
+        fullAmount: hoFullAmount, businessAmount, personalAmount, pct: hoPct,
+        breakdown: hoMembers.map(l => ({ name: l.name, amount: l.amount })),
+      };
+      hoDisplayAmount = businessAmount;
+    }
+
+    // ── Travel split (same combine-then-split pattern as home office) ──
+    const travelActive = !!(travelOptions && travelOptions.active);
+    const travelPctRaw = travelActive
+      ? parseFloat(String(travelOptions.businessPct || '0').replace(/[^0-9.]/g, ''))
+      : null;
+    const travelPct    = travelActive && travelPctRaw !== null && !isNaN(travelPctRaw) && travelPctRaw >= 0 && travelPctRaw <= 100
+      ? travelPctRaw : null;
+    const useTravelSplit = travelPct !== null;
+
+    let travelSplitData = null;
+
+    const travelMembers    = rawExpenseLines.filter(l => l.group === 'travel');
+    const travelFullAmount = r2(travelMembers.reduce((s, l) => s + l.amount, 0));
+    let   travelDisplayAmount = travelFullAmount;
+
+    if (useTravelSplit && travelFullAmount > 0) {
+      const businessAmount = r2(travelFullAmount * travelPct / 100);
+      const personalAmount = r2(travelFullAmount - businessAmount);
+      travelSplitData = {
+        fullAmount: travelFullAmount, businessAmount, personalAmount, pct: travelPct,
+        breakdown: travelMembers.map(l => ({ name: l.name, amount: l.amount })),
+      };
+      travelDisplayAmount = businessAmount;
+    }
+
+    // ── Cell phone split ────────────────────────────────────────
+    const cellActive = !!(cellPhoneOptions && cellPhoneOptions.active);
+    const cellPctRaw = cellActive
+      ? parseFloat(String(cellPhoneOptions.businessPct || '0').replace(/[^0-9.]/g, ''))
+      : null;
+    const cellPct    = cellActive && cellPctRaw !== null && !isNaN(cellPctRaw) && cellPctRaw >= 0 && cellPctRaw <= 100
+      ? cellPctRaw : null;
+    const useCellSplit = cellPct !== null;
+
+    let cellSplitData = null;
+    const cellLine        = rawExpenseLines.find(l => l.code === 'ITR-EXP-CEL');
+    const cellFullAmount  = cellLine ? cellLine.amount : 0;
+    let   cellDisplayAmount = cellFullAmount;
+
+    if (useCellSplit && cellFullAmount > 0) {
+      const businessAmount = r2(cellFullAmount * cellPct / 100);
+      const personalAmount = r2(cellFullAmount - businessAmount);
+      cellSplitData = { fullAmount: cellFullAmount, businessAmount, personalAmount, pct: cellPct };
+      cellDisplayAmount = businessAmount;
+    }
+
+    let hoInserted = false;
+    let travelInserted = false;
+    const expenseLines = rawExpenseLines
       .map(l => {
-        let amount = r2(-l.amount); // negative tx amounts → positive display
-        if (useHOSplit && l.code === 'ITR-EXP-HOM' && amount > 0) {
-          const fullAmount     = amount;
-          const businessAmount = r2(fullAmount * hoPct / 100);
-          const personalAmount = r2(fullAmount - businessAmount);
-          hoSplitData = { fullAmount, businessAmount, personalAmount, pct: hoPct };
-          amount = businessAmount;
+        if (l.group === 'home_office') {
+          if (hoInserted) return null; // drop other HO members — combined into the first slot
+          hoInserted = true;
+          return { code: 'ITR-EXP-HOM', name: 'Home office', amount: hoDisplayAmount };
         }
-        return { ...l, amount };
+        if (l.group === 'travel') {
+          if (travelInserted) return null; // drop other travel members — combined into the first slot
+          travelInserted = true;
+          return { code: 'ITR-EXP-TRV', name: 'Travel', amount: travelDisplayAmount };
+        }
+        if (l.code === 'ITR-EXP-CEL') {
+          return { ...l, amount: cellDisplayAmount };
+        }
+        return l;
       })
+      .filter(l => l !== null)
       .filter(l => !hideZeros || l.amount !== 0);
 
     const totalExpenses = r2(expenseLines.reduce((s, l) => s + l.amount, 0));
     const netIncome     = r2(totalIncome - totalExpenses);
+
+    // ── Personal / non-deductible (e.g. Drawings) ──────────────
+    // Deliberately kept OUT of totalIncome/totalExpenses/netIncome above —
+    // these are personal transactions pulled through the business account,
+    // not business income or expenses. Shown only as a memo total below
+    // the income statement for record-keeping.
+    const personalLines = mapLines(ITR12_CATEGORIES.personal || [])
+      .map(l => ({ ...l, amount: r2(-l.amount) })) // negative tx amounts → positive display, same convention as expenseLines
+      .filter(l => !hideZeros || l.amount !== 0);
+    const totalPersonal = r2(personalLines.reduce((s, l) => s + l.amount, 0));
 
     return {
       ok: true,
@@ -767,6 +1002,12 @@ function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOp
         overrideAmount: useOverride ? ovAmount : null,
         hoSplitActive:  useHOSplit && hoSplitData !== null,
         hoSplitData,    // null when HO line is zero or split not active
+        travelSplitActive: useTravelSplit && travelSplitData !== null,
+        travelSplitData,   // null when Travel line is zero or split not active
+        cellSplitActive:   useCellSplit && cellSplitData !== null,
+        cellSplitData,     // null when Cell phone line is zero or split not active
+        personalLines,  // memo-only, excluded from netIncome
+        totalPersonal,
       },
     };
   } catch (err) {
@@ -808,65 +1049,303 @@ async function buildFullPack(clientId, financialYear, coa, hideZeros) {
 // Each renderer returns an HTML string for injection into the DOM.
 // ============================================================
 
-function renderIS(data, currentLabel, priorLabel, hideZeros, opts) {
+// ── Shared AFS-style helpers ────────────────────────────────────
+// Used by renderIS, renderTB, and renderBSFromTB so all three reports
+// share identical number formatting, period labels, and account naming.
+const _afsRound = n => Math.round(n || 0);
+const _afsFmtN  = n => {   // positive display only (structural sign via labels)
+  const v = _afsRound(Math.abs(n || 0));
+  return v === 0 ? '—' : v.toLocaleString('en-ZA');
+};
+const _afsFmtB  = n => {   // brackets for losses/negatives
+  const v = _afsRound(n || 0);
+  if (v === 0) return '—';
+  const s = Math.abs(v).toLocaleString('en-ZA');
+  return v < 0 ? '(' + s + ')' : s;
+};
+
+const _afsParseLbl = lbl => { const p = (lbl||'').split(' '); return { mon: p[1]||'', yr: p[2]||'' }; };
+const _AFS_MONTH_FULL = { Jan:'January',Feb:'February',Mar:'March',Apr:'April',May:'May',Jun:'June',
+                Jul:'July',Aug:'August',Sep:'September',Oct:'October',Nov:'November',Dec:'December' };
+const _AFS_MONTH_NUM  = { Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12 };
+function _afsPeriod(currentLabel, priorLabel) {
+  const cur  = _afsParseLbl(currentLabel);
+  const mnum = _AFS_MONTH_NUM[cur.mon] || 12;
+  const lastDay = cur.yr ? new Date(parseInt(cur.yr), mnum, 0).getDate() : 28;
+  const periodStr = cur.yr
+    ? `for the year ended ${lastDay} ${_AFS_MONTH_FULL[cur.mon]||cur.mon} ${cur.yr}`
+    : '';
+  const colCur = cur.yr || (currentLabel || 'Current');
+  const colPri = _afsParseLbl(priorLabel).yr || (priorLabel || 'Prior');
+  return { periodStr, colCur, colPri };
+}
+
+// AFS presentation name overrides — maps account codes to names matching the signed AFS.
+const _AFS_NAME = {
+  '4001':'Services rendered', '5003':'Funeral expenses',
+  '6012':'Computer expenses',
+  '6013':'Postage and stationery', '6014':'Rental: office',
+  '6016':'Salaries', '6021':'Interest paid',
+  '6022':'Members remuneration', '6023':'Fuel',
+  '6024':'Rental: motor vehicles',
+};
+const _afsAcctName = l => _AFS_NAME[l.code] || l.name;
+const _AFS_NOTE_ACCT = { '6001':'5', '6021':'8' };
+
+// Build marker — bumped manually whenever financial-outputs.js changes, so a
+// stale-cache/stale-build issue can be confirmed or ruled out at a glance by
+// comparing what's printed on-screen against what's expected after a sync.
+const _AFS_BUILD_TAG = 'BUILD 2026-07-01T01:35Z-hideZeros-fix';
+
+function _afsHeader(clientName, reportTitle, periodStr) {
+  return `<div class="afs-header">
+    <div class="afs-entity">${escHtml(clientName || 'Company')}</div>
+    <div class="afs-report-title">${escHtml(reportTitle)}</div>
+    ${periodStr ? `<div class="afs-period">${escHtml(periodStr)}</div>` : ''}
+    <div class="afs-currency-note">Figures in Rand &nbsp;&middot;&nbsp; <span style="opacity:0.55;font-size:0.68rem;">${_AFS_BUILD_TAG}</span></div>
+  </div>`;
+}
+
+function _afsThead(showComp, colPri, colCur) {
+  return `<thead><tr>
+    <th class="afs-th-left" style="width:44%">Description</th>
+    <th class="afs-th-center" style="width:6%">Note(s)</th>
+    <th style="width:25%">${showComp ? escHtml(colPri) : ''}</th>
+    <th style="width:25%">${escHtml(colCur)}</th>
+  </tr></thead>`;
+}
+
+// Renders the Income Statement body rows (Revenue → Net profit) only — no table/header wrapper.
+// Shared by renderIS (standalone statement) and renderTB Section 1.
+function _afsISRows(data, showComp) {
   const { incomeLines, cosLines, expLines,
-          revenue, revComparative,
           totalCOS, cosCom,
           grossProfit, grossProfitCom,
           totalExpenses, expCom,
-          netProfit, netProfitCom,
-          comparativeAvailable } = data;
+          netProfit, netProfitCom } = data;
 
-  const curLbl  = currentLabel || 'Current year';
-  const priorLbl = priorLabel  || 'Prior year';
-  const showComp = comparativeAvailable;
-  const col = showComp
-    ? `<div class="stmt-col-heads"><span>Description</span><span>${priorLbl}</span><span>${curLbl}</span></div>`
-    : `<div class="stmt-col-heads"><span>Description</span><span></span><span>${curLbl}</span></div>`;
+  const amtCells = (cur, pri) => showComp
+    ? `<td class="afs-amt">${_afsFmtN(pri)}</td><td class="afs-amt">${_afsFmtN(cur)}</td>`
+    : `<td class="afs-amt"></td><td class="afs-amt">${_afsFmtN(cur)}</td>`;
+  const amtCellsB = (cur, pri) => showComp
+    ? `<td class="afs-amt">${_afsFmtB(pri)}</td><td class="afs-amt">${_afsFmtB(cur)}</td>`
+    : `<td class="afs-amt"></td><td class="afs-amt">${_afsFmtB(cur)}</td>`;
 
-  const row = (label, cur, prior, cls = '') => {
-    const priorCell = showComp ? `<td class="amt">${prior !== undefined ? fmt(prior) : ''}</td>` : '<td class="amt"></td>';
-    return `<tr class="${cls}"><td class="label indent">${label}</td>${priorCell}<td class="amt">${fmt(cur)}</td></tr>`;
-  };
+  let html = '';
 
-  const subtotal = (label, cur, prior, cls = 'subtotal') => {
-    const priorCell = showComp ? `<td class="amt">${prior !== undefined ? fmt(prior) : ''}</td>` : '<td class="amt"></td>';
-    return `<tr class="${cls}"><td class="label">${label}</td>${priorCell}<td class="amt">${fmt(cur)}</td></tr>`;
-  };
-
-  const secHead = (label) =>
-    `<tr class="section-head"><td colspan="3">${label}</td></tr>`;
-
-  const header = (opts && opts.title) ? _brandHeader(opts.title, opts.clientName, currentLabel, priorLabel) : '';
-  let html = `<div class="statement-wrap">${header}${col}<table class="stmt-table">`;
-
-  // Income
-  html += secHead('Income');
-  incomeLines.forEach(l => { html += row(l.name, l.current, l.comparative); });
-  html += subtotal('Total income', revenue, revComparative);
-
-  // Cost of Sales
-  if (!hideZeros || totalCOS !== 0) {
-    html += secHead('Cost of Sales');
-    cosLines.forEach(l => { html += row(l.name, l.current, l.comparative); });
-    html += subtotal('Total cost of sales', totalCOS, cosCom);
+  // ── Revenue section ───────────────────────────────────────────
+  html += `<tr class="afs-section-head"><td colspan="4">Revenue</td></tr>`;
+  incomeLines.forEach(l => {
+    html += `<tr><td class="afs-desc afs-indent">${escHtml(_afsAcctName(l))}</td>
+      <td class="afs-nc">6</td>${amtCells(l.current, l.comparative)}</tr>`;
+  });
+  if (totalCOS !== 0 || (showComp && cosCom !== 0)) {
+    // Less: Cost of sales — broken out by component account (e.g. Funeral
+    // expenses, Subcontractors), matching the AFS note format. Each line uses
+    // the same current/comparative figures already computed for cosLines
+    // elsewhere on this report — no separate calculation.
+    html += `<tr><td class="afs-desc afs-indent">Less: Cost of sales</td>
+      <td class="afs-nc">7</td><td class="afs-amt"></td><td class="afs-amt"></td></tr>`;
+    cosLines.forEach(l => {
+      html += `<tr><td class="afs-desc afs-indent" style="padding-left:42px;">${escHtml(_afsAcctName(l))}</td>
+        <td class="afs-nc"></td>${amtCells(l.current, l.comparative)}</tr>`;
+    });
   }
+  html += `<tr class="afs-subtotal">
+    <td class="afs-desc">Total income</td><td class="afs-nc"></td>
+    ${amtCellsB(grossProfit, grossProfitCom)}
+  </tr>`;
 
-  // Gross Profit
-  html += subtotal('Gross Profit', grossProfit, grossProfitCom, 'subtotal');
+  // ── Expenses section ──────────────────────────────────────────
+  html += `<tr class="afs-spacer"><td colspan="4"></td></tr>`;
+  html += `<tr class="afs-section-head"><td colspan="4">Expenses</td></tr>`;
 
-  // Expenses
-  html += secHead('Expenses');
-  expLines.forEach(l => { html += row(l.name, l.current, l.comparative); });
-  html += subtotal('Total expenses', totalExpenses, expCom);
+  [...expLines]
+    .sort((a, b) => _afsAcctName(a).localeCompare(_afsAcctName(b)))
+    .forEach(l => {
+      const note = _AFS_NOTE_ACCT[l.code] || '';
+      html += `<tr><td class="afs-desc afs-indent">${escHtml(_afsAcctName(l))}</td>
+        <td class="afs-nc">${note}</td>${amtCells(l.current, l.comparative)}</tr>`;
+    });
 
-  // Net Profit/Loss
-  const npCls = `total ${netProfit >= 0 ? 'profit' : 'loss'}`;
-  const npLabel = netProfit >= 0 ? 'Net Profit' : 'Net Loss';
-  const priorNP = showComp ? `<td class="amt">${fmt(netProfitCom)}</td>` : '<td class="amt"></td>';
-  html += `<tr class="${npCls}"><td class="label">${npLabel}</td>${priorNP}<td class="amt">${fmt(netProfit)}</td></tr>`;
+  html += `<tr class="afs-subtotal">
+    <td class="afs-desc">Total expenses</td><td class="afs-nc"></td>
+    ${amtCells(totalExpenses, expCom)}
+  </tr>`;
 
-  html += '</table></div>';
+  // ── Net profit / (loss) ───────────────────────────────────────
+  html += `<tr class="afs-total">
+    <td class="afs-desc">Net profit/(loss) for the year</td><td class="afs-nc"></td>
+    ${amtCellsB(netProfit, netProfitCom)}
+  </tr>`;
+
+  return html;
+}
+
+// Renders the Statement of Financial Position body rows only — no table/header wrapper.
+// assetLines/liabLines/equityLines: [{ code, name, current, comparative }]
+// totals: { totalAssets, assetsCom, totalLiabilities, liabCom, totalEquity, equityCom }
+// Shared by renderTB Section 2 and renderBSFromTB, so the two reports never diverge.
+// netProfit: current-year net profit/(loss), already computed live from the IS
+// accounts (buildTrialBalance's `netProfit`). Used ONLY to recompute the displayed
+// Retained Earnings figure below — never written back to any ledger, journal, or
+// transaction. Account 3002's stored balance is read here and never modified.
+function _afsBSRows(assetLines, liabLines, equityLines, totals, showComp, netProfit) {
+  const { totalAssets, assetsCom, totalLiabilities, liabCom, totalEquity, equityCom } = totals;
+
+  const amtCells = (cur, pri) => showComp
+    ? `<td class="afs-amt">${_afsFmtN(pri)}</td><td class="afs-amt">${_afsFmtN(cur)}</td>`
+    : `<td class="afs-amt"></td><td class="afs-amt">${_afsFmtN(cur)}</td>`;
+  const amtCellsB = (cur, pri) => showComp
+    ? `<td class="afs-amt">${_afsFmtB(pri)}</td><td class="afs-amt">${_afsFmtB(cur)}</td>`
+    : `<td class="afs-amt"></td><td class="afs-amt">${_afsFmtB(cur)}</td>`;
+  // Subtotal/total rows must never render a genuine R0 as "—" (the line-item
+  // convention for "no activity") — a calculated zero total is a real result,
+  // not missing data, so it always shows the digit "0".
+  const _zeroSafe = (formatted, raw) => (Math.abs(_afsRound(raw)) === 0 ? '0' : formatted);
+  const amtCellsTotal = (cur, pri) => showComp
+    ? `<td class="afs-amt">${_zeroSafe(_afsFmtN(pri), pri)}</td><td class="afs-amt">${_zeroSafe(_afsFmtN(cur), cur)}</td>`
+    : `<td class="afs-amt"></td><td class="afs-amt">${_zeroSafe(_afsFmtN(cur), cur)}</td>`;
+  const amtCellsTotalB = (cur, pri) => showComp
+    ? `<td class="afs-amt">${_zeroSafe(_afsFmtB(pri), pri)}</td><td class="afs-amt">${_zeroSafe(_afsFmtB(cur), cur)}</td>`
+    : `<td class="afs-amt"></td><td class="afs-amt">${_zeroSafe(_afsFmtB(cur), cur)}</td>`;
+
+  // Non-current vs current classification (asset side only — see renderTB header comment).
+  const _isNonCurrent = l =>
+    /loan|investment|property|equipment|vehicle|depreciation|accumulated/i.test(l.name) ||
+    (/receivable/i.test(l.name) && !/trade.?receiv|debtor/i.test(l.name)) ||
+    (parseInt(l.code) >= 1400 && parseInt(l.code) <= 1999);
+
+  const ncAssets = assetLines.filter(_isNonCurrent);
+  const caAssets = assetLines.filter(l => !_isNonCurrent(l));
+  const sumCur = arr => r2(arr.reduce((s, l) => s + (l.current || 0), 0));
+  const sumPri = arr => r2(arr.reduce((s, l) => s + (l.comparative || 0), 0));
+  const ncTotal = sumCur(ncAssets), ncTotalCom = sumPri(ncAssets);
+  const caTotal = sumCur(caAssets), caTotalCom = sumPri(caAssets);
+
+  let html = '';
+
+  // ── Assets ─────────────────────────────────────────────────────
+  html += `<tr class="afs-section-head"><td colspan="4">Assets</td></tr>`;
+  if (ncAssets.length) {
+    html += `<tr><td class="afs-desc afs-indent" style="font-style:italic;">Non-current assets</td><td class="afs-nc"></td><td class="afs-amt"></td><td class="afs-amt"></td></tr>`;
+    ncAssets.forEach(l => {
+      html += `<tr><td class="afs-desc afs-indent" style="padding-left:42px;">${escHtml(_afsAcctName(l))}</td>
+        <td class="afs-nc"></td>${amtCells(l.current, l.comparative)}</tr>`;
+    });
+  }
+  if (caAssets.length) {
+    html += `<tr><td class="afs-desc afs-indent" style="font-style:italic;">Current assets</td><td class="afs-nc"></td><td class="afs-amt"></td><td class="afs-amt"></td></tr>`;
+    caAssets.forEach(l => {
+      html += `<tr><td class="afs-desc afs-indent" style="padding-left:42px;">${escHtml(_afsAcctName(l))}</td>
+        <td class="afs-nc"></td>${amtCells(l.current, l.comparative)}</tr>`;
+    });
+  }
+  html += `<tr class="afs-total">
+    <td class="afs-desc">Total Assets</td><td class="afs-nc"></td>
+    ${amtCellsTotalB(totalAssets, assetsCom)}
+  </tr>`;
+
+  // ── Liabilities ────────────────────────────────────────────────
+  html += `<tr class="afs-spacer"><td colspan="4"></td></tr>`;
+  html += `<tr class="afs-section-head"><td colspan="4">Liabilities</td></tr>`;
+  if (liabLines.length) {
+    html += `<tr><td class="afs-desc afs-indent" style="font-style:italic;">Current liabilities</td><td class="afs-nc"></td><td class="afs-amt"></td><td class="afs-amt"></td></tr>`;
+    liabLines.forEach(l => {
+      html += `<tr><td class="afs-desc afs-indent" style="padding-left:42px;">${escHtml(_afsAcctName(l))}</td>
+        <td class="afs-nc"></td>${amtCells(l.current, l.comparative)}</tr>`;
+    });
+  }
+  html += `<tr class="afs-subtotal">
+    <td class="afs-desc">Total Liabilities</td><td class="afs-nc"></td>
+    ${amtCellsTotal(totalLiabilities, liabCom)}
+  </tr>`;
+
+  // ── Equity ─────────────────────────────────────────────────────
+  // Retained Earnings display override (CURRENT column only, calculation only):
+  //   Displayed RE = Opening RE (account 3002's actual stored ledger balance,
+  //   i.e. l.current as posted from opening_balances) + current-year Net Profit/(Loss),
+  //   computed live from the Income Statement. The comparative (prior-year) column
+  //   is left untouched — it already reflects the AFS-signed closing position with
+  //   no reliable "opening RE" on file to recompute it from.
+  // This never writes to 3002, never posts a journal/transaction — display-only.
+  const _isRE = l => l.code === '3002' || /retained earnings/i.test(l.name);
+  html += `<tr class="afs-spacer"><td colspan="4"></td></tr>`;
+  html += `<tr class="afs-section-head"><td colspan="4">Capital and reserves</td></tr>`;
+  let totalEquityAdj = totalEquity;
+  equityLines.forEach(l => {
+    let displayCurrent = l.current;
+    if (_isRE(l) && !l.synthetic && typeof netProfit === 'number') {
+      const recalculated = r2(l.current + netProfit);
+      totalEquityAdj = r2(totalEquityAdj - l.current + recalculated);
+      displayCurrent = recalculated;
+    }
+    html += `<tr><td class="afs-desc afs-indent">${escHtml(_afsAcctName(l))}</td>
+      <td class="afs-nc"></td>${amtCells(displayCurrent, l.comparative)}</tr>`;
+  });
+  html += `<tr class="afs-subtotal">
+    <td class="afs-desc">Total Equity</td><td class="afs-nc"></td>
+    ${amtCellsTotal(totalEquityAdj, equityCom)}
+  </tr>`;
+
+  // ── Total Liabilities and Equity ──────────────────────────────
+  const totalLE    = r2(totalLiabilities + totalEquityAdj);
+  const totalLECom = r2(liabCom + equityCom);
+  html += `<tr class="afs-total">
+    <td class="afs-desc">Total Liabilities and Equity</td><td class="afs-nc"></td>
+    ${amtCellsTotalB(totalLE, totalLECom)}
+  </tr>`;
+
+  // ── Balance Check ────────────────────────────────────────────
+  // Live recalculation: Total Assets − Total Liabilities and Equity, per
+  // column. Exactly R0.00 → green "Balanced"; anything else → red figure.
+  const checkCur = r2(totalAssets - totalLE);
+  const checkPri = r2(assetsCom  - totalLECom);
+  const checkCell = v => {
+    const ok = Math.abs(v) < 0.005;
+    return `<td class="afs-amt ${ok ? 'afs-check-ok' : 'afs-check-bad'}">${ok ? 'Balanced' : _afsFmtB(v)}</td>`;
+  };
+  html += `<tr class="afs-check-row">
+    <td class="afs-desc">Balance Check</td><td class="afs-nc"></td>
+    ${showComp ? checkCell(checkPri) : '<td class="afs-amt"></td>'}${checkCell(checkCur)}
+  </tr>`;
+
+  return html;
+}
+
+// Single balancing-check banner, rendered separately from the report table.
+// Computed from Assets vs (Liabilities + Equity) for each year independently —
+// this is the only place DR/CR-style balancing logic surfaces visually.
+function _afsBalanceCheckBanner(curDiff, priDiff, colCur, colPri, showComp) {
+  // Cents-precision reconciliation check — deliberately NOT rounded to whole
+  // rand like the rest of the AFS-style report, since this is the one place
+  // DR/CR balancing logic surfaces and small cent differences matter here.
+  const line = (label, diff) => {
+    const ok = Math.abs(diff) <= 0.02;
+    const amt = Math.abs(r2(diff)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `<span class="afs-bc-item ${ok ? 'ok' : 'bad'}">${escHtml(label)}: ${ok ? 'Balanced' : 'Out of balance by R' + amt}</span>`;
+  };
+  const items = showComp
+    ? `${line(colPri, priDiff)}<span class="afs-bc-sep">&middot;</span>${line(colCur, curDiff)}`
+    : line(colCur, curDiff);
+  return `<div class="afs-balance-check"><span class="afs-bc-label">Trial Balance Check</span>${items}</div>`;
+}
+
+function renderIS(data, currentLabel, priorLabel, hideZeros, opts) {
+  const { comparativeAvailable } = data;
+  const showComp = !!comparativeAvailable;
+
+  const { periodStr, colCur, colPri } = _afsPeriod(currentLabel, priorLabel);
+
+  const clientName = (opts && opts.clientName) || '';
+  const brandBar = (opts && opts.title) ? _brandHeader('', clientName, currentLabel, priorLabel) : '';
+  const afsHeader = _afsHeader(clientName, 'Detailed Statement of Comprehensive Income', periodStr);
+  const thead = _afsThead(showComp, colPri, colCur);
+
+  let html = `<div class="statement-wrap"><div class="afs-wrap">${brandBar}${afsHeader}
+    <table class="afs-table">${thead}<tbody>`;
+  html += _afsISRows(data, showComp);
+  html += '</tbody></table></div></div>';
   return html;
 }
 
@@ -976,184 +1455,111 @@ function renderCF(data, currentLabel, priorLabel, opts) {
 function renderTB(data, currentLabel, priorLabel, opts) {
   const {
     incomeLines, cosLines, expLines,
-    grossIncome, totalCOS, grossProfit, totalExpenses, netProfit,
-    priorGrossIncome, priorTotalCOS, priorGrossProfit, priorTotalExpenses, priorNetProfit,
+    totalCOS, grossProfit, totalExpenses, netProfit,
+    priorTotalCOS, priorGrossProfit, priorTotalExpenses, priorNetProfit,
     assetLines, liabLines, equityLines,
-    totalAssets, totalLiabilities, totalEquity, balanceEffect,
+    totalAssets, totalLiabilities, totalEquity, balanceEffect, priorBalanceEffect,
     priorTotalAssets, priorTotalLiabilities, priorTotalEquity,
-    totalDebits, totalCredits,
-    priorTotalDebits, priorTotalCredits,
     priorYearAvailable,
   } = data;
 
-  const curLbl   = currentLabel || 'Current year';
-  const priorLbl = priorLabel   || 'Prior year';
-  const showPrior = !!priorYearAvailable;
-  const cols      = showPrior ? 5 : 3;
+  const showComp = !!priorYearAvailable;
+  const { periodStr, colCur, colPri } = _afsPeriod(currentLabel, priorLabel);
 
-  const colgroup = showPrior
-    ? `<colgroup><col style="width:40%"><col style="width:15%"><col style="width:15%"><col style="width:15%"><col style="width:15%"></colgroup>`
-    : `<colgroup><col style="width:55%"><col style="width:22%"><col style="width:23%"></colgroup>`;
+  const clientName = (opts && opts.clientName) || '';
+  const brandBar   = (opts && opts.title) ? _brandHeader('', clientName, currentLabel, priorLabel) : '';
+  const afsHeader  = _afsHeader(clientName, 'Trial Balance', periodStr);
+  const thead      = _afsThead(showComp, colPri, colCur);
+  const banner     = _afsBalanceCheckBanner(balanceEffect, priorBalanceEffect, colCur, colPri, showComp);
 
-  const thead = showPrior
-    ? `<thead><tr class="stmt-thead">
-        <th class="label">Account</th>
-        <th class="amt">${priorLbl} DR</th>
-        <th class="amt">${priorLbl} CR</th>
-        <th class="amt">${curLbl} DR</th>
-        <th class="amt">${curLbl} CR</th>
-      </tr></thead>`
-    : `<thead><tr class="stmt-thead">
-        <th class="label">Account</th>
-        <th class="amt">${curLbl} DR</th>
-        <th class="amt">${curLbl} CR</th>
-      </tr></thead>`;
+  let html = `<div class="statement-wrap"><div class="afs-wrap">${brandBar}${afsHeader}${banner}
+    <table class="afs-table">${thead}<tbody>`;
 
-  // Individual account line
-  const lineRow = l => showPrior
-    ? `<tr>
-        <td class="label indent">${l.code} — ${escHtml(l.name)}</td>
-        <td class="amt">${l.priorDebit  ? fmt(l.priorDebit)  : '—'}</td>
-        <td class="amt">${l.priorCredit ? fmt(l.priorCredit) : '—'}</td>
-        <td class="amt">${l.debit  ? fmt(l.debit)  : '—'}</td>
-        <td class="amt">${l.credit ? fmt(l.credit) : '—'}</td>
-      </tr>`
-    : `<tr>
-        <td class="label indent">${l.code} — ${escHtml(l.name)}</td>
-        <td class="amt">${l.debit  ? fmt(l.debit)  : '—'}</td>
-        <td class="amt">${l.credit ? fmt(l.credit) : '—'}</td>
-      </tr>`;
-
-  const emptyRow = msg =>
-    `<tr><td colspan="${cols}" class="label" style="color:var(--muted);padding:6px 10px;font-size:0.82rem;">${msg}</td></tr>`;
-
-  const secHead = label => `<tr class="section-head"><td colspan="${cols}">${label}</td></tr>`;
-
-  const grpHead = label =>
-    `<tr class="grp-head"><td colspan="${cols}">${label}</td></tr>`;
-
-  // Subtotal row — drAmt/crAmt are the current-year values; priorDr/priorCr are optional prior year
-  const subtotalRow = (label, drAmt, crAmt, priorDr, priorCr, cls = 'subtotal') => {
-    if (showPrior) {
-      return `<tr class="${cls}">
-        <td class="label">${label}</td>
-        <td class="amt">${priorDr !== null && priorDr !== undefined ? fmt(priorDr) : ''}</td>
-        <td class="amt">${priorCr !== null && priorCr !== undefined ? fmt(priorCr) : ''}</td>
-        <td class="amt">${drAmt !== null ? fmt(drAmt) : ''}</td>
-        <td class="amt">${crAmt !== null ? fmt(crAmt) : ''}</td>
-      </tr>`;
-    }
-    return `<tr class="${cls}">
-      <td class="label">${label}</td>
-      <td class="amt">${drAmt !== null ? fmt(drAmt) : ''}</td>
-      <td class="amt">${crAmt !== null ? fmt(crAmt) : ''}</td>
-    </tr>`;
+  // ── Section 1 — Income Statement ──────────────────────────────
+  // Convert TB's DR/CR ledger lines into the {current, comparative} shape
+  // _afsISRows expects (income credit-normal, COS/expense debit-normal).
+  html += `<tr class="afs-major-head"><td colspan="4">Section 1 — Income Statement</td></tr>`;
+  const isViewModel = {
+    incomeLines: incomeLines.map(l => ({ ...l, current: r2(l.credit - l.debit), comparative: r2(l.priorCredit - l.priorDebit) })),
+    cosLines:    cosLines.map(l    => ({ ...l, current: r2(l.debit - l.credit), comparative: r2(l.priorDebit - l.priorCredit) })),
+    expLines:    expLines.map(l    => ({ ...l, current: r2(l.debit - l.credit), comparative: r2(l.priorDebit - l.priorCredit) })),
+    totalCOS, cosCom: priorTotalCOS,
+    grossProfit, grossProfitCom: priorGrossProfit,
+    totalExpenses, expCom: priorTotalExpenses,
+    netProfit, netProfitCom: priorNetProfit,
   };
+  html += _afsISRows(isViewModel, showComp);
 
-  // Derived row: current amount lands in credit if ≥ 0, debit if < 0; same logic for prior
-  const derivedRow = (label, amount, priorAmount, cls = 'subtotal') => {
-    const currDr   = amount      < 0 ? Math.abs(amount)      : null;
-    const currCr   = amount      >= 0 ? amount      : null;
-    const priorDr  = showPrior && priorAmount < 0  ? Math.abs(priorAmount) : (showPrior ? null : undefined);
-    const priorCr  = showPrior && priorAmount >= 0 ? priorAmount           : (showPrior ? null : undefined);
-    return subtotalRow(label, currDr, currCr, priorDr, priorCr, cls);
-  };
+  // ── Section 2 — Statement of Financial Position ───────────────
+  const hasBS = (assetLines.length + liabLines.length + equityLines.length) > 0;
+  if (hasBS) {
+    const toAFS = (arr, sign) => arr.map(l => ({
+      ...l,
+      current:     r2(sign > 0 ? l.debit - l.credit : l.credit - l.debit),
+      comparative: r2(sign > 0 ? l.priorDebit - l.priorCredit : l.priorCredit - l.priorDebit),
+    }));
+    html += `<tr class="afs-spacer"><td colspan="4"></td></tr>`;
+    html += `<tr class="afs-major-head"><td colspan="4">Section 2 — Statement of Financial Position</td></tr>`;
+    html += _afsBSRows(
+      toAFS(assetLines,  +1),
+      toAFS(liabLines,   -1),
+      toAFS(equityLines, -1),
+      { totalAssets, assetsCom: priorTotalAssets, totalLiabilities, liabCom: priorTotalLiabilities, totalEquity, equityCom: priorTotalEquity },
+      showComp,
+      netProfit,
+    );
+  }
 
-  const header = (opts && opts.title) ? _brandHeader(opts.title, opts.clientName, currentLabel, priorLabel) : '';
-  let html = `<div class="statement-wrap">${header}<table class="stmt-table">${colgroup}${thead}`;
+  html += '</tbody></table></div></div>';
+  return html;
+}
 
-  // ══════════════════════════════════════════════════════════════
-  // SECTION 1 — Income Statement Accounts
-  // ══════════════════════════════════════════════════════════════
-  html += secHead('Section 1 — Income Statement Accounts');
+// Renders the Statement of Financial Position as a standalone report, using
+// the SAME source data and the SAME _afsBSRows body as TB Section 2 — so the
+// Balance Sheet report and the Trial Balance never diverge. Pass it the
+// `data` object returned by buildTrialBalance (not buildBalanceSheet).
+function renderBSFromTB(tbData, currentLabel, priorLabel, opts) {
+  const {
+    assetLines, liabLines, equityLines,
+    totalAssets, totalLiabilities, totalEquity, balanceEffect, priorBalanceEffect,
+    priorTotalAssets, priorTotalLiabilities, priorTotalEquity,
+    priorYearAvailable, netProfit,
+  } = tbData;
 
-  html += grpHead('Income');
-  incomeLines.length
-    ? incomeLines.forEach(l => { html += lineRow(l); })
-    : html += emptyRow('No income transactions classified.');
-  html += subtotalRow('Gross Income', null, grossIncome, null, priorGrossIncome);
+  const showComp = !!priorYearAvailable;
+  const { periodStr, colCur, colPri } = _afsPeriod(currentLabel, priorLabel);
 
-  html += grpHead('Cost of Sales');
-  cosLines.length
-    ? cosLines.forEach(l => { html += lineRow(l); })
-    : html += emptyRow('No cost of sales transactions classified.');
-  html += derivedRow(grossProfit >= 0 ? 'Gross Profit' : 'Gross Loss', grossProfit, priorGrossProfit || 0);
+  const clientName = (opts && opts.clientName) || '';
+  const brandBar   = (opts && opts.title) ? _brandHeader('', clientName, currentLabel, priorLabel) : '';
+  const afsHeader  = _afsHeader(clientName, 'Statement of Financial Position', periodStr);
+  const thead      = _afsThead(showComp, colPri, colCur);
+  const banner     = _afsBalanceCheckBanner(balanceEffect, priorBalanceEffect, colCur, colPri, showComp);
 
-  html += grpHead('Expenses');
-  expLines.length
-    ? expLines.forEach(l => { html += lineRow(l); })
-    : html += emptyRow('No expense transactions classified.');
-  html += derivedRow(
-    netProfit >= 0 ? 'Net Profit' : 'Net Loss',
-    netProfit, priorNetProfit || 0,
-    'total ' + (netProfit >= 0 ? 'profit' : 'loss'),
+  const toAFS = (arr, sign) => arr.map(l => ({
+    ...l,
+    current:     r2(sign > 0 ? l.debit - l.credit : l.credit - l.debit),
+    comparative: r2(sign > 0 ? l.priorDebit - l.priorCredit : l.priorCredit - l.priorDebit),
+  }));
+
+  let html = `<div class="statement-wrap"><div class="afs-wrap">${brandBar}${afsHeader}${banner}
+    <table class="afs-table">${thead}<tbody>`;
+  html += _afsBSRows(
+    toAFS(assetLines,  +1),
+    toAFS(liabLines,   -1),
+    toAFS(equityLines, -1),
+    { totalAssets, assetsCom: priorTotalAssets, totalLiabilities, liabCom: priorTotalLiabilities, totalEquity, equityCom: priorTotalEquity },
+    showComp,
+    netProfit,
   );
-
-  // ══════════════════════════════════════════════════════════════
-  // SECTION 2 — Balance Sheet Accounts
-  // ══════════════════════════════════════════════════════════════
-  html += secHead('Section 2 — Balance Sheet Accounts');
-
-  html += grpHead('Assets (including Bank)');
-  assetLines.length
-    ? assetLines.forEach(l => { html += lineRow(l); })
-    : html += emptyRow('No asset transactions classified.');
-  html += subtotalRow('Total Assets', totalAssets, null, priorTotalAssets, null);
-
-  html += grpHead('Liabilities');
-  liabLines.length
-    ? liabLines.forEach(l => { html += lineRow(l); })
-    : html += emptyRow('No liability transactions classified.');
-  html += subtotalRow('Total Liabilities', null, totalLiabilities, null, priorTotalLiabilities);
-
-  html += grpHead('Equity');
-  equityLines.length
-    ? equityLines.forEach(l => { html += lineRow(l); })
-    : html += emptyRow('No equity transactions classified.');
-  html += subtotalRow('Total Equity', null, totalEquity, null, priorTotalEquity);
-
-  const beOk  = Math.abs(balanceEffect) <= 0.02;
-  const beCls = beOk ? 'subtotal' : 'total loss';
-  const beLabel = beOk
-    ? 'Balance Effect — Balance Sheet balances ✓'
-    : `Balance Effect — out by ${fmt(Math.abs(balanceEffect))} (check equity / opening balances)`;
-  html += derivedRow(beLabel, beOk ? 0 : balanceEffect, 0, beCls);
-
-  // ══════════════════════════════════════════════════════════════
-  // Grand Total
-  // ══════════════════════════════════════════════════════════════
-  const gtOk  = Math.abs(totalDebits - totalCredits) <= 0.02;
-
-  if (showPrior) {
-    html += `<tr class="grand-total">
-      <td class="label">Grand Total</td>
-      <td class="amt">${fmt(priorTotalDebits)}</td>
-      <td class="amt">${fmt(priorTotalCredits)}</td>
-      <td class="amt">${fmt(totalDebits)}</td>
-      <td class="amt">${fmt(totalCredits)}</td>
-    </tr>`;
-  } else {
-    html += `<tr class="grand-total">
-      <td class="label">Grand Total</td>
-      <td class="amt">${fmt(totalDebits)}</td>
-      <td class="amt">${fmt(totalCredits)}</td>
-    </tr>`;
-  }
-
-  if (!gtOk) {
-    html += `<tr><td colspan="${cols}" style="color:var(--red);padding:8px 10px;font-size:0.8rem;">
-      &#9888; Trial balance is out by ${fmt(Math.abs(totalDebits - totalCredits))} — check for unclassified transactions.
-    </td></tr>`;
-  }
-
-  html += '</table></div>';
+  html += '</tbody></table></div></div>';
   return html;
 }
 
 function renderCommissionIS(data, hideZeros) {
   const { incomeLines, expenseLines, totalIncome, totalExpenses, netIncome, isLoss,
           overrideActive, overrideAmount, bankIncome,
-          hoSplitActive, hoSplitData } = data;
+          hoSplitActive, hoSplitData, travelSplitActive, travelSplitData,
+          cellSplitActive, cellSplitData, personalLines, totalPersonal } = data;
 
   const row = (label, amt) =>
     `<tr><td class="label indent">${label}</td><td class="amt"></td><td class="amt">${fmt(amt)}</td></tr>`;
@@ -1199,10 +1605,36 @@ function renderCommissionIS(data, hideZeros) {
       html += row(l.name, l.amount);
       // Home office split verification panel — shown right after the HO line
       if (l.code === 'ITR-EXP-HOM' && hoSplitActive && hoSplitData) {
-        const { fullAmount, businessAmount, personalAmount, pct } = hoSplitData;
+        const { fullAmount, businessAmount, personalAmount, pct, breakdown } = hoSplitData;
+        const breakdownRows = (breakdown || []).map(b => [`  ${b.name}:`, fmt(b.amount), null]);
         html += notePanel('&#127968;', '--text-muted', '--surface-2', '--border',
           `Home office split — ${pct}% business use`, [
+            ...breakdownRows,
             [`Full home office expenses:`, fmt(fullAmount), null],
+            [`Business portion (${pct}%):`, fmt(businessAmount), null],
+            [`Personal portion (${r2(100 - pct)}%):`, fmt(personalAmount), 'var(--text-muted)'],
+            [`Amount on this statement:`, fmt(businessAmount), null],
+          ]);
+      }
+      // Travel split verification panel — shown right after the Travel line
+      if (l.code === 'ITR-EXP-TRV' && travelSplitActive && travelSplitData) {
+        const { fullAmount, businessAmount, personalAmount, pct, breakdown } = travelSplitData;
+        const breakdownRows = (breakdown || []).map(b => [`  ${b.name}:`, fmt(b.amount), null]);
+        html += notePanel('&#128664;', '--text-muted', '--surface-2', '--border',
+          `Travel split — ${pct}% business use`, [
+            ...breakdownRows,
+            [`Full travel expenses:`, fmt(fullAmount), null],
+            [`Business portion (${pct}%):`, fmt(businessAmount), null],
+            [`Personal portion (${r2(100 - pct)}%):`, fmt(personalAmount), 'var(--text-muted)'],
+            [`Amount on this statement:`, fmt(businessAmount), null],
+          ]);
+      }
+      // Cell phone split verification panel — shown right after the Cell phone line
+      if (l.code === 'ITR-EXP-CEL' && cellSplitActive && cellSplitData) {
+        const { fullAmount, businessAmount, personalAmount, pct } = cellSplitData;
+        html += notePanel('&#128241;', '--text-muted', '--surface-2', '--border',
+          `Cell phone split — ${pct}% business use`, [
+            [`Full cell phone expenses:`, fmt(fullAmount), null],
             [`Business portion (${pct}%):`, fmt(businessAmount), null],
             [`Personal portion (${r2(100 - pct)}%):`, fmt(personalAmount), 'var(--text-muted)'],
             [`Amount on this statement:`, fmt(businessAmount), null],
@@ -1216,7 +1648,20 @@ function renderCommissionIS(data, hideZeros) {
   const npLabel = isLoss ? 'Net Loss' : 'Net Income';
   html += `<tr class="${npCls}"><td class="label">${npLabel}</td><td class="amt"></td><td class="amt">${fmt(netIncome)}</td></tr>`;
 
-  html += '</table></div>';
+  html += '</table>';
+
+  // Memo section — personal/non-deductible items (e.g. Drawings). Excluded
+  // from Total Income/Total Expenses/Net Income above; shown here purely
+  // for record-keeping, visually separated from the income statement itself.
+  if (personalLines && personalLines.length && (!hideZeros || totalPersonal !== 0)) {
+    html += `<table class="stmt-table" style="margin-top:14px;">
+      <tr class="section-head"><td colspan="3">Memo — Personal (not part of Income Statement)</td></tr>`;
+    personalLines.forEach(l => { if (!hideZeros || l.amount !== 0) html += row(l.name, l.amount); });
+    html += subtotal('Total Personal / Drawings', totalPersonal, 'subtotal');
+    html += '</table>';
+  }
+
+  html += '</div>';
   return html;
 }
 
@@ -1386,6 +1831,7 @@ window.FinancialOutputs = {
   buildFullPack,
   renderIS,
   renderBS,
+  renderBSFromTB,
   renderCF,
   renderTB,
   renderCommissionIS,

@@ -10,6 +10,9 @@ credentials.*
 # Node
 node_modules/
 
+# Build output (packaged Electron app — regenerate with npm run build)
+dist/
+
 # OS junk
 .DS_Store
 Thumbs.db

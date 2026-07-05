@@ -392,7 +392,7 @@ function exportVATCSV(vat201, clientName, financialYear) {
 function exportCommissionISCSV(data, clientName, financialYear) {
   const { incomeLines, expenseLines, totalIncome, totalExpenses, netIncome,
           overrideActive, overrideAmount, bankIncome,
-          hoSplitActive, hoSplitData } = data;
+          hoSplitActive, hoSplitData, personalLines, totalPersonal } = data;
 
   const rows = [
     [`${clientName} — Commission Earner Income Statement — FY${financialYear} — Generated ${todayDMY()}`],
@@ -429,6 +429,15 @@ function exportCommissionISCSV(data, clientName, financialYear) {
   rows.push(['', 'Total Expenses', fmtNum(totalExpenses)]);
   rows.push([]);
   rows.push(['', netIncome >= 0 ? 'NET INCOME' : 'NET LOSS', fmtNum(netIncome)]);
+
+  // Memo — personal/non-deductible (e.g. Drawings). Excluded from the totals
+  // above; recorded separately for reference, not part of the ITR12 result.
+  if (personalLines && personalLines.length) {
+    rows.push([]);
+    rows.push(['MEMO — Personal (not part of Income Statement)']);
+    personalLines.forEach(l => rows.push([l.code, l.name, fmtNum(l.amount)]));
+    rows.push(['', 'Total Personal / Drawings', fmtNum(totalPersonal)]);
+  }
 
   downloadFile(
     toCSV(rows),

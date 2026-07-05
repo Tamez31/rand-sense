@@ -248,6 +248,19 @@ input, select, textarea { font-family: var(--font); }
   transition: background .15s;
 }
 .topnav-settings:hover { background: rgba(255,255,255,.15); }
+.topnav-brochure {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.5);
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 13px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background .15s;
+}
+.topnav-brochure:hover { background: rgba(255,255,255,.28); }
 
 /* ── Settings Page ───────────────────────────────────────────── */
 .settings-card {
@@ -1229,6 +1242,153 @@ table.stmt-table .pos { color: #145A32; }
 }
 
 /* ── Print styles ────────────────────────────────────────────── */
+/* ── AFS professional report style ──────────────────────────── */
+.afs-wrap {
+  font-family: var(--font-sans);
+  color: #000;
+  background: #fff;
+  padding: 0 0 24px;
+}
+.afs-header {
+  text-align: center;
+  padding: 18px 0 16px;
+  border-bottom: 2px solid #000;
+  margin-bottom: 14px;
+}
+.afs-entity {
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.afs-report-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.afs-period {
+  font-size: 0.82rem;
+  margin-bottom: 6px;
+}
+.afs-currency-note {
+  font-size: 0.74rem;
+  font-style: italic;
+  color: #555;
+}
+table.afs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  color: #000;
+  background: #fff;
+}
+table.afs-table th {
+  padding: 7px 10px;
+  text-align: right;
+  font-weight: 700;
+  background: #fff;
+  color: #000;
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+  font-size: 0.82rem;
+}
+table.afs-table th.afs-th-left { text-align: left; }
+table.afs-table th.afs-th-center { text-align: center; }
+table.afs-table td {
+  padding: 3px 10px;
+  vertical-align: middle;
+  color: #000;
+  background: #fff;
+}
+table.afs-table td.afs-desc   { width: 44%; }
+table.afs-table td.afs-nc     { width: 6%; text-align: center; color: #555; font-size: 0.76rem; }
+table.afs-table td.afs-amt    { width: 25%; text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+table.afs-table td.afs-indent { padding-left: 26px; }
+table.afs-table tr.afs-section-head td {
+  font-weight: 700;
+  font-size: 0.88rem;
+  padding-top: 20px;
+  padding-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #000;
+}
+table.afs-table tr.afs-subtotal td {
+  font-weight: 700;
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  background: #fff;
+}
+table.afs-table tr.afs-total td {
+  font-weight: 700;
+  border-top: 1px solid #000;
+  border-bottom: 3px double #000;
+  padding-top: 5px;
+  padding-bottom: 7px;
+  background: #fff;
+}
+table.afs-table tr.afs-spacer td {
+  padding: 4px 0;
+  border: none;
+}
+/* TB non-current/current sub-group header */
+table.stmt-table tr.sub-grp-head td {
+  background: #EFF8EF;
+  color: #145A32;
+  font-weight: 600;
+  font-size: 0.73rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 10px 4px 22px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ── AFS combined-report major section banner (TB "Section 1 / 2") ──── */
+table.afs-table tr.afs-major-head td {
+  font-weight: 800;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-top: 22px;
+  padding-bottom: 6px;
+  border-top: 2px solid #000;
+  border-bottom: 2px solid #000;
+}
+
+/* ── AFS single balancing-check banner — separate from the table body ── */
+.afs-balance-check {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.78rem;
+  padding: 8px 4px 14px;
+  border-bottom: 1px solid #ccc;
+  margin-bottom: 6px;
+}
+.afs-bc-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 2px;
+}
+.afs-bc-item.ok  { color: #1E8449; font-weight: 600; }
+.afs-bc-item.bad { color: #C0392B; font-weight: 700; }
+.afs-bc-sep { color: #999; }
+
+/* ── AFS Balance Sheet "Balance Check" row (live Assets vs Liab+Equity) ── */
+table.afs-table tr.afs-check-row td {
+  padding-top: 8px;
+  font-weight: 700;
+  font-style: italic;
+}
+table.afs-table tr.afs-check-row td.afs-check-ok  { color: #1E8449; }
+table.afs-table tr.afs-check-row td.afs-check-bad { color: #C0392B; }
+
 @media print {
   body > *:not(#print-target) { display: none !important; }
   #print-target {
@@ -1240,6 +1400,10 @@ table.stmt-table .pos { color: #145A32; }
   }
   .no-print { display: none !important; }
   table.stmt-table td { padding: 4px 8px; }
+  table.afs-table td, table.afs-table th { padding: 3px 8px; }
+  .afs-header { border-bottom: 2px solid #000 !important; }
+  table.afs-table tr.afs-subtotal td { border-top: 1px solid #000 !important; border-bottom: 1px solid #000 !important; }
+  table.afs-table tr.afs-total td { border-bottom: 3px double #000 !important; }
 }
 
 /* ── Responsive ──────────────────────────────────────────────── */
