@@ -815,7 +815,21 @@ const Journals = {
   // lines = [{ account_code, account_name, debit, credit }, ...]
   // Exactly one of debit/credit must be non-zero per line.
   // Total debits must equal total credits (caller should validate first).
-  async post(clientId, financialYear, date, narration, lines) {
+  //
+  // isCommissionEarner: sign convention differs by report engine. Company
+  // clients read the ledger via buildTrialBalance, which nets debit-minus-credit
+  // per account — so amount = +debit / -credit (standard double-entry) is
+  // correct there. Commission earner clients read a completely different
+  // pipeline (buildCommissionIS -> netByAccount), which treats amount at face
+  // value as a cash-flow sign identical to imported bank statement rows
+  // (negative = money out = expense increase, positive = money in = expense
+  // decrease) and just negates the summed net for display. Storing a journal's
+  // debit-to-expense side as positive under that convention makes the expense
+  // display as a negative/credit — confirmed directly on three separate posted
+  // journals (JNL-1/2/3) all showing their reallocated expense category with
+  // the wrong sign. So for commission earners the sign is inverted relative to
+  // the company convention: amount = -debit / +credit.
+  async post(clientId, financialYear, date, narration, lines, isCommissionEarner) {
     const num    = await Journals.nextNumber(clientId);
     const period = `JNL-${num}`;
     const desc   = `${period}: ${narration}`;
@@ -829,7 +843,9 @@ const Journals = {
       source_bank:    'Journal',
       account_code:   l.account_code,
       account_name:   l.account_name,
-      amount:         l.debit > 0 ? _r2(l.debit) : _r2(-l.credit),
+      amount:         isCommissionEarner
+        ? (l.debit > 0 ? _r2(-l.debit) : _r2(l.credit))
+        : (l.debit > 0 ? _r2(l.debit)  : _r2(-l.credit)),
       vat_type:       'none',
       vat_amount:     0,
       is_reconciled:  false,

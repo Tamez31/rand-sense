@@ -102,29 +102,38 @@ function getPrintTarget() {
   return _printTarget;
 }
 
-function printStatement(title, clientName, financialYear, period, bodyHTML) {
+function printStatement(title, clientName, financialYear, period, bodyHTML, opts) {
   const target = getPrintTarget();
+  const hideGeneratedLine = !!(opts && opts.hideGeneratedLine);
+  // hideBranding: omit the RandSense logo/tagline header bar and footer strip
+  // entirely — for documents the practitioner will apply their own letterhead
+  // branding to instead.
+  const hideBranding = !!(opts && opts.hideBranding);
   const periodLine = period ? ` &mdash; Period: ${escapeHTML(period)}` : '';
   const barStyle  = 'background:#145A32;padding:1rem 1.5rem;display:flex;align-items:flex-start;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
   const botStyle  = 'background:#1E8449;padding:0.5rem 1.5rem;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
-  target.innerHTML = `
-    <div style="font-family:'Poppins',sans-serif;color:#1A1A1A;font-size:11pt;margin:0;padding:0;">
+  const headerBar = hideBranding ? '' : `
       <div style="${barStyle}">
         ${_practiceLogoHTML()}
         <div style="font-size:11px;color:#D4F5E2;text-align:right;">${_practiceBy()}</div>
-      </div>
+      </div>`;
+  const footerBar = hideBranding ? '' : `
+      <div style="${botStyle}">
+        <span style="color:#FFFFFF;font-size:9px;font-family:'Poppins',sans-serif;">Making Cents of it all &mdash; RandSense</span>
+      </div>`;
+  target.innerHTML = `
+    <div style="font-family:'Poppins',sans-serif;color:#1A1A1A;font-size:11pt;margin:0;padding:0;">
+      ${headerBar}
       <div style="padding:24px;background:#FFFFFF;">
         <div style="margin-bottom:20px;">
           <div style="color:#145A32;font-weight:700;font-size:16pt;margin-bottom:2px;">${escapeHTML(clientName)}</div>
           <div style="color:#1E8449;font-weight:500;font-size:13pt;">${escapeHTML(title)}</div>
           <div style="color:#1E8449;font-size:10pt;margin-top:2px;">FY ${escapeHTML(financialYear)}${periodLine}</div>
-          <div style="font-size:8.5pt;color:#666666;margin-top:3px;">Generated: ${todayDMY()}</div>
+          ${hideGeneratedLine ? '' : `<div style="font-size:8.5pt;color:#666666;margin-top:3px;">Generated: ${todayDMY()}</div>`}
         </div>
         ${bodyHTML}
       </div>
-      <div style="${botStyle}">
-        <span style="color:#FFFFFF;font-size:9px;font-family:'Poppins',sans-serif;">Making Cents of it all &mdash; RandSense</span>
-      </div>
+      ${footerBar}
     </div>`;
   window.print();
 }

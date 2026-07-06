@@ -40,6 +40,15 @@ function fmt(n) {
   return (n < 0 ? '(' : '') + 'R\u00a0' + s + (n < 0 ? ')' : '');
 }
 
+// Commission earner ITR12 income statement rounds to the nearest whole rand
+// (no cents) rather than 2 decimal places used elsewhere.
+function fmtR1(n) {
+  const rounded = Math.round(n || 0);
+  const abs = Math.abs(rounded);
+  const s   = abs.toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return (rounded < 0 ? '(' : '') + 'R\u00a0' + s + (rounded < 0 ? ')' : '');
+}
+
 // ── Net balance per account code from a transaction array ─────
 // Returns a Map: accountCode → { name, type, net }
 // net = sum of all amounts for that code (positive or negative)
@@ -1555,11 +1564,21 @@ function renderBSFromTB(tbData, currentLabel, priorLabel, opts) {
   return html;
 }
 
-function renderCommissionIS(data, hideZeros) {
+// opts.hideCalcDetail: when true, suppress the split-verification breakdown
+// panels (income override, home office/travel/cell phone % split workings)
+// and show only the category totals. Used for the PDF export so a finalized
+// return can be downloaded as a clean totals-only statement; the on-screen
+// view always shows the full calculation detail.
+function renderCommissionIS(data, hideZeros, opts) {
+  const hideCalcDetail = !!(opts && opts.hideCalcDetail);
   const { incomeLines, expenseLines, totalIncome, totalExpenses, netIncome, isLoss,
           overrideActive, overrideAmount, bankIncome,
           hoSplitActive, hoSplitData, travelSplitActive, travelSplitData,
           cellSplitActive, cellSplitData, personalLines, totalPersonal } = data;
+
+  // Commission earner ITR12 statement rounds to the nearest whole rand —
+  // shadow the module-level 2-decimal fmt() for the rest of this function only.
+  const fmt = fmtR1;
 
   const row = (label, amt) =>
     `<tr><td class="label indent">${label}</td><td class="amt"></td><td class="amt">${fmt(amt)}</td></tr>`;
@@ -1589,7 +1608,7 @@ function renderCommissionIS(data, hideZeros) {
   html += subtotal('Total Income', totalIncome);
 
   // Income override verification panel
-  if (overrideActive) {
+  if (overrideActive && !hideCalcDetail) {
     html += notePanel('&#9888;', '--amber', '--amber-light', '--amber-border',
       'Income override active', [
         ['Bank statement income (from transactions):', fmt(bankIncome), null],
@@ -1604,7 +1623,7 @@ function renderCommissionIS(data, hideZeros) {
     if (!hideZeros || l.amount !== 0) {
       html += row(l.name, l.amount);
       // Home office split verification panel — shown right after the HO line
-      if (l.code === 'ITR-EXP-HOM' && hoSplitActive && hoSplitData) {
+      if (l.code === 'ITR-EXP-HOM' && hoSplitActive && hoSplitData && !hideCalcDetail) {
         const { fullAmount, businessAmount, personalAmount, pct, breakdown } = hoSplitData;
         const breakdownRows = (breakdown || []).map(b => [`  ${b.name}:`, fmt(b.amount), null]);
         html += notePanel('&#127968;', '--text-muted', '--surface-2', '--border',
@@ -1617,7 +1636,7 @@ function renderCommissionIS(data, hideZeros) {
           ]);
       }
       // Travel split verification panel — shown right after the Travel line
-      if (l.code === 'ITR-EXP-TRV' && travelSplitActive && travelSplitData) {
+      if (l.code === 'ITR-EXP-TRV' && travelSplitActive && travelSplitData && !hideCalcDetail) {
         const { fullAmount, businessAmount, personalAmount, pct, breakdown } = travelSplitData;
         const breakdownRows = (breakdown || []).map(b => [`  ${b.name}:`, fmt(b.amount), null]);
         html += notePanel('&#128664;', '--text-muted', '--surface-2', '--border',
@@ -1630,7 +1649,7 @@ function renderCommissionIS(data, hideZeros) {
           ]);
       }
       // Cell phone split verification panel — shown right after the Cell phone line
-      if (l.code === 'ITR-EXP-CEL' && cellSplitActive && cellSplitData) {
+      if (l.code === 'ITR-EXP-CEL' && cellSplitActive && cellSplitData && !hideCalcDetail) {
         const { fullAmount, businessAmount, personalAmount, pct } = cellSplitData;
         html += notePanel('&#128241;', '--text-muted', '--surface-2', '--border',
           `Cell phone split — ${pct}% business use`, [
@@ -1653,7 +1672,8 @@ function renderCommissionIS(data, hideZeros) {
   // Memo section — personal/non-deductible items (e.g. Drawings). Excluded
   // from Total Income/Total Expenses/Net Income above; shown here purely
   // for record-keeping, visually separated from the income statement itself.
-  if (personalLines && personalLines.length && (!hideZeros || totalPersonal !== 0)) {
+  // Omitted entirely from the totals-only PDF export (hideCalcDetail).
+  if (personalLines && personalLines.length && (!hideZeros || totalPersonal !== 0) && !hideCalcDetail) {
     html += `<table class="stmt-table" style="margin-top:14px;">
       <tr class="section-head"><td colspan="3">Memo — Personal (not part of Income Statement)</td></tr>`;
     personalLines.forEach(l => { if (!hideZeros || l.amount !== 0) html += row(l.name, l.amount); });

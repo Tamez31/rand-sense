@@ -375,6 +375,7 @@ const ITR12_CATEGORIES = {
     // with a single shared business-use % applied once to their combined
     // total (not three independent percentages). See group: 'home_office'.
     { code: 'ITR-EXP-HOM-BND', name: 'Home Office - Bond Interest', group: 'home_office' },
+    { code: 'ITR-EXP-HOM-RENT', name: 'Home Office - Rent',         group: 'home_office' },
     { code: 'ITR-EXP-HOM-WTR', name: 'Home Office - Water',         group: 'home_office' },
     { code: 'ITR-EXP-HOM-ELE', name: 'Home Office - Electricity',   group: 'home_office' },
     { code: 'ITR-EXP-INS',  name: 'Insurance' },
