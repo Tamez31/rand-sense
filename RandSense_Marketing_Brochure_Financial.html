@@ -296,10 +296,24 @@
 
     /* ── Print styles ────────────────────────────────────────────── */
     @media print {
+      html { font-size: 11.5px; }
       .btn-download { display: none; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .section { padding: 44px 0; }
+      .section { padding: 26px 0; }
+      .section-header { margin-bottom: 26px; }
+      .hero { padding: 40px 24px 32px; }
+      .hero-stats { padding-top: 20px; }
+      .hero-cta { margin-bottom: 28px; }
       .service-card:hover { box-shadow: none; transform: none; }
+      .service-grid { gap: 10px; }
+      .why-grid { gap: 12px; }
+      .service-card, .why-card, .contact-card,
+      .sub-section-heading, .section-header,
+      .hero, .footer {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .sub-section { page-break-inside: avoid; break-inside: avoid; }
     }
 
     /* ── Responsive ──────────────────────────────────────────────── */
