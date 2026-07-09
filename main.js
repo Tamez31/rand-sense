@@ -29,8 +29,14 @@ function createWindow() {
 }
 
 // ── IPC: print brochure HTML to PDF and open it ──────────────
-ipcMain.handle('print-brochure-pdf', async () => {
-  const brochurePath = path.join(__dirname, 'RandSense_Marketing_Brochure_V3.html')
+ipcMain.handle('print-brochure-pdf', async (_, brochureFile) => {
+  const allowed = [
+    'RandSense_Marketing_Brochure_V3.html',
+    'RandSense_Marketing_Brochure_Tax.html',
+    'RandSense_Marketing_Brochure_Financial.html'
+  ]
+  const file = allowed.includes(brochureFile) ? brochureFile : allowed[0]
+  const brochurePath = path.join(__dirname, file)
   const hidden = new BrowserWindow({
     show: false,
     webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: false }
@@ -38,7 +44,8 @@ ipcMain.handle('print-brochure-pdf', async () => {
   await hidden.loadFile(brochurePath)
   const pdfBuf = await hidden.webContents.printToPDF({ landscape: true, printBackground: true })
   hidden.close()
-  const savePath = path.join(os.homedir(), 'Downloads', `RandSense_Brochure_${Date.now()}.pdf`)
+  const nameTag = file.replace('RandSense_Marketing_Brochure_', '').replace('.html', '')
+  const savePath = path.join(os.homedir(), 'Downloads', `RandSense_Brochure_${nameTag}_${Date.now()}.pdf`)
   fs.writeFileSync(savePath, pdfBuf)
   shell.openPath(savePath)
   return savePath

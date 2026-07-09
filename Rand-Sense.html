@@ -61,8 +61,13 @@
   <!-- ── Brochure Modal ──────────────────────────────────── -->
   <div id="brochure-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;flex-direction:column;">
     <div style="background:#fff;border-radius:16px;width:94vw;height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 48px rgba(0,0,0,0.4);">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #e0e0e0;background:#145A32;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #e0e0e0;background:#145A32;flex-wrap:wrap;gap:10px;">
         <span style="font-weight:700;font-size:1.05rem;color:#fff;">RandSense Marketing Brochure</span>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm brochure-tab-btn" data-brochure="combined" onclick="switchBrochureTab('combined')" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);">Combined</button>
+          <button class="btn btn-sm brochure-tab-btn" data-brochure="tax" onclick="switchBrochureTab('tax')" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);">Tax Only</button>
+          <button class="btn btn-sm brochure-tab-btn" data-brochure="financial" onclick="switchBrochureTab('financial')" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);">Financial Only</button>
+        </div>
         <div style="display:flex;gap:10px;">
           <button class="btn btn-primary btn-sm" onclick="downloadBrochurePDF()" id="brochure-pdf-btn">&#11123; Download PDF</button>
           <button class="btn btn-sm" style="background:#25D366;color:#fff;border:none;" onclick="shareBrochureWhatsApp()">&#128232; Share via WhatsApp</button>
@@ -5667,9 +5672,28 @@ async function saveIndividualInvoice(contactId, status) {
 // BROCHURE MODAL
 // ============================================================
 
+const BROCHURE_FILES = {
+  combined:  'RandSense_Marketing_Brochure_V3.html',
+  tax:       'RandSense_Marketing_Brochure_Tax.html',
+  financial: 'RandSense_Marketing_Brochure_Financial.html'
+};
+let currentBrochureTab = 'combined';
+
+function switchBrochureTab(tab) {
+  currentBrochureTab = tab;
+  const frame = document.getElementById('brochure-frame');
+  if (frame) { frame.src = BROCHURE_FILES[tab] || BROCHURE_FILES.combined; }
+  document.querySelectorAll('.brochure-tab-btn').forEach(b => {
+    const active = b.dataset.brochure === tab;
+    b.style.background = active ? '#A8E6C1' : 'rgba(255,255,255,0.15)';
+    b.style.color = active ? '#145A32' : '#fff';
+  });
+}
+
 function openBrochureModal() {
   const modal = document.getElementById('brochure-modal');
   if (modal) { modal.style.display = 'flex'; }
+  switchBrochureTab('combined');
 }
 
 function closeBrochureModal() {
@@ -5682,7 +5706,7 @@ async function downloadBrochurePDF() {
   if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
   try {
     if (window.electronAPI?.printBrochurePDF) {
-      const savePath = await window.electronAPI.printBrochurePDF();
+      const savePath = await window.electronAPI.printBrochurePDF(BROCHURE_FILES[currentBrochureTab] || BROCHURE_FILES.combined);
       toast(`PDF saved to Downloads folder.`, 'success');
     } else {
       // Fallback: print the iframe
