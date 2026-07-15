@@ -4674,10 +4674,50 @@ async function openPaymentModal(clientId) {
     state._paymentModal = {
       invoiceId:         inv.id,
       clientId:          c.id,
+      individualContactId: null,
       amountPaid:        parseFloat(inv.amount_paid) || 0,
       amountOutstanding: parseFloat(inv.amount_outstanding) || parseFloat(inv.total) || 0,
+      source:            'dashboard',
     };
     document.getElementById('pm-client-name').textContent    = c.name;
+    document.getElementById('pm-invoice-number').textContent = inv.invoice_number;
+    document.getElementById('pm-total').textContent          = _fmtZAR(inv.total);
+    document.getElementById('pm-paid').textContent           = _fmtZAR(inv.amount_paid || 0);
+    document.getElementById('pm-outstanding').textContent    = _fmtZAR(state._paymentModal.amountOutstanding);
+    document.getElementById('pm-amount').value               = '';
+    document.getElementById('pm-error').style.display        = 'none';
+    openModal('payment-modal');
+  } catch(e) {
+    toast('Error loading invoice: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+// Generic payment capture from the Invoices list — works for both
+// company/commission clients (client_id) and individuals (individual_contact_id).
+async function openInvoicePaymentModal(invoiceId) {
+  showLoading('Loading invoice…');
+  try {
+    const inv = await DB.Invoices.getById(invoiceId);
+    if (!inv) { toast('Invoice not found.', 'error'); return; }
+    let payerName = '—';
+    if (inv.individual_contact_id) {
+      const contact = await DB.IndividualContacts.get(inv.individual_contact_id);
+      payerName = contact?.name || '—';
+    } else if (inv.client_id) {
+      if (!state.clients.length) state.clients = await DB.Clients.list();
+      payerName = state.clients.find(c => c.id === inv.client_id)?.name || '—';
+    }
+    state._paymentModal = {
+      invoiceId:            inv.id,
+      clientId:             inv.client_id || null,
+      individualContactId:  inv.individual_contact_id || null,
+      amountPaid:           parseFloat(inv.amount_paid) || 0,
+      amountOutstanding:    parseFloat(inv.amount_outstanding) || parseFloat(inv.total) || 0,
+      source:               'invoiceList',
+    };
+    document.getElementById('pm-client-name').textContent    = payerName;
     document.getElementById('pm-invoice-number').textContent = inv.invoice_number;
     document.getElementById('pm-total').textContent          = _fmtZAR(inv.total);
     document.getElementById('pm-paid').textContent           = _fmtZAR(inv.amount_paid || 0);
@@ -4722,15 +4762,17 @@ async function confirmPayment() {
     const invUpdate = { amount_paid: newAmtPaid, amount_outstanding: newAmtOutstanding, status: newStatus };
     if (newStatus === 'paid') invUpdate.paid_date = new Date().toISOString();
     await DB.Invoices.update(m.invoiceId, invUpdate);
-    // Update pending_invoice on client
-    const c = state.clients.find(x => x.id === m.clientId);
-    if (c) {
-      const nowIso = new Date().toISOString();
-      const pi = { ...(c.pending_invoice || {}), status: newStatus, amount_outstanding: newAmtOutstanding };
-      if (newStatus === 'paid') { pi.stage = 'paid'; pi.paid_date = nowIso; }
-      await DB.Clients.update(m.clientId, { pending_invoice: pi });
-      const idx = state.clients.findIndex(x => x.id === m.clientId);
-      if (idx >= 0) state.clients[idx] = { ...state.clients[idx], pending_invoice: pi };
+    // Update pending_invoice on client (company/commission clients only)
+    if (m.clientId) {
+      const c = state.clients.find(x => x.id === m.clientId);
+      if (c) {
+        const nowIso = new Date().toISOString();
+        const pi = { ...(c.pending_invoice || {}), status: newStatus, amount_outstanding: newAmtOutstanding };
+        if (newStatus === 'paid') { pi.stage = 'paid'; pi.paid_date = nowIso; }
+        await DB.Clients.update(m.clientId, { pending_invoice: pi });
+        const idx = state.clients.findIndex(x => x.id === m.clientId);
+        if (idx >= 0) state.clients[idx] = { ...state.clients[idx], pending_invoice: pi };
+      }
     }
     // Re-query outstanding total from Supabase so the metric card is accurate
     try {
@@ -4738,7 +4780,8 @@ async function confirmPayment() {
       state._outstandingTotal = rows.reduce((s, r) => s + (parseFloat(r.amount_outstanding) || 0), 0);
     } catch(_) {}
     toast(`Payment of ${_fmtZAR(amt)} recorded${newStatus === 'paid' ? ' — invoice fully paid!' : '.'}`, 'success');
-    renderPracticeDashboard();
+    if (m.source === 'invoiceList') loadInvoiceList();
+    else renderPracticeDashboard();
   } catch(e) {
     toast('Error recording payment: ' + e.message, 'error');
   } finally {
@@ -4833,11 +4876,12 @@ async function loadInvoiceList() {
   showLoading('Loading invoices…');
   try {
     if (!state.clients.length) state.clients = await DB.Clients.list();
-    const [invoices, payments] = await Promise.all([
+    const [invoices, payments, individuals] = await Promise.all([
       DB.Invoices.list(),
       DB.Payments.listAll(),
+      DB.IndividualContacts.list(),
     ]);
-    renderInvoiceList(invoices, payments);
+    renderInvoiceList(invoices, payments, individuals);
   } catch(e) {
     toast('Error loading invoices: ' + e.message, 'error');
   } finally {
@@ -4845,10 +4889,12 @@ async function loadInvoiceList() {
   }
 }
 
-function renderInvoiceList(invoices, payments) {
+function renderInvoiceList(invoices, payments, individuals) {
   _renderInvNav();
   const clientMap = {};
   state.clients.forEach(c => { clientMap[c.id] = c.name; });
+  (individuals || []).forEach(c => { clientMap[c.id] = c.name; });
+  const nameForInv = inv => clientMap[inv.individual_contact_id] || clientMap[inv.client_id] || '—';
 
   // Group payments by invoice_id
   const payMap = {};
@@ -4873,7 +4919,7 @@ function renderInvoiceList(invoices, payments) {
         const mainRow = `
           <tr>
             <td><strong style="color:#145A32;">${escH(inv.invoice_number)}</strong></td>
-            <td>${escH(clientMap[inv.client_id] || '—')}</td>
+            <td>${escH(nameForInv(inv))}</td>
             <td style="font-size:0.82rem;color:#666;">${fmtDate(inv.invoice_date)}</td>
             <td style="font-size:0.82rem;color:#666;">${fmtDate(inv.due_date)}</td>
             <td>${statusPill(inv.status)}${paidDateCell}</td>
@@ -4881,7 +4927,10 @@ function renderInvoiceList(invoices, payments) {
             <td class="num" style="color:${parseFloat(inv.amount_outstanding) > 0 ? '#C0392B' : '#999'};">
               ${parseFloat(inv.amount_outstanding) > 0 ? _fmtZAR(inv.amount_outstanding) : '—'}
             </td>
-            <td style="display:flex;gap:6px;">
+            <td style="display:flex;gap:6px;flex-wrap:wrap;">
+              ${parseFloat(inv.amount_outstanding) > 0
+                ? `<button class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="openInvoicePaymentModal('${inv.id}')">Payment Received</button>`
+                : ''}
               <button class="btn btn-ghost btn-sm" onclick="downloadInvoicePDF('${inv.id}')">&#128196; PDF</button>
               <button class="btn btn-danger btn-sm" onclick="deleteInvoice('${inv.id}')">Delete</button>
             </td>
