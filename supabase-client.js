@@ -339,6 +339,19 @@ const Rules = {
   async incrementBatch(ids) {
     await Promise.all(ids.map(id => Rules.incrementMatchCount(id)));
   },
+
+  // All rules belonging to every OTHER client (excludes clientId) — used to
+  // suggest classifications for a new client from other clients' history.
+  async listExcluding(clientId) {
+    const sb = getClient();
+    return unwrap(
+      await sb
+        .from('bank_rules')
+        .select('*')
+        .neq('client_id', clientId)
+        .order('match_count', { ascending: false })
+    );
+  },
 };
 
 // ============================================================

@@ -240,6 +240,42 @@ async function runImportPipeline(params) {
   }
 }
 
+// ── Cross-client rule suggestions ──────────────────────────────
+// For a brand-new client with no rule history of their own, reuse other
+// clients' keyword rules to auto-classify obvious matches (shared merchants,
+// bank fee wording, etc.) — same substring/longest-keyword-wins matching as
+// matchRule(), but restricted to keywords of MIN_CROSS_CLIENT_KEYWORD_LEN or
+// more. Short keywords (e.g. "AE", "IK") are safe within the client whose
+// own transaction history they were tuned against, but reused blindly across
+// clients they produce false positives (matching unrelated merchants that
+// happen to contain the same short substring). Never writes anything to the
+// database — call classifyBatch on the result to actually persist matches.
+const MIN_CROSS_CLIENT_KEYWORD_LEN = 4;
+
+function suggestFromOtherClients(transactions, foreignRules) {
+  const usableRules = foreignRules.filter(r => normalise(r.keyword).length >= MIN_CROSS_CLIENT_KEYWORD_LEN);
+
+  const matched   = [];
+  const unmatched = [];
+  for (const tx of transactions) {
+    const rule = matchRule(tx.description, usableRules);
+    if (rule) {
+      matched.push({
+        id:           tx.id,
+        account_code: rule.account_code,
+        account_name: rule.account_name,
+        vat_type:     rule.vat_type || 'none',
+        vat_code:     rule.vat_code || 0,
+        matchedKeyword: rule.keyword,
+        matchedFromClientId: rule.client_id,
+      });
+    } else {
+      unmatched.push(tx);
+    }
+  }
+  return { matched, unmatched };
+}
+
 // ── Save a manual classification + create rule ────────────────
 // Called when the user classifies an unmatched transaction.
 //
@@ -425,6 +461,7 @@ window.RulesEngine = {
   validateRule,
   findDuplicateRule,
   runImportPipeline,
+  suggestFromOtherClients,
   classifyAndSaveRule,
   classifyCommissionTransaction,
   ITR12_CATEGORIES,

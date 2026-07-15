@@ -1221,6 +1221,7 @@ function renderTransactionsList() {
       </div>
       <div class="btn-row" style="margin-bottom:16px;">
         <button class="btn btn-dark btn-sm" onclick="openClassifyQueue()">Classify Now &#8594;</button>
+        <button class="btn btn-ghost btn-sm" onclick="suggestClassificationsFromOtherClients()">&#10024; Suggest from Other Clients' Rules</button>
         <button class="btn btn-ghost btn-sm" onclick="exportUnclassifiedForClient()">&#128196; Export for Client Review</button>
       </div>
       ${renderTxTable(all)}`;
@@ -1290,11 +1291,51 @@ function exportUnclassifiedForClient() {
   window.Export.exportUnclassifiedPDF(unc, state.currentClient.name, state.currentYear);
 }
 
+// Reuse other clients' bank-rule keyword history to auto-classify obvious
+// matches for this client's unclassified transactions (e.g. a brand-new
+// client with no rules of their own yet). Only reasonably specific keywords
+// are used — see MIN_CROSS_CLIENT_KEYWORD_LEN in rules-engine.js — so this
+// is safe to run without review, but every match can still be edited
+// afterwards like any other classification.
+async function suggestClassificationsFromOtherClients() {
+  const c = state.currentClient;
+  const unc = state.unclassified;
+  if (!unc.length) { toast('Nothing to classify.', 'info'); return; }
+
+  showLoading('Checking other clients’ rules…');
+  try {
+    const foreignRules = await DB.Rules.listExcluding(c.id);
+    const { matched, unmatched } = window.RulesEngine.suggestFromOtherClients(unc, foreignRules);
+
+    if (!matched.length) {
+      toast('No matches found in other clients’ rule history.', 'info');
+      return;
+    }
+
+    await DB.Transactions.classifyBatch(matched);
+
+    const matchedRuleIds = [...new Set(foreignRules
+      .filter(r => matched.some(m => m.matchedFromClientId === r.client_id && m.matchedKeyword === r.keyword))
+      .map(r => r.id))];
+    if (matchedRuleIds.length) await DB.Rules.incrementBatch(matchedRuleIds);
+
+    state.unclassified = await DB.Transactions.listUnclassified(c.id);
+    state.transactions = await DB.Transactions.listByYear(c.id, state.currentYear);
+    toast(`${matched.length} transaction${matched.length>1?'s':''} classified from other clients’ rules. ${unmatched.length} still need review.`, 'success');
+    renderClientDetail();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
 function renderClassifyQueue() {
   const unc = state.unclassified;
   const c   = state.currentClient;
 
   const exportBtn = `<button class="btn btn-ghost btn-sm" onclick="exportUnclassifiedForClient()">&#128196; Export for Client Review</button>`;
+  const suggestBtn = `<button class="btn btn-ghost btn-sm" onclick="suggestClassificationsFromOtherClients()">&#10024; Suggest from Other Clients' Rules</button>`;
 
   if (unc.length === 0) {
     setContent(`
@@ -1338,7 +1379,7 @@ function renderClassifyQueue() {
         <div class="page-title">Classify Transactions
           <small>${unc.length} remaining</small>
         </div>
-        <div>${exportBtn}</div>
+        <div>${suggestBtn}${exportBtn}</div>
       </div>
       <div class="card">
         <div class="card-title">Unclassified transactions</div>
