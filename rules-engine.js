@@ -428,10 +428,7 @@ const ITR12_CATEGORIES = {
     // group: 'travel'.
     { code: 'ITR-EXP-TRL',  name: 'Travel - local',    group: 'travel' },
     { code: 'ITR-EXP-TRO',  name: 'Travel - overseas', group: 'travel' },
-    // Motor vehicle sits directly under Travel — same underlying driving
-    // activity, so it gets its own business-use % split via motorVehicleOptions
-    // in buildCommissionIS(), rendered right after the Travel line.
-    { code: 'ITR-EXP-MOT',  name: 'Motor vehicle expenses' },
+    { code: 'ITR-EXP-MOT',  name: 'Repairs and Maintenance - Vehicle', group: 'travel' },
     { code: 'ITR-EXP-UNI',  name: 'Uniforms / protective clothing' },
     { code: 'ITR-EXP-OTH',  name: 'Other expenses' },
   ],

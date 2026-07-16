@@ -851,12 +851,7 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
 //
 // cellPhoneOptions (optional): { active: boolean, businessPct: string|number }
 //   Same pattern as homeOfficeOptions, applied to the Cell phone line.
-//
-// motorVehicleOptions (optional): { active: boolean, businessPct: string|number }
-//   Same single-line pattern as cellPhoneOptions, applied to the Motor
-//   vehicle expenses line (fuel, tracking, servicing) — rendered directly
-//   after Travel since it's the same underlying driving activity.
-function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOptions, travelOptions, cellPhoneOptions, motorVehicleOptions) {
+function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOptions, travelOptions, cellPhoneOptions) {
   try {
     const txMap = netByAccount(transactions);
 
@@ -966,27 +961,6 @@ function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOp
       cellDisplayAmount = businessAmount;
     }
 
-    // ── Motor vehicle split (same single-line pattern as cell phone) ───
-    const motActive = !!(motorVehicleOptions && motorVehicleOptions.active);
-    const motPctRaw = motActive
-      ? parseFloat(String(motorVehicleOptions.businessPct || '0').replace(/[^0-9.]/g, ''))
-      : null;
-    const motPct    = motActive && motPctRaw !== null && !isNaN(motPctRaw) && motPctRaw >= 0 && motPctRaw <= 100
-      ? motPctRaw : null;
-    const useMotSplit = motPct !== null;
-
-    let motSplitData = null;
-    const motLine        = rawExpenseLines.find(l => l.code === 'ITR-EXP-MOT');
-    const motFullAmount  = motLine ? motLine.amount : 0;
-    let   motDisplayAmount = motFullAmount;
-
-    if (useMotSplit && motFullAmount > 0) {
-      const businessAmount = r2(motFullAmount * motPct / 100);
-      const personalAmount = r2(motFullAmount - businessAmount);
-      motSplitData = { fullAmount: motFullAmount, businessAmount, personalAmount, pct: motPct };
-      motDisplayAmount = businessAmount;
-    }
-
     let hoInserted = false;
     let travelInserted = false;
     const expenseLines = rawExpenseLines
@@ -1003,9 +977,6 @@ function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOp
         }
         if (l.code === 'ITR-EXP-CEL') {
           return { ...l, amount: cellDisplayAmount };
-        }
-        if (l.code === 'ITR-EXP-MOT') {
-          return { ...l, amount: motDisplayAmount };
         }
         return l;
       })
@@ -1044,8 +1015,6 @@ function buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOp
         travelSplitData,   // null when Travel line is zero or split not active
         cellSplitActive:   useCellSplit && cellSplitData !== null,
         cellSplitData,     // null when Cell phone line is zero or split not active
-        motSplitActive:    useMotSplit && motSplitData !== null,
-        motSplitData,      // null when Motor vehicle line is zero or split not active
         personalLines,  // memo-only, excluded from netIncome
         totalPersonal,
       },
@@ -1605,8 +1574,7 @@ function renderCommissionIS(data, hideZeros, opts) {
   const { incomeLines, expenseLines, totalIncome, totalExpenses, netIncome, isLoss,
           overrideActive, overrideAmount, bankIncome,
           hoSplitActive, hoSplitData, travelSplitActive, travelSplitData,
-          cellSplitActive, cellSplitData, motSplitActive, motSplitData,
-          personalLines, totalPersonal } = data;
+          cellSplitActive, cellSplitData, personalLines, totalPersonal } = data;
 
   // Commission earner ITR12 statement rounds to the nearest whole rand —
   // shadow the module-level 2-decimal fmt() for the rest of this function only.
@@ -1686,17 +1654,6 @@ function renderCommissionIS(data, hideZeros, opts) {
         html += notePanel('&#128241;', '--text-muted', '--surface-2', '--border',
           `Cell phone split — ${pct}% business use`, [
             [`Full cell phone expenses:`, fmt(fullAmount), null],
-            [`Business portion (${pct}%):`, fmt(businessAmount), null],
-            [`Personal portion (${r2(100 - pct)}%):`, fmt(personalAmount), 'var(--text-muted)'],
-            [`Amount on this statement:`, fmt(businessAmount), null],
-          ]);
-      }
-      // Motor vehicle split verification panel — shown right after the Motor vehicle line
-      if (l.code === 'ITR-EXP-MOT' && motSplitActive && motSplitData && !hideCalcDetail) {
-        const { fullAmount, businessAmount, personalAmount, pct } = motSplitData;
-        html += notePanel('&#128664;', '--text-muted', '--surface-2', '--border',
-          `Motor vehicle split — ${pct}% business use`, [
-            [`Full motor vehicle expenses:`, fmt(fullAmount), null],
             [`Business portion (${pct}%):`, fmt(businessAmount), null],
             [`Personal portion (${r2(100 - pct)}%):`, fmt(personalAmount), 'var(--text-muted)'],
             [`Amount on this statement:`, fmt(businessAmount), null],

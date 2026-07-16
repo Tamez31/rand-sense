@@ -505,7 +505,6 @@ const state = {
   cmHomeOffice: { active: false, businessPct: '' },
   cmTravel:     { active: false, businessPct: '' },
   cmCellPhone:  { active: false, businessPct: '' },
-  cmMotorVehicle: { active: false, businessPct: '' },
   // VAT report date range filter
   _vatDateFrom:    null,       // YYYY-MM-DD or null
   _vatDateTo:      null,       // YYYY-MM-DD or null
@@ -1636,31 +1635,6 @@ function renderReportsTab() {
       </div>
     </div>` : '';
 
-  // Motor vehicle split bar — only shown for commission earners on the IS tab
-  const mvChecked      = state.cmMotorVehicle.active ? 'checked' : '';
-  const mvPct          = state.cmMotorVehicle.businessPct || '';
-  const mvPctVisible   = state.cmMotorVehicle.active ? 'flex' : 'none';
-  const motorVehicleBar  = (isC && rt === 'IS') ? `
-    <div style="background:#F0F9F4;border:1.5px solid #C8E6C9;border-radius:8px;padding:12px 16px;margin-bottom:14px;">
-      <label class="toggle-row">
-        <input type="checkbox" id="mv-split-toggle" ${mvChecked} onchange="toggleMotorVehicleSplit(this.checked)"/>
-        <span style="font-weight:600;">Apply motor vehicle business % split</span>
-      </label>
-      <div id="mv-split-input" style="margin-top:12px;display:${mvPctVisible};align-items:center;gap:10px;flex-wrap:wrap;">
-        <label style="font-size:0.82rem;font-weight:600;color:#145A32;white-space:nowrap;">Business use</label>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input class="form-control" type="number" min="0" max="100" step="1"
-            id="mv-split-pct"
-            value="${mvPct}"
-            placeholder="e.g. 20"
-            style="width:90px;"
-            oninput="setMotorVehiclePct(this.value)"/>
-          <span style="font-size:0.9rem;font-weight:700;">%</span>
-        </div>
-        <span style="font-size:0.78rem;color:#666666;">Only the business portion of motor vehicle expenses (fuel, tracking, servicing) will appear on the statement — same underlying driving as the Travel split above.</span>
-      </div>
-    </div>` : '';
-
   // VAT date range filter bar — shown only on VAT tab for VAT-active companies
   let vatFilterBar = '';
   if (!isC && c.vat_active && rt === 'VAT') {
@@ -1749,7 +1723,7 @@ function renderReportsTab() {
   // Auto-generate on tab render
   setTimeout(() => generateReport(), 50);
 
-  return `<div id="reports-tab-content">${itr12Banner}${toolbar}${incomeOverrideBar}${homeOfficeBar}${travelBar}${motorVehicleBar}${cellPhoneBar}${vatFilterBar}<div class="card">${content}</div>${finalizeSection}</div>`;
+  return `<div id="reports-tab-content">${itr12Banner}${toolbar}${incomeOverrideBar}${homeOfficeBar}${travelBar}${cellPhoneBar}${vatFilterBar}<div class="card">${content}</div>${finalizeSection}</div>`;
 }
 
 function toggleIncomeOverride(active) {
@@ -1807,18 +1781,6 @@ function toggleCellPhoneSplit(active) {
 
 function setCellPhonePct(val) {
   state.cmCellPhone.businessPct = val;
-  generateReport();
-}
-
-function toggleMotorVehicleSplit(active) {
-  state.cmMotorVehicle.active = active;
-  const inp = document.getElementById('mv-split-input');
-  if (inp) inp.style.display = active ? 'flex' : 'none';
-  generateReport();
-}
-
-function setMotorVehiclePct(val) {
-  state.cmMotorVehicle.businessPct = val;
   generateReport();
 }
 
@@ -2267,7 +2229,7 @@ async function generateReport() {
           state._commissionIS = snapshot;
           _enforceReportReadOnly();
         } else {
-          const r = F.buildCommissionIS(txs, hz, state.cmIncomeOverride, state.cmHomeOffice, state.cmTravel, state.cmCellPhone, state.cmMotorVehicle);
+          const r = F.buildCommissionIS(txs, hz, state.cmIncomeOverride, state.cmHomeOffice, state.cmTravel, state.cmCellPhone);
           el.innerHTML = r.ok ? F.renderCommissionIS(r.data, hz) : `<div class="info-box red">${escH(r.error)}</div>`;
           state._commissionIS = r.ok ? r.data : null;
           if (locked) {
