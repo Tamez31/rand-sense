@@ -414,6 +414,7 @@ const ITR12_CATEGORIES = {
     { code: 'ITR-EXP-HOM-RENT', name: 'Home Office - Rent',         group: 'home_office' },
     { code: 'ITR-EXP-HOM-WTR', name: 'Home Office - Water',         group: 'home_office' },
     { code: 'ITR-EXP-HOM-ELE', name: 'Home Office - Electricity',   group: 'home_office' },
+    { code: 'ITR-EXP-HOM-REP', name: 'Home Office - Repairs & Maintenance', group: 'home_office' },
     { code: 'ITR-EXP-INS',  name: 'Insurance' },
     { code: 'ITR-EXP-INT',  name: 'Internet' },
     { code: 'ITR-EXP-LEG',  name: 'Legal fees' },
