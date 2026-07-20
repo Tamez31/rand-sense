@@ -509,6 +509,7 @@ const state = {
   _vatDateFrom:    null,       // YYYY-MM-DD or null
   _vatDateTo:      null,       // YYYY-MM-DD or null
   _vatQuickSelect: null,       // active quick-select key or null for custom
+  _vatPeriodKey:   null,       // selected VAT filing period key, or null for custom/all
   // Prior year transactions (cached for comparative columns on all reports)
   priorTransactions:   [],
   // Finalized ITR12 snapshot (localStorage-backed) for the current commission
@@ -885,6 +886,13 @@ async function openClient(id) {
     state.currentClient = await DB.Clients.get(id);
     if (!state.currentClient) { toast('Client not found.','error'); hideLoading(); return; }
 
+    // Reset the VAT report filter — a period/date range picked for one
+    // client must never leak into another client's VAT report.
+    state._vatDateFrom    = null;
+    state._vatDateTo      = null;
+    state._vatQuickSelect = null;
+    state._vatPeriodKey   = null;
+
     const years = await DB.Transactions.listYears(id);
     if (!state.currentYear || !years.includes(state.currentYear)) {
       state.currentYear = years[0] || String(new Date().getFullYear());
@@ -1188,6 +1196,11 @@ async function confirmInvoicePayment(invoiceId, outstanding) {
 
 async function onYearChange(year) {
   state.currentYear = year;
+  // A VAT filing period picked for one financial year doesn't map to another.
+  state._vatDateFrom    = null;
+  state._vatDateTo      = null;
+  state._vatQuickSelect = null;
+  state._vatPeriodKey   = null;
   showLoading('Loading year…');
   try {
     const priorYear = String(parseInt(year, 10) - 1);
@@ -1638,12 +1651,16 @@ function renderReportsTab() {
   // VAT date range filter bar — shown only on VAT tab for VAT-active companies
   let vatFilterBar = '';
   if (!isC && c.vat_active && rt === 'VAT') {
-    // Default to current month on first open
-    if (!state._vatDateFrom && !state._vatDateTo && !state._vatQuickSelect) {
-      const def = _computeVATQuickRange('current-month');
-      state._vatDateFrom    = def.from;
-      state._vatDateTo      = def.to;
-      state._vatQuickSelect = 'current-month';
+    // Default to the current (most recent open) VAT filing period on first open
+    const filingPeriods = _computeVATFilingPeriods(c, state.currentYear);
+    if (!state._vatDateFrom && !state._vatDateTo && !state._vatQuickSelect && !state._vatPeriodKey) {
+      const today = new Date().toISOString().slice(0, 10);
+      const openPeriod = [...filingPeriods].reverse().find(p => p.from <= today) || filingPeriods[filingPeriods.length - 1];
+      if (openPeriod) {
+        state._vatDateFrom = openPeriod.from;
+        state._vatDateTo   = openPeriod.to;
+        state._vatPeriodKey = openPeriod.key;
+      }
     }
     const fromVal = state._vatDateFrom || '';
     const toVal   = state._vatDateTo   || '';
@@ -1653,6 +1670,19 @@ function renderReportsTab() {
     const showingTxt = (fromVal || toVal)
       ? `Showing transactions from ${fromDis} to ${toDis}`
       : 'Showing all transactions';
+
+    const periodOptions = filingPeriods.map(p =>
+      `<option value="${p.key}" ${state._vatPeriodKey === p.key ? 'selected' : ''}>${escH(p.label)}</option>`
+    ).join('');
+    const periodSelectHTML = filingPeriods.length ? `
+      <div>
+        <label style="display:block;font-size:13px;font-weight:500;color:#145A32;margin-bottom:4px;">VAT Period</label>
+        <select id="vat-period-select" class="form-control" style="width:220px;" onchange="setVATPeriodSelect(this.value)">
+          <option value="">— Custom / All —</option>
+          ${periodOptions}
+        </select>
+      </div>` : '';
+
     const qBtns = [
       ['current-month', 'Current Month'],
       ['last-month',    'Last Month'],
@@ -1668,6 +1698,7 @@ function renderReportsTab() {
     vatFilterBar = `
       <div style="background:#F0F9F4;border:1px solid #C8E6C9;border-radius:12px;padding:1rem 1.5rem;margin-bottom:16px;">
         <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+          ${periodSelectHTML}
           <div>
             <label style="display:block;font-size:13px;font-weight:500;color:#145A32;margin-bottom:4px;">From</label>
             <input type="date" id="vat-date-from" class="form-control" style="width:170px;" value="${fromVal}"/>
@@ -1899,6 +1930,91 @@ function _isoToDmy(iso) {
   return `${d}/${m}/${y}`;
 }
 
+// Build the client's actual bi-monthly (or monthly/yearly) VAT filing periods
+// for the given financial year, so the report can be locked to exactly one
+// SARS filing period at a time — matching real bank-statement date ranges,
+// not an arbitrary custom range.
+//
+// Bi-monthly pairing follows the SARS convention: Jan-Feb, Mar-Apr, May-Jun,
+// Jul-Aug, Sep-Oct, Nov-Dec (calendar-aligned, independent of the company's
+// financial year-end month).
+function _computeVATFilingPeriods(client, currentYearStr) {
+  const FYE_MONTHS = { january:0, february:1, march:2, april:3, may:4, june:5,
+    july:6, august:7, september:8, october:9, november:10, december:11 };
+  const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const pad  = n => String(n).padStart(2, '0');
+  const isoD = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+  const feMonthIdx = FYE_MONTHS[(client?.financial_year_end || 'February').toLowerCase()] ?? 1;
+  const endYear   = parseInt(currentYearStr, 10);
+  if (!endYear) return [];
+  // FY spans 1st of the month after FYE, through the last day of the FYE month.
+  const fyStart = new Date(endYear - 1, feMonthIdx + 1, 1);
+  const fyEnd   = new Date(endYear,     feMonthIdx + 1, 0);
+
+  const vp = client?.vat_period || 'monthly';
+  if (vp === 'yearly') {
+    return [{
+      key:   'annual',
+      label: `Annual (${MONTH_ABBR[fyStart.getMonth()]} ${fyStart.getFullYear()} – ${MONTH_ABBR[fyEnd.getMonth()]} ${fyEnd.getFullYear()})`,
+      from:  isoD(fyStart),
+      to:    isoD(fyEnd),
+    }];
+  }
+
+  const step = vp === '2monthly' ? 2 : 1;
+  let curYear  = fyStart.getFullYear();
+  let curMonth = fyStart.getMonth(); // 0-indexed
+  if (step === 2 && (curMonth + 1) % 2 === 0) {
+    // Even start month — it belongs to the pair that opened the previous (odd) month.
+    curMonth -= 1;
+    if (curMonth < 0) { curMonth = 11; curYear -= 1; }
+  }
+
+  const periods = [];
+  while (true) {
+    const periodStart = new Date(curYear, curMonth, 1);
+    if (periodStart > fyEnd) break;
+    const periodEnd = new Date(curYear, curMonth + step, 0); // last day of the period's final month
+    if (periodEnd >= fyStart) {
+      const label = step === 1
+        ? `${MONTH_ABBR[periodStart.getMonth()]} ${periodStart.getFullYear()}`
+        : `${MONTH_ABBR[periodStart.getMonth()]} ${periodStart.getFullYear()} – ${MONTH_ABBR[periodEnd.getMonth()]} ${periodEnd.getFullYear()}`;
+      periods.push({ key: isoD(periodStart), label, from: isoD(periodStart), to: isoD(periodEnd) });
+    }
+    curMonth += step;
+    if (curMonth > 11) { curMonth -= 12; curYear += 1; }
+  }
+  return periods;
+}
+
+// Selecting a specific VAT filing period locks the report to exactly that
+// period's date range — no bleed from adjacent periods.
+function setVATPeriodSelect(key) {
+  state._vatQuickSelect = null;
+  state._vatPeriodKey   = key || null;
+  if (!key) {
+    state._vatDateFrom = null;
+    state._vatDateTo   = null;
+  } else {
+    const periods = _computeVATFilingPeriods(state.currentClient, state.currentYear);
+    const p = periods.find(pp => pp.key === key);
+    if (p) {
+      state._vatDateFrom = p.from;
+      state._vatDateTo   = p.to;
+    }
+  }
+  const fromEl = document.getElementById('vat-date-from');
+  const toEl   = document.getElementById('vat-date-to');
+  if (fromEl) fromEl.value = state._vatDateFrom || '';
+  if (toEl)   toEl.value   = state._vatDateTo   || '';
+  document.querySelectorAll('.vat-quick-btn').forEach(btn => {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-ghost');
+  });
+  generateReport();
+}
+
 function _computeVATQuickRange(key) {
   const now  = new Date();
   const y    = now.getFullYear();
@@ -1934,6 +2050,7 @@ function _computeVATQuickRange(key) {
 
 function setVATQuickSelect(key) {
   state._vatQuickSelect = key;
+  state._vatPeriodKey   = null;
   const { from, to } = _computeVATQuickRange(key);
   state._vatDateFrom = from;
   state._vatDateTo   = to;
@@ -1951,6 +2068,7 @@ function setVATQuickSelect(key) {
 
 function applyVATDateFilter() {
   state._vatQuickSelect = null;
+  state._vatPeriodKey   = null;
   state._vatDateFrom = document.getElementById('vat-date-from')?.value || null;
   state._vatDateTo   = document.getElementById('vat-date-to')?.value   || null;
   document.querySelectorAll('.vat-quick-btn').forEach(btn => {
@@ -1967,27 +2085,32 @@ function toggleHideZeros(val) {
 
 // ── VAT201 Summary card ────────────────────────────────────────
 function _buildVAT201Card(txs, fromIso, toIso, client) {
-  // Classified transactions only, vat_code 1 or 2
-  const vatTxs = txs.filter(t => t.account_code && ((t.vat_code || 0) === 1 || (t.vat_code || 0) === 2));
+  // Classified transactions with an actual VAT amount, keyed by vat_type
+  // ('output' = income VAT collected, 'input' = expense VAT claimable).
+  // Zero-rated items are VAT-eligible transactions with vat_amount === 0
+  // (as opposed to 'none', which is out-of-scope entirely — assets,
+  // liabilities, equity, drawings, loan accounts, etc.)
+  const vatTxs = txs.filter(t => t.account_code && (t.vat_type === 'output' || t.vat_type === 'input'));
 
-  // Split by direction (sign) and code
-  const outStd  = vatTxs.filter(t => (t.vat_code || 0) === 1 && t.amount > 0);  // income, standard rated
-  const outZero = vatTxs.filter(t => (t.vat_code || 0) === 2 && t.amount > 0);  // income, zero rated
-  const inStd   = vatTxs.filter(t => (t.vat_code || 0) === 1 && t.amount < 0);  // expense, standard rated
-  const inZero  = vatTxs.filter(t => (t.vat_code || 0) === 2 && t.amount < 0);  // expense, zero rated
+  const outStd  = vatTxs.filter(t => t.vat_type === 'output' && (t.vat_amount || 0) > 0);
+  const outZero = vatTxs.filter(t => t.vat_type === 'output' && (t.vat_amount || 0) === 0);
+  const inStd   = vatTxs.filter(t => t.vat_type === 'input'  && (t.vat_amount || 0) > 0);
+  const inZero  = vatTxs.filter(t => t.vat_type === 'input'  && (t.vat_amount || 0) === 0);
 
   const sumAbs  = arr => arr.reduce((a, t) => a + Math.abs(t.amount || 0), 0);
+  const sumVAT  = arr => arr.reduce((a, t) => a + (t.vat_amount || 0), 0);
   const r2      = n => Math.round(n * 100) / 100;
 
-  // Output calculations
+  // Output calculations — use the stored, already-extracted VAT amount
+  // rather than recomputing (keeps this in sync with the enhanced report).
   const outInc  = r2(sumAbs(outStd));
-  const outVAT  = r2(outInc / 115 * 15);
+  const outVAT  = r2(sumVAT(outStd));
   const outExc  = r2(outInc - outVAT);
   const outZeroAmt = r2(sumAbs(outZero));
 
   // Input calculations
   const inInc   = r2(sumAbs(inStd));
-  const inVAT   = r2(inInc / 115 * 15);
+  const inVAT   = r2(sumVAT(inStd));
   const inExc   = r2(inInc - inVAT);
   const inZeroAmt = r2(sumAbs(inZero));
 
@@ -2063,18 +2186,17 @@ function _buildVATSchedulesHTML(txs, fromIso, toIso, c) {
   const r2     = n => Math.round(n * 100) / 100;
   const fmtAmt = n => 'R\u00a0' + Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Classified txs only, split by vat_code and direction
-  const stdTxs    = txs.filter(t => t.account_code && (t.vat_code || 0) === 1);
-  const zeroTxs   = txs.filter(t => t.account_code && (t.vat_code || 0) === 2);
-  const outputTxs = stdTxs.filter(t => t.amount > 0);
-  const inputTxs  = stdTxs.filter(t => t.amount < 0);
-  const zeroOutTxs = zeroTxs.filter(t => t.amount > 0);
-  const zeroInTxs  = zeroTxs.filter(t => t.amount < 0);
+  // Classified txs only, split by vat_type (output/input) and standard vs. zero-rated
+  const vatTxs     = txs.filter(t => t.account_code && (t.vat_type === 'output' || t.vat_type === 'input'));
+  const outputTxs  = vatTxs.filter(t => t.vat_type === 'output' && (t.vat_amount || 0) > 0);
+  const inputTxs   = vatTxs.filter(t => t.vat_type === 'input'  && (t.vat_amount || 0) > 0);
+  const zeroOutTxs = vatTxs.filter(t => t.vat_type === 'output' && (t.vat_amount || 0) === 0);
+  const zeroInTxs  = vatTxs.filter(t => t.vat_type === 'input'  && (t.vat_amount || 0) === 0);
 
-  // Build row data for export
+  // Build row data for export — uses the stored, already-extracted VAT amount.
   const buildStdRow = t => {
     const inc = r2(Math.abs(t.amount || 0));
-    const vat = r2(inc / 115 * 15);
+    const vat = r2(t.vat_amount || 0);
     return { date: t.date, description: t.description, accountName: t.account_name || '', amtInc: inc, vatAmt: vat, amtExc: r2(inc - vat) };
   };
   const buildZeroRow = t => ({ date: t.date, description: t.description, accountName: t.account_name || '', amount: r2(Math.abs(t.amount || 0)) });
