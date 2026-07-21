@@ -65,6 +65,33 @@ function netByAccount(transactions) {
   return map;
 }
 
+// VAT-exclusive amount for a single transaction. Output/input VAT collected
+// or paid must never inflate revenue or expense on the Income Statement — it
+// belongs on the Balance Sheet (VAT Payable / VAT Receivable). Transactions
+// with vat_type 'none' (or no vat_amount) pass through unchanged.
+function exclVAT(t) {
+  const vat = Number(t.vat_amount || 0);
+  if (!vat || (t.vat_type !== 'output' && t.vat_type !== 'input')) return t.amount || 0;
+  const amt = t.amount || 0;
+  return r2(amt - Math.sign(amt) * vat);
+}
+
+// Same as netByAccount, but nets the VAT-exclusive amount per transaction.
+// Used everywhere the Income Statement's own figures are derived, so a
+// VAT-registered client's revenue/expense lines are always tax-exclusive.
+function netByAccountExclVAT(transactions) {
+  const map = new Map();
+  for (const t of transactions) {
+    if (!t.account_code) continue;
+    const key = t.account_code;
+    if (!map.has(key)) {
+      map.set(key, { code: key, name: t.account_name || key, net: 0 });
+    }
+    map.get(key).net = r2(map.get(key).net + exclVAT(t));
+  }
+  return map;
+}
+
 // ── Merge COA with transaction nets ──────────────────────────
 // Returns array of { code, name, type, net, openingBalance }
 // Includes all active COA accounts even if net is zero.
@@ -109,7 +136,7 @@ function buildIncomeStatement(transactions, coa, priorYearTransactions, hideZero
     // Journal entries are stored debit-positive (+DR, -CR). IS expects bank-perspective
     // (negative = expense, positive = income), so flip the sign for journal rows only.
     const flipJnl   = txns => txns.map(t => t.source_bank === 'Journal' ? {...t, amount: -(t.amount||0)} : t);
-    const txMap     = netByAccount(flipJnl(transactions));
+    const txMap     = netByAccountExclVAT(flipJnl(transactions));
     const hasPriorTxs = (priorYearTransactions || []).some(t => t.account_code);
     // Build priorMap: prefer live prior-year transactions; fall back to static comparatives
     // stored in opening_balances (financial_year = prior year, IS account types only).
@@ -117,7 +144,7 @@ function buildIncomeStatement(transactions, coa, priorYearTransactions, hideZero
     // for static comparative display — NOT opening balances in the traditional sense.
     let priorMap;
     if (hasPriorTxs) {
-      priorMap = netByAccount(flipJnl(priorYearTransactions));
+      priorMap = netByAccountExclVAT(flipJnl(priorYearTransactions));
     } else if ((staticComparatives || []).length > 0) {
       const _coaByCode = new Map(coa.map(a => [a.account_code, a]));
       priorMap = new Map();
@@ -528,6 +555,14 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
     const bankCode = bankCOA?.account_code || '1001';
     const bankName = bankCOA?.account_name || 'Bank Account';
 
+    // Locate the client's VAT clearing accounts (if configured). Output VAT
+    // collected on income and input VAT paid on expenses is split out of the
+    // classified P&L line and posted here instead, so the Income Statement
+    // stays VAT-exclusive while the double entry still balances against the
+    // full (VAT-inclusive) cash movement through the bank account.
+    const vatPayableCOA    = coa.find(a => a.is_active && a.account_type === 'liability' && /vat payable/i.test(a.account_name || ''));
+    const vatReceivableCOA = coa.find(a => a.is_active && a.account_type === 'asset'     && /vat receivable/i.test(a.account_name || ''));
+
     // Double-entry ledger: code → { code, name, type, debit, credit }
     const ledger = new Map();
 
@@ -557,14 +592,29 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
         continue;
       }
 
+      const vat        = Number(t.vat_amount || 0);
+      const isVatable   = vat > 0 && (t.vat_type === 'output' || t.vat_type === 'input') &&
+                          ['income', 'cost_of_sales', 'expense'].includes(accType);
+      const exclAbs     = isVatable ? r2(abs - vat) : abs;
+
       if ((t.amount || 0) > 0) {
-        // Money IN: DR Bank, CR classified account (income / asset / equity credit)
-        post(bankCode,       bankName, 'asset',  abs, 0  );
-        post(t.account_code, accName,  accType,  0,   abs);
+        // Money IN: DR Bank (full inclusive), CR classified account (exclusive)
+        // + CR VAT Payable for the output VAT portion, if configured.
+        post(bankCode,       bankName, 'asset', abs, 0);
+        post(t.account_code, accName,  accType, 0,   exclAbs);
+        if (isVatable) {
+          if (vatPayableCOA) post(vatPayableCOA.account_code, vatPayableCOA.account_name, 'liability', 0, vat);
+          else               post(t.account_code, accName, accType, 0, vat); // no VAT account configured — fall back
+        }
       } else {
-        // Money OUT: DR classified account (expense / asset debit), CR Bank
-        post(t.account_code, accName,  accType,  abs, 0  );
-        post(bankCode,       bankName, 'asset',  0,   abs);
+        // Money OUT: DR classified account (exclusive) + DR VAT Receivable for
+        // the input VAT portion, if configured. CR Bank (full inclusive).
+        post(t.account_code, accName,  accType, exclAbs, 0);
+        post(bankCode,       bankName, 'asset', 0,        abs);
+        if (isVatable) {
+          if (vatReceivableCOA) post(vatReceivableCOA.account_code, vatReceivableCOA.account_name, 'asset', vat, 0);
+          else                  post(t.account_code, accName, accType, vat, 0); // no VAT account configured — fall back
+        }
       }
     }
 
@@ -643,13 +693,12 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
     const equityLines = sort(filtered.filter(l => l.type === 'equity'));
 
     // ── Inject computed retained earnings into equity section ──
-    // Only when openingBalances and netProfit are supplied (company TB) AND
-    // there are no opening balances. When OBs exist, RE was already posted
-    // into the ledger above (showing the opening balance); adding synthetic
-    // RE on top would double-count net profit against the IS accounts.
-    // Without OBs, this synthetic line plugs the gap between IS net profit
-    // and the equity section so the BS section of the TB visually balances.
-    if (openingBalances !== undefined && netProfit !== undefined && !(openingBalances || []).length) {
+    // Always fold current-year net profit into Retained Earnings, whether or
+    // not opening balances exist. When OBs exist, the ledger above only ever
+    // posted the OB (prior years') RE balance — it never includes the
+    // current year's net profit, so this line is what makes the BS balance
+    // against the Income Statement for the current year.
+    if (netProfit !== undefined) {
       const reAccount = coa.find(a =>
         a.is_active && a.account_type === 'equity' &&
         (a.account_code === '3002' || a.account_name.toLowerCase().includes('retained earnings'))
