@@ -2588,7 +2588,7 @@ function renderAFSPack(d) {
     cosLines:    d.isData.cosLines.filter(_nz),
     expLines:    d.isData.expLines.filter(_nz),
   };
-  const detailedIS = `<div class="statement-wrap afs-page" style="page-break-before:always;padding:24px 32px;">${renderIS(isDataForDetail, d.currentLabel, d.priorLabel, false, { hideBuildTag: true, reverseColumns: true, noOuterWrap: true })}</div>`;
+  const detailedIS = `<div class="statement-wrap afs-page" style="page-break-before:always;padding:24px 32px;">${renderIS(isDataForDetail, d.currentLabel, d.priorLabel, false, { hideBuildTag: true, reverseColumns: true, noOuterWrap: true, clientName: c.name })}</div>`;
 
   return [cover, indexPage, letterPage1, letterPage2, sfp, sci, sce, scf, policies, notesPages, detailedIS].join('');
 }
