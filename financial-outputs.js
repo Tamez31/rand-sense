@@ -587,8 +587,27 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
       if (t.source_bank === 'Journal') {
         // Journal entries: post directly to the named account — no implicit bank leg.
         // Stored convention: amount > 0 = debit to account, amount < 0 = credit to account.
-        if ((t.amount || 0) > 0) post(t.account_code, accName, accType, abs, 0);
-        else                      post(t.account_code, accName, accType, 0,   abs);
+        // A journal line CAN carry vat_type/vat_amount (e.g. a VAT-inclusive capital
+        // asset purchase) — when it does, split the VAT portion out to the VAT
+        // clearing account, same as a bank-sourced transaction, so the line's
+        // `amount` can hold the true VAT-inclusive value for VAT-report purposes
+        // while the classified account still only receives the exclusive cost.
+        const jVat      = Number(t.vat_amount || 0);
+        const jVatable  = jVat > 0 && (t.vat_type === 'output' || t.vat_type === 'input');
+        const jExclAbs  = jVatable ? r2(abs - jVat) : abs;
+        if ((t.amount || 0) > 0) {
+          post(t.account_code, accName, accType, jExclAbs, 0);
+          if (jVatable) {
+            if (t.vat_type === 'input' && vatReceivableCOA) post(vatReceivableCOA.account_code, vatReceivableCOA.account_name, 'asset', jVat, 0);
+            else                                            post(t.account_code, accName, accType, jVat, 0);
+          }
+        } else {
+          post(t.account_code, accName, accType, 0, jExclAbs);
+          if (jVatable) {
+            if (t.vat_type === 'output' && vatPayableCOA) post(vatPayableCOA.account_code, vatPayableCOA.account_name, 'liability', 0, jVat);
+            else                                           post(t.account_code, accName, accType, 0, jVat);
+          }
+        }
         continue;
       }
 
