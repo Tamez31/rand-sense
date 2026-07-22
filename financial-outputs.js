@@ -1174,12 +1174,13 @@ const _AFS_NOTE_ACCT = { '6001':'5', '6021':'8' };
 // comparing what's printed on-screen against what's expected after a sync.
 const _AFS_BUILD_TAG = 'BUILD 2026-07-01T01:35Z-hideZeros-fix';
 
-function _afsHeader(clientName, reportTitle, periodStr) {
+function _afsHeader(clientName, reportTitle, periodStr, opts) {
+  const hideBuildTag = !!(opts && opts.hideBuildTag);
   return `<div class="afs-header">
     <div class="afs-entity">${escHtml(clientName || 'Company')}</div>
     <div class="afs-report-title">${escHtml(reportTitle)}</div>
     ${periodStr ? `<div class="afs-period">${escHtml(periodStr)}</div>` : ''}
-    <div class="afs-currency-note">Figures in Rand &nbsp;&middot;&nbsp; <span style="opacity:0.55;font-size:0.68rem;">${_AFS_BUILD_TAG}</span></div>
+    <div class="afs-currency-note">Figures in Rand${hideBuildTag ? '' : ` &nbsp;&middot;&nbsp; <span style="opacity:0.55;font-size:0.68rem;">${_AFS_BUILD_TAG}</span>`}</div>
   </div>`;
 }
 
@@ -1416,7 +1417,7 @@ function renderIS(data, currentLabel, priorLabel, hideZeros, opts) {
 
   const clientName = (opts && opts.clientName) || '';
   const brandBar = (opts && opts.title) ? _brandHeader('', clientName, currentLabel, priorLabel) : '';
-  const afsHeader = _afsHeader(clientName, 'Detailed Statement of Comprehensive Income', periodStr);
+  const afsHeader = _afsHeader(clientName, 'Detailed Statement of Comprehensive Income', periodStr, opts);
   const thead = _afsThead(showComp, colPri, colCur);
 
   let html = `<div class="statement-wrap"><div class="afs-wrap">${brandBar}${afsHeader}
@@ -1991,11 +1992,13 @@ function buildAFSPack(opts) {
     const obMapCur = buildOpeningMap(openingBalances || []);
     const openingRE = reAcct ? r2(-(obMapCur.get(reAcct.account_code)?.amount || 0)) : 0; // stored credit-sign
     const priorYearAvailable = tbR.data.priorYearAvailable;
+    // Fewer, cleaner rows: opening balance, each year's movement, closing
+    // balance — skip the redundant intermediate "closing balance of the
+    // prior year" row, since it's identical to the current year's opening.
     const sceRows = priorYearAvailable ? [
       { label: `Balance at ${_afsOpeningDate(priorLabel)}`, amount: r2(openingRE - priorNetProfit) },
-      { label: `Net profit/(loss) for the year`, amount: priorNetProfit },
-      { label: `Balance at ${_afsClosingDateFromLabel(priorLabel, client.financial_year_end)}`, amount: openingRE },
-      { label: `Net profit/(loss) for the year`, amount: netProfit },
+      { label: `Net profit/(loss) for FY${priorLabel.replace(/\D/g,'')}`, amount: priorNetProfit },
+      { label: `Net profit/(loss) for FY${currentLabel.replace(/\D/g,'')}`, amount: netProfit },
       { label: `Balance at ${_afsClosingDateFromLabel(currentLabel, client.financial_year_end)}`, amount: r2(openingRE + netProfit) },
     ] : [
       { label: `Balance at ${_afsOpeningDate(currentLabel)}`, amount: openingRE },
@@ -2123,7 +2126,19 @@ function _buildAFSNotesList({ coa, tbR, isR, netProfit }) {
     });
   }
 
-  // 5. Trade and other payables — liabilities excluding VAT/loan/finance/overdraft
+  // 5. Long-term loans — loan/finance liability accounts (vehicle finance,
+  // instalment sale agreements etc.) excluding VAT.
+  const longTermLoanLines = liabLines.filter(l => hasBal(l) && /loan|finance|instal/i.test(l.name || '') && !/vat/i.test(l.name || ''));
+  if (longTermLoanLines.length) {
+    notes.push({
+      number: n++, title: 'Long-term loans', sfpSection: 'nonCurrentLiabilities',
+      codes: longTermLoanLines.map(l => l.code),
+      rows: longTermLoanLines.map(l => ({ label: l.name, current: r2(l.credit - l.debit), prior: r2(l.priorCredit - l.priorDebit) })),
+      total: longTermLoanLines.length > 1,
+    });
+  }
+
+  // 6. Trade and other payables — remaining liabilities, excluding VAT/loans
   const payableLines = liabLines.filter(l => hasBal(l) && !/vat|loan|finance|overdraft|instal/i.test(l.name || ''));
   if (payableLines.length) {
     notes.push({
@@ -2187,7 +2202,7 @@ function _buildAFSNotesList({ coa, tbR, isR, netProfit }) {
 // individual account lines only for anything no note claims.
 function _afsRenderGroupedSFP(d) {
   const c = d.client;
-  const { assetLines, liabLines, equityLines, totalAssets, totalLiabilities, totalEquity, balanceEffect } = d.tbData;
+  const { assetLines, liabLines, equityLines, totalAssets, totalLiabilities, totalEquity } = d.tbData;
   const claimedCodes = new Set(d.notes.flatMap(n => n.codes || []));
   const dr = l => r2(l.debit - l.credit);
   const cr = l => r2(l.credit - l.debit);
@@ -2214,14 +2229,30 @@ function _afsRenderGroupedSFP(d) {
     .map(l => row(l.name, '', cr(l), r2(l.priorCredit - l.priorDebit)));
 
   const ncNotes = d.notes.filter(n => n.sfpSection === 'nonCurrentAssets');
-  const curAssetNotes = d.notes.filter(n => n.sfpSection === 'currentAssets');
+  let curAssetNotes = d.notes.filter(n => n.sfpSection === 'currentAssets');
   const curLiabNotes = d.notes.filter(n => n.sfpSection === 'currentLiabilities');
+  const ncLiabNotes = d.notes.filter(n => n.sfpSection === 'nonCurrentLiabilities');
 
   const noteTotal = note => {
     const cur = note.totalOverride ? note.totalOverride.current : r2(note.rows.reduce((s,r)=>s+(r.current||0),0));
     const pri = note.totalOverride ? note.totalOverride.prior   : r2(note.rows.reduce((s,r)=>s+(r.prior||0),0));
     return { cur, pri };
   };
+
+  // A bank account in overdraft at year-end is a liability, not a negative
+  // asset — pull the Cash and cash equivalents note out of current assets
+  // and show it (sign flipped) under current liabilities instead when its
+  // current-year total is negative.
+  let overdraftRow = '';
+  const cashNoteIdx = curAssetNotes.findIndex(n => n.title === 'Cash and cash equivalents');
+  if (cashNoteIdx >= 0) {
+    const t = noteTotal(curAssetNotes[cashNoteIdx]);
+    if (t.cur < 0) {
+      const n = curAssetNotes[cashNoteIdx];
+      overdraftRow = row('Bank overdraft', n.number, r2(-t.cur), r2(-t.pri));
+      curAssetNotes = curAssetNotes.filter((_, i) => i !== cashNoteIdx);
+    }
+  }
 
   // Any asset no note claims (e.g. VAT Receivable, Inventory, Prepaid
   // Expenses) still needs to show SOMEWHERE — classify by name into current
@@ -2233,7 +2264,10 @@ function _afsRenderGroupedSFP(d) {
   const currentAssetRows = curAssetNotes.map(n => { const t = noteTotal(n); return row(n.title, n.number, t.cur, t.pri); }).join('')
     + individualAssetRows(l => _isCurrentByName(l)).join('');
 
-  const currentLiabRows = curLiabNotes.map(n => { const t = noteTotal(n); return row(n.title, n.number, t.cur, t.pri); }).join('')
+  const nonCurrentLiabRows = ncLiabNotes.map(n => { const t = noteTotal(n); return row(n.title, n.number, t.cur, t.pri); }).join('');
+
+  const currentLiabRows = overdraftRow
+    + curLiabNotes.map(n => { const t = noteTotal(n); return row(n.title, n.number, t.cur, t.pri); }).join('')
     + individualLiabRows.join('');
 
   const equityRows = equityLines
@@ -2243,7 +2277,7 @@ function _afsRenderGroupedSFP(d) {
   const priorTotalLiabEquity = r2((d.tbData.priorTotalLiabilities||0) + (d.tbData.priorTotalEquity||0));
 
   return `<div class="statement-wrap"><div class="afs-wrap">
-    ${_afsHeader(c.name, 'Statement of Financial Position', d.periodStr)}
+    ${_afsHeader(c.name, 'Statement of Financial Position', d.periodStr, { hideBuildTag: true })}
     <table class="afs-table">
       <thead><tr>
         <th class="afs-th-left" style="width:44%">Description</th>
@@ -2262,14 +2296,12 @@ function _afsRenderGroupedSFP(d) {
         ${headRow('Capital and reserves')}
         ${equityRows}
         ${subtotalRow('', totalEquity, d.tbData.priorTotalEquity)}
+        ${ncLiabNotes.length ? headRow('Non-current liabilities') + nonCurrentLiabRows : ''}
         ${headRow('Current liabilities')}
         ${currentLiabRows}
         ${subtotalRow('Total funds and liabilities', r2(totalLiabilities+totalEquity), priorTotalLiabEquity)}
       </tbody>
     </table>
-    <div class="afs-balance-check"><span class="afs-bc-label">Trial Balance Check</span>
-      <span class="afs-bc-item ${Math.abs(balanceEffect)<=0.02?'ok':'bad'}">${Math.abs(balanceEffect)<=0.02?'Balanced':'Out of balance by R'+fmtR1(balanceEffect).replace('R','')}</span>
-    </div>
   </div></div>`;
 }
 
@@ -2277,9 +2309,9 @@ function _afsRenderGroupedSFP(d) {
 function renderAFSPack(d) {
   const c = d.client;
   const page = (title, body, opts) => `
-    <div class="statement-wrap afs-page" style="${opts && opts.noBreak ? '' : 'page-break-before:always;'}">
+    <div class="statement-wrap afs-page" style="${opts && opts.noBreak ? '' : 'page-break-before:always;'}padding:24px 32px;">
       <div class="afs-wrap">
-        ${_afsHeader(c.name, title, d.periodStr)}
+        ${_afsHeader(c.name, title, d.periodStr, { hideBuildTag: true })}
         ${body}
       </div>
     </div>`;
@@ -2299,7 +2331,7 @@ function renderAFSPack(d) {
       <td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(totCur)}</td>
     </tr>` : '';
     return `
-      <div style="margin-bottom:18px;">
+      <div style="margin-bottom:18px;page-break-inside:avoid;break-inside:avoid;">
         <div style="font-weight:700;margin-bottom:4px;">${note.number}. ${escHtml(note.title)}</div>
         <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
           <thead><tr style="color:#555;font-size:0.78rem;">
@@ -2315,7 +2347,7 @@ function renderAFSPack(d) {
 
   // ── Cover ────────────────────────────────────────────────────
   const cover = `
-    <div class="statement-wrap afs-page">
+    <div class="statement-wrap afs-page" style="padding:24px 32px;">
       <div class="afs-wrap" style="text-align:center;padding-top:120px;">
         <div style="font-weight:700;color:#145A32;font-size:1.1rem;">RandSense</div>
         <div style="font-size:0.7rem;letter-spacing:0.05em;color:#666;border-bottom:1px solid #ccc;padding-bottom:14px;margin-bottom:60px;">MAKING CENTS OF IT ALL</div>
@@ -2414,7 +2446,7 @@ function renderAFSPack(d) {
   // off the statement. Totals themselves come straight from tbData, so
   // Total Assets / Total Liabilities / Total Equity can never disagree
   // with the on-screen Balance Sheet or the Trial Balance check.
-  const sfp = `<div class="afs-page" style="page-break-before:always;">${_afsRenderGroupedSFP(d)}</div>`;
+  const sfp = `<div class="afs-page" style="page-break-before:always;padding:24px 32px;">${_afsRenderGroupedSFP(d)}</div>`;
 
   // ── Statement of Comprehensive Income (summary, 3 lines) ──────
   // "Revenue" here is net of cost of sales (matches grossProfit — i.e. the
@@ -2460,7 +2492,17 @@ function renderAFSPack(d) {
   if (d.cfData) {
     const cf = d.cfData;
     const line = (label, cur, pri, bold) => _afsMoneyRow(label, '', cur, pri, d.showComp, { bold });
-    scfBody = `<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><tbody>
+    // Prior year's own opening cash = this year's opening minus the prior
+    // year's net movement — the only way to derive it, since only one
+    // year's opening balance is ever stored.
+    const priorBankOB = d.showComp ? r2(cf.bankOB - (cf.priorNetMovement || 0)) : null;
+    scfBody = `<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+      <thead><tr style="font-weight:700;color:#555;font-size:0.78rem;">
+        <td style="padding:2px 8px;">Figures in Rand</td>
+        ${d.showComp ? `<td style="padding:2px 8px;text-align:right;">${escHtml(d.colPri)}</td>` : ''}
+        <td style="padding:2px 8px;text-align:right;">${escHtml(d.colCur)}</td>
+      </tr></thead>
+      <tbody>
       <tr><td colspan="4" style="padding:6px 8px;font-weight:700;">Cash flows from operating activities</td></tr>
       ${line('Net cash from operations', cf.operating, cf.priorOperating)}
       <tr><td colspan="4" style="padding:6px 8px;font-weight:700;">Cash flow from investing activities</td></tr>
@@ -2468,8 +2510,8 @@ function renderAFSPack(d) {
       <tr><td colspan="4" style="padding:6px 8px;font-weight:700;">Cash flow from financing activities</td></tr>
       ${line('Net cash from financing', cf.financing, cf.priorFinancing)}
       ${line('Net increase/(decrease) in cash and cash equivalents', cf.netMovement, cf.priorNetMovement, true)}
-      ${line('Cash and cash equivalents at beginning of year', cf.bankOB, null)}
-      ${line('Cash and cash equivalents at end of year', cf.closingBankBalance, null, true)}
+      ${line('Cash and cash equivalents at beginning of year', cf.bankOB, priorBankOB)}
+      ${line('Cash and cash equivalents at end of year', cf.closingBankBalance, cf.bankOB, true)}
     </tbody></table>`;
   }
   const scf = page('Statement of Cash Flows', scfBody);
@@ -2489,7 +2531,7 @@ function renderAFSPack(d) {
 
   // ── Detailed Statement of Comprehensive Income (reuse renderIS) ──
   // renderIS also produces a complete self-contained page — same treatment.
-  const detailedIS = `<div class="afs-page" style="page-break-before:always;">${renderIS(d.isData, d.currentLabel, d.priorLabel, false, {})}</div>`;
+  const detailedIS = `<div class="afs-page" style="page-break-before:always;padding:24px 32px;">${renderIS(d.isData, d.currentLabel, d.priorLabel, true, { hideBuildTag: true })}</div>`;
 
   return [cover, indexPage, letterPage1, letterPage2, sfp, sci, sce, scf, policies, notesPage, detailedIS].join('');
 }
