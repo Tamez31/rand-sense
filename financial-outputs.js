@@ -2452,7 +2452,9 @@ function renderAFSPack(d) {
         <div>Date: ___________________</div>
       </div>
       <div style="margin-top:36px;max-width:280px;page-break-inside:avoid;break-inside:avoid;">
-        <img src="${_AFS_SIGNATURE_IMG}" alt="Signature" width="218" height="40" style="height:40px;width:218px;display:block;"/>
+        <svg width="218" height="40" viewBox="0 0 218 40" style="display:block;" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <image href="${_AFS_SIGNATURE_IMG}" xlink:href="${_AFS_SIGNATURE_IMG}" x="0" y="0" width="218" height="40" preserveAspectRatio="xMinYMid meet"/>
+        </svg>
         <div style="border-top:1px solid #999;padding-top:4px;margin-top:-4px;">
           <div style="font-weight:700;">${_AFS_FIRM.signatory}</div>
           <div style="font-style:italic;">${_AFS_FIRM.signatoryRole}</div>
