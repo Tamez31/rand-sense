@@ -171,8 +171,13 @@ const Transactions = {
   // All distinct financial years for a client (for year selector)
   async listYears(clientId) {
     const sb = getClient();
-    const rows = unwrap(
-      await sb
+    // Unpaginated — a client past 1000 total transactions would silently
+    // lose any financial_year whose rows all sit beyond that cap (confirmed
+    // directly: AJ Forklifts at 2886 rows only ever returned '2026', never
+    // '2027'). Same PostgREST 1000-row cap as listByYear elsewhere in this
+    // file — paginate the same way.
+    const rows = await fetchAllPages(
+      sb
         .from('transactions')
         .select('financial_year')
         .eq('client_id', clientId)

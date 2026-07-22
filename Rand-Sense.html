@@ -510,6 +510,8 @@ const state = {
   _vatDateTo:      null,       // YYYY-MM-DD or null
   _vatQuickSelect: null,       // active quick-select key or null for custom
   _vatPeriodKey:   null,       // selected VAT filing period key, or null for custom/all
+  _showVATRecon:   false,      // whether the VAT Reconciliation section is expanded
+  _vatRecon:       null,       // cached { ok, rows, totals } from buildVATReconciliation
   // Prior year transactions (cached for comparative columns on all reports)
   priorTransactions:   [],
   // Finalized ITR12 snapshot (localStorage-backed) for the current commission
@@ -1717,8 +1719,10 @@ function renderReportsTab() {
         <div style="display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid #C8E6C9;">
           <button class="btn btn-primary btn-sm" onclick="printVATReport()">&#128196; Download VAT Report PDF</button>
           <button class="btn btn-ghost btn-sm" onclick="csvVATReport()">&#8595; Download VAT Report CSV</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleVATRecon()">&#128202; ${state._showVATRecon ? 'Hide' : 'Show'} VAT Reconciliation</button>
         </div>
-      </div>`;
+      </div>
+      ${state._showVATRecon ? `<div id="vat-recon-mount">${_renderVATReconSection()}</div>` : ''}`;
   }
 
   // ITR12 finalize / lock state (commission earner IS tab only). Purely a
@@ -2321,6 +2325,105 @@ function printVATReport() {
 function csvVATReport() {
   if (!state._VATData) { toast('Generate the VAT report first.', 'warning'); return; }
   window.Export.exportVATReportCSV(state._VATData);
+}
+
+// ── VAT Reconciliation — running statement of account across every
+// filing period the client has, chaining each period's net VAT into a
+// running balance. Needs the FULL transaction history (not just the
+// currently-loaded year), so it fetches every financial year on demand.
+async function toggleVATRecon() {
+  state._showVATRecon = !state._showVATRecon;
+  if (state._showVATRecon && !state._vatRecon) {
+    await loadVATRecon();
+  }
+  renderClientDetail();
+}
+
+async function loadVATRecon() {
+  const c = state.currentClient;
+  showLoading('Building VAT reconciliation…');
+  try {
+    const years = await DB.Transactions.listYears(c.id);
+    const allTx = (await Promise.all(years.map(y => DB.Transactions.listByYear(c.id, y)))).flat();
+    const vatPeriodSetting = c.vat_period || 'monthly';
+    state._vatRecon = window.VAT.buildVATReconciliation(allTx, vatPeriodSetting);
+  } catch (e) {
+    toast('Could not build VAT reconciliation: ' + e.message, 'error');
+    state._vatRecon = { ok: false, error: e.message };
+  }
+  hideLoading();
+}
+
+function _renderVATReconSection() {
+  const r = state._vatRecon;
+  if (!r) return `<div class="info-box blue">Loading…</div>`;
+  if (!r.ok) return `<div class="info-box red">${escH(r.error || 'Could not build reconciliation.')}</div>`;
+  if (!r.rows.length) return `<div class="empty-state"><div class="empty-state-sub">No VAT-tagged transactions found for this client yet.</div></div>`;
+
+  const fmtSigned = n => {
+    const abs = 'R ' + Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return n < 0 ? `-${abs}` : abs;
+  };
+
+  const rows = r.rows.map(row => `
+    <tr>
+      <td style="padding:8px 12px;">${escH(row.period)}</td>
+      <td style="padding:8px 12px;text-align:right;font-family:var(--font-mono);">${fmtSigned(row.output)}</td>
+      <td style="padding:8px 12px;text-align:right;font-family:var(--font-mono);">${fmtSigned(row.input)}</td>
+      <td style="padding:8px 12px;text-align:right;font-family:var(--font-mono);font-weight:600;">${fmtSigned(row.net)}</td>
+      <td style="padding:8px 12px;text-align:right;font-family:var(--font-mono);font-weight:700;color:${row.runningIsRefund?'#1E8449':'#145A32'};">${fmtSigned(row.runningBalance)}</td>
+      <td style="padding:8px 12px;">
+        <span style="font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;background:${row.runningIsRefund?'#D4F5E2':'#FCE8E8'};color:${row.runningIsRefund?'#145A32':'#B03030'};">
+          ${row.runningIsRefund ? 'Refund due' : 'Payable'}
+        </span>
+      </td>
+    </tr>`).join('');
+
+  return `
+    <div class="card" style="margin-top:4px;">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>VAT Reconciliation — Statement of Account</span>
+        <button class="btn btn-ghost btn-xs" onclick="printVATRecon()">&#128196; Print</button>
+      </div>
+      <div style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;">
+        Running balance assumes no VAT has actually been paid to or refunded by SARS yet — confirm against real submission history before relying on the closing balance.
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+          <thead>
+            <tr style="border-bottom:2px solid #C8E6C9;color:#6c757d;font-size:0.76rem;text-transform:uppercase;letter-spacing:0.04em;">
+              <th style="text-align:left;padding:6px 12px;">Period</th>
+              <th style="text-align:right;padding:6px 12px;">Output VAT</th>
+              <th style="text-align:right;padding:6px 12px;">Input VAT</th>
+              <th style="text-align:right;padding:6px 12px;">Net Movement</th>
+              <th style="text-align:right;padding:6px 12px;">Running Balance</th>
+              <th style="text-align:left;padding:6px 12px;">Position</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr style="border-top:2px solid #145A32;font-weight:700;">
+              <td style="padding:8px 12px;">Total</td>
+              <td style="padding:8px 12px;text-align:right;font-family:var(--font-mono);">${fmtSigned(r.totals.output)}</td>
+              <td style="padding:8px 12px;text-align:right;font-family:var(--font-mono);">${fmtSigned(r.totals.input)}</td>
+              <td style="padding:8px 12px;text-align:right;font-family:var(--font-mono);">${fmtSigned(r.totals.net)}</td>
+              <td style="padding:8px 12px;text-align:right;font-family:var(--font-mono);">${fmtSigned(r.rows[r.rows.length-1].runningBalance)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>`;
+}
+
+function printVATRecon() {
+  const r = state._vatRecon;
+  if (!r || !r.ok) { toast('Nothing to print yet.', 'warning'); return; }
+  const c = state.currentClient;
+  const body = _renderVATReconSection().replace(
+    /<button class="btn btn-ghost btn-xs"[^>]*>[\s\S]*?<\/button>/, ''
+  );
+  window.Export.printStatement('VAT Reconciliation — Statement of Account', c.name, state.currentYear, null, body);
 }
 
 async function generateReport() {

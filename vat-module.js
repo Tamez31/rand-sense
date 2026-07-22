@@ -302,6 +302,80 @@ function buildEnhancedVATReport(transactions, vatPeriod, periodFilter) {
   };
 }
 
+// ── VAT reconciliation (running statement of account) ─────────
+// Chains every filing period's net VAT into a running balance — exactly
+// what a VAT control account looks like on the Balance Sheet, assuming
+// nothing has actually been paid to / refunded by SARS yet (the caller
+// is responsible for confirming that; this function has no way to know
+// about real-world settlements that never hit the bank statements).
+// transactions: VAT-tagged transactions spanning as many years as needed
+// (the caller must supply the full multi-year set — this module has no
+// concept of "financial year").
+// Returns { ok, rows: [{ period, sortKey, output, input, net, isRefund,
+//   runningBalance, runningIsRefund }], totals: {...} }
+function buildVATReconciliation(transactions, vatPeriod) {
+  const vatTxs = (transactions || []).filter(t => t.vat_type !== 'none' && (t.vat_amount || 0) > 0);
+  if (!vatTxs.length) return { ok: true, rows: [], totals: { output: 0, input: 0, net: 0 } };
+
+  // Group by the transaction's actual DATE, not its stored `period` string —
+  // a journal line's period is something like "JNL-1" (its journal number),
+  // not a calendar month, so grouping by t.period alone splits a journal's
+  // VAT into its own bogus bucket instead of merging it into the filing
+  // period its date actually falls in.
+  const monthAbbr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const twoMonthLabel = (m0, y) => { // m0 = 0-based month of the PAIR START (even index: 0,2,4,6,8,10)
+    return `${monthAbbr[m0]} ${y} – ${monthAbbr[m0+1]} ${y}`;
+  };
+  const groupOf = t => {
+    const d = new Date(t.date);
+    const m = d.getMonth(), y = d.getFullYear();
+    if (vatPeriod === 'monthly') return `${monthAbbr[m]} ${y}`;
+    if (vatPeriod === 'yearly')  return 'Annual';
+    const pairStart = Math.floor(m / 2) * 2; // 2-monthly
+    return twoMonthLabel(pairStart, y);
+  };
+  const sortKeyOf = t => {
+    const d = new Date(t.date);
+    return d.getFullYear() * 12 + d.getMonth();
+  };
+
+  const buckets = new Map(); // label -> { output, input, sortKey }
+  for (const t of vatTxs) {
+    const key = groupOf(t);
+    if (!buckets.has(key)) buckets.set(key, { output: 0, input: 0, sortKey: sortKeyOf(t) });
+    const b = buckets.get(key);
+    if (t.vat_type === 'output') b.output = round2(b.output + t.vat_amount);
+    else if (t.vat_type === 'input') b.input = round2(b.input + t.vat_amount);
+    b.sortKey = Math.min(b.sortKey, sortKeyOf(t));
+  }
+
+  const periods = [...buckets.keys()].sort((a, b) => buckets.get(a).sortKey - buckets.get(b).sortKey);
+
+  let running = 0;
+  const rows = periods.map(period => {
+    const b = buckets.get(period);
+    const net = round2(b.output - b.input);
+    running = round2(running + net);
+    return {
+      period,
+      output: b.output,
+      input: b.input,
+      net,
+      isRefund: net < 0,
+      runningBalance: running,
+      runningIsRefund: running < 0,
+    };
+  });
+
+  const totals = {
+    output: round2(rows.reduce((s, r) => s + r.output, 0)),
+    input:  round2(rows.reduce((s, r) => s + r.input, 0)),
+    net:    round2(rows.reduce((s, r) => s + r.net, 0)),
+  };
+
+  return { ok: true, rows, totals };
+}
+
 // ── VAT number validator ──────────────────────────────────────
 // SA VAT numbers are 10 digits starting with 4.
 function validateVATNumber(vatNumber) {
@@ -354,6 +428,7 @@ window.VAT = {
   buildVATReport,
   buildVAT201,
   buildEnhancedVATReport,
+  buildVATReconciliation,
   getVATPeriods,
   getFilingPeriods,
   validateVATNumber,
