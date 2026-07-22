@@ -97,6 +97,7 @@ const Transactions = {
         .eq('client_id', clientId)
         .eq('financial_year', financialYear)
         .order('date')
+        .order('id')
     );
   },
 
@@ -111,6 +112,7 @@ const Transactions = {
         .eq('financial_year', financialYear)
         .eq('period', period)
         .order('date')
+        .order('id')
     );
   },
 
@@ -124,6 +126,7 @@ const Transactions = {
         .eq('client_id', clientId)
         .is('account_code', null)
         .order('date')
+        .order('id')
     );
   },
 
