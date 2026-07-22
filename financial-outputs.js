@@ -1426,10 +1426,11 @@ function renderIS(data, currentLabel, priorLabel, hideZeros, opts) {
   const afsHeader = _afsHeader(clientName, 'Detailed Statement of Comprehensive Income', periodStr, opts);
   const thead = _afsThead(showComp, colPri, colCur, reverse);
 
-  let html = `<div class="statement-wrap"><div class="afs-wrap">${brandBar}${afsHeader}
+  const noOuterWrap = !!(opts && opts.noOuterWrap);
+  let html = `${noOuterWrap ? '' : '<div class="statement-wrap">'}<div class="afs-wrap">${brandBar}${afsHeader}
     <table class="afs-table">${thead}<tbody>`;
   html += _afsISRows(data, showComp, reverse);
-  html += '</tbody></table></div></div>';
+  html += `</tbody></table></div>${noOuterWrap ? '' : '</div>'}`;
   return html;
 }
 
@@ -2293,7 +2294,7 @@ function _afsRenderGroupedSFP(d) {
 
   const priorTotalLiabEquity = r2((d.tbData.priorTotalLiabilities||0) + (d.tbData.priorTotalEquity||0));
 
-  return `<div class="statement-wrap"><div class="afs-wrap">
+  return `<div class="afs-wrap">
     ${_afsHeader(c.name, 'Statement of Financial Position', d.periodStr, { hideBuildTag: true })}
     <table class="afs-table">
       <thead><tr>
@@ -2319,7 +2320,7 @@ function _afsRenderGroupedSFP(d) {
         ${subtotalRow('Total funds and liabilities', r2(totalLiabilities+totalEquity), priorTotalLiabEquity)}
       </tbody>
     </table>
-  </div></div>`;
+  </div>`;
 }
 
 // ── Render: the full printable pack ─────────────────────────────
@@ -2469,7 +2470,7 @@ function renderAFSPack(d) {
   // off the statement. Totals themselves come straight from tbData, so
   // Total Assets / Total Liabilities / Total Equity can never disagree
   // with the on-screen Balance Sheet or the Trial Balance check.
-  const sfp = `<div class="afs-page" style="page-break-before:always;padding:24px 32px;">${_afsRenderGroupedSFP(d)}</div>`;
+  const sfp = `<div class="statement-wrap afs-page" style="page-break-before:always;padding:24px 32px;">${_afsRenderGroupedSFP(d)}</div>`;
 
   // ── Statement of Comprehensive Income (summary, 3 lines) ──────
   // "Revenue" here is net of cost of sales (matches grossProfit — i.e. the
@@ -2587,7 +2588,7 @@ function renderAFSPack(d) {
     cosLines:    d.isData.cosLines.filter(_nz),
     expLines:    d.isData.expLines.filter(_nz),
   };
-  const detailedIS = `<div class="afs-page" style="page-break-before:always;padding:24px 32px;">${renderIS(isDataForDetail, d.currentLabel, d.priorLabel, false, { hideBuildTag: true, reverseColumns: true })}</div>`;
+  const detailedIS = `<div class="statement-wrap afs-page" style="page-break-before:always;padding:24px 32px;">${renderIS(isDataForDetail, d.currentLabel, d.priorLabel, false, { hideBuildTag: true, reverseColumns: true, noOuterWrap: true })}</div>`;
 
   return [cover, indexPage, letterPage1, letterPage2, sfp, sci, sce, scf, policies, notesPages, detailedIS].join('');
 }
