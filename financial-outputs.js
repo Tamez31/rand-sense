@@ -1184,18 +1184,21 @@ function _afsHeader(clientName, reportTitle, periodStr, opts) {
   </div>`;
 }
 
-function _afsThead(showComp, colPri, colCur) {
+function _afsThead(showComp, colPri, colCur, reverse) {
+  const priCell = `<th style="width:25%">${showComp ? escHtml(colPri) : ''}</th>`;
+  const curCell = `<th style="width:25%">${escHtml(colCur)}</th>`;
   return `<thead><tr>
     <th class="afs-th-left" style="width:44%">Description</th>
     <th class="afs-th-center" style="width:6%">Note(s)</th>
-    <th style="width:25%">${showComp ? escHtml(colPri) : ''}</th>
-    <th style="width:25%">${escHtml(colCur)}</th>
+    ${reverse ? curCell + priCell : priCell + curCell}
   </tr></thead>`;
 }
 
 // Renders the Income Statement body rows (Revenue → Net profit) only — no table/header wrapper.
 // Shared by renderIS (standalone statement) and renderTB Section 1.
-function _afsISRows(data, showComp) {
+// reverse: AFS pack convention shows current year first, prior year second
+// (every other caller keeps the default prior-then-current order).
+function _afsISRows(data, showComp, reverse) {
   const { incomeLines, cosLines, expLines,
           totalCOS, cosCom,
           grossProfit, grossProfitCom,
@@ -1203,10 +1206,12 @@ function _afsISRows(data, showComp) {
           netProfit, netProfitCom } = data;
 
   const amtCells = (cur, pri) => showComp
-    ? `<td class="afs-amt">${_afsFmtN(pri)}</td><td class="afs-amt">${_afsFmtN(cur)}</td>`
+    ? (reverse ? `<td class="afs-amt">${_afsFmtN(cur)}</td><td class="afs-amt">${_afsFmtN(pri)}</td>`
+               : `<td class="afs-amt">${_afsFmtN(pri)}</td><td class="afs-amt">${_afsFmtN(cur)}</td>`)
     : `<td class="afs-amt"></td><td class="afs-amt">${_afsFmtN(cur)}</td>`;
   const amtCellsB = (cur, pri) => showComp
-    ? `<td class="afs-amt">${_afsFmtB(pri)}</td><td class="afs-amt">${_afsFmtB(cur)}</td>`
+    ? (reverse ? `<td class="afs-amt">${_afsFmtB(cur)}</td><td class="afs-amt">${_afsFmtB(pri)}</td>`
+               : `<td class="afs-amt">${_afsFmtB(pri)}</td><td class="afs-amt">${_afsFmtB(cur)}</td>`)
     : `<td class="afs-amt"></td><td class="afs-amt">${_afsFmtB(cur)}</td>`;
 
   let html = '';
@@ -1412,17 +1417,18 @@ function _afsBalanceCheckBanner(curDiff, priDiff, colCur, colPri, showComp) {
 function renderIS(data, currentLabel, priorLabel, hideZeros, opts) {
   const { comparativeAvailable } = data;
   const showComp = !!comparativeAvailable;
+  const reverse = !!(opts && opts.reverseColumns);
 
   const { periodStr, colCur, colPri } = _afsPeriod(currentLabel, priorLabel);
 
   const clientName = (opts && opts.clientName) || '';
   const brandBar = (opts && opts.title) ? _brandHeader('', clientName, currentLabel, priorLabel) : '';
   const afsHeader = _afsHeader(clientName, 'Detailed Statement of Comprehensive Income', periodStr, opts);
-  const thead = _afsThead(showComp, colPri, colCur);
+  const thead = _afsThead(showComp, colPri, colCur, reverse);
 
   let html = `<div class="statement-wrap"><div class="afs-wrap">${brandBar}${afsHeader}
     <table class="afs-table">${thead}<tbody>`;
-  html += _afsISRows(data, showComp);
+  html += _afsISRows(data, showComp, reverse);
   html += '</tbody></table></div></div>';
   return html;
 }
@@ -1939,14 +1945,24 @@ const _AFS_FIRM = {
   saicaNo: '30745377',
 };
 
+// Temporary fallback until the afs_director_names column is populated via
+// Settings (requires the one-time schema migration in schema.sql to have
+// been run first) — keyed by client name so it's a no-op the moment the
+// real Settings field has a value.
+const _AFS_DIRECTOR_FALLBACK = {
+  'AJ Forklifts (Pty) Ltd': 'Ashley Johnson',
+  'Gabler Group (Pty) Ltd': 'HA Gabler',
+};
+
 function _afsMoneyRow(label, code, cur, pri, showComp, opts) {
   opts = opts || {};
   const bold = opts.bold ? 'font-weight:700;' : '';
+  // Current year shows first (leftmost), prior year second — AFS pack convention.
   return `<tr>
     <td style="padding:4px 8px;${bold}">${escHtml(label)}</td>
     <td style="padding:4px 8px;text-align:center;color:#555;font-size:0.76rem;">${escHtml(code||'')}</td>
-    ${showComp ? `<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);${bold}">${pri==null?'':fmtR1(pri)}</td>` : ''}
     <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);${bold}">${cur==null?'':fmtR1(cur)}</td>
+    ${showComp ? `<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);${bold}">${pri==null?'':fmtR1(pri)}</td>` : ''}
   </tr>`;
 }
 
@@ -2016,7 +2032,7 @@ function buildAFSPack(opts) {
         showComp: priorYearAvailable,
         isData: isR.data, tbData: tbR.data, cfData: cfR.ok ? cfR.data : null,
         netProfit, priorNetProfit, openingRE, sceRows, notes,
-        directorNames: directorNames || '',
+        directorNames: directorNames || _AFS_DIRECTOR_FALLBACK[client.name] || '',
         accountingPolicies: accountingPolicies || '',
         approvalDate: _afsTodayDMY(),
       },
@@ -2207,16 +2223,17 @@ function _afsRenderGroupedSFP(d) {
   const dr = l => r2(l.debit - l.credit);
   const cr = l => r2(l.credit - l.debit);
 
+  // Current year shows first (leftmost), prior year second.
   const row = (label, noteNum, cur, pri) => `<tr>
     <td class="afs-desc" style="padding:4px 8px;">${escHtml(label)}</td>
     <td class="afs-nc" style="padding:4px 8px;text-align:center;color:#555;font-size:0.76rem;">${noteNum||''}</td>
-    ${d.showComp ? `<td class="afs-amt" style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(pri)}</td>` : ''}
     <td class="afs-amt" style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(cur)}</td>
+    ${d.showComp ? `<td class="afs-amt" style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(pri)}</td>` : ''}
   </tr>`;
   const subtotalRow = (label, cur, pri) => `<tr style="border-top:1px solid #999;font-weight:700;">
     <td style="padding:4px 8px;">${escHtml(label)}</td><td></td>
-    ${d.showComp ? `<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(pri)}</td>` : ''}
     <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(cur)}</td>
+    ${d.showComp ? `<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(pri)}</td>` : ''}
   </tr>`;
   const headRow = label => `<tr><td colspan="${d.showComp?4:3}" style="padding:8px 8px 2px;font-weight:700;">${escHtml(label)}</td></tr>`;
 
@@ -2282,8 +2299,8 @@ function _afsRenderGroupedSFP(d) {
       <thead><tr>
         <th class="afs-th-left" style="width:44%">Description</th>
         <th class="afs-th-center" style="width:6%">Note(s)</th>
-        ${d.showComp ? `<th style="width:25%">${escHtml(d.colPri)}</th>` : ''}
         <th style="width:25%">${escHtml(d.colCur)}</th>
+        ${d.showComp ? `<th style="width:25%">${escHtml(d.colPri)}</th>` : ''}
       </tr></thead>
       <tbody>
         ${headRow('Assets')}
@@ -2316,19 +2333,19 @@ function renderAFSPack(d) {
       </div>
     </div>`;
 
-  // 2-column (prior/current) note renderer.
+  // Note renderer — current year first (leftmost), prior year second.
   const renderNote = note => {
     const rows = note.rows.map(r => `<tr>
       <td style="padding:3px 8px;">${escHtml(r.label)}</td>
-      ${d.showComp ? `<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${r.prior==null?'–':fmtR1(r.prior)}</td>` : ''}
       <td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${r.current==null?'–':fmtR1(r.current)}</td>
+      ${d.showComp ? `<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${r.prior==null?'–':fmtR1(r.prior)}</td>` : ''}
     </tr>`).join('');
     const totCur = note.totalOverride ? note.totalOverride.current : r2(note.rows.reduce((s,r)=>s+(r.current||0),0));
     const totPri = note.totalOverride ? note.totalOverride.prior   : r2(note.rows.reduce((s,r)=>s+(r.prior||0),0));
     const totalRow = note.total ? `<tr style="border-top:1px solid #999;font-weight:700;">
       <td style="padding:3px 8px;"></td>
-      ${d.showComp ? `<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(totPri)}</td>` : ''}
       <td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(totCur)}</td>
+      ${d.showComp ? `<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(totPri)}</td>` : ''}
     </tr>` : '';
     return `
       <div style="margin-bottom:18px;page-break-inside:avoid;break-inside:avoid;">
@@ -2336,8 +2353,8 @@ function renderAFSPack(d) {
         <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
           <thead><tr style="color:#555;font-size:0.78rem;">
             <td style="padding:2px 8px;">Figures in Rand</td>
-            ${d.showComp ? `<td style="padding:2px 8px;text-align:right;">${escHtml(d.colPri)}</td>` : ''}
             <td style="padding:2px 8px;text-align:right;">${escHtml(d.colCur)}</td>
+            ${d.showComp ? `<td style="padding:2px 8px;text-align:right;">${escHtml(d.colPri)}</td>` : ''}
           </tr></thead>
           <tbody>${rows}${totalRow}</tbody>
         </table>
@@ -2376,7 +2393,7 @@ function renderAFSPack(d) {
       <p>The executive committee is responsible for the organisation's system of internal financial control. These are designed to provide reasonable, but not absolute, assurance as to the reliability of the financial statements, and to adequately safeguard, verify and maintain accountability of assets, and to prevent and detect misstatement and loss. Nothing has come to the attention of the executive committee to indicate that any material breakdown in the functioning of these controls, procedures and system has occurred during the year under review.</p>
       <p>The financial statements have been prepared on the going concern basis, since the executive committee has every reason to believe that the organisation has adequate resources in place to continue in operation for the foreseeable future.</p>
       <p>The financial statements which appear on pages 5 to 11 were approved by the executive committee on the ${escHtml(d.approvalDate)}.</p>
-      <div style="margin-top:36px;border-top:1px solid #145A32;padding-top:6px;max-width:260px;">
+      <div style="margin-top:36px;max-width:260px;page-break-inside:avoid;break-inside:avoid;">
         <div style="font-weight:700;">${escHtml(d.directorNames || '_____________________')}</div>
         <div style="font-style:italic;">(Director)</div>
         <div style="margin-top:10px;">Date: ___________________</div>
@@ -2384,8 +2401,13 @@ function renderAFSPack(d) {
     </div>`);
 
   // ── Compilation letter ───────────────────────────────────────
+  // .afs-letter p page-break rule keeps a paragraph from being cut mid-
+  // sentence across a physical page boundary — a whole paragraph moves to
+  // the next page instead if it doesn't fit.
+  const letterStyle = `<style>.afs-letter p{page-break-inside:avoid;break-inside:avoid;}</style>`;
   const letterPage1 = page('Compilation Letter', `
-    <div style="font-size:0.82rem;">
+    ${letterStyle}
+    <div class="afs-letter" style="font-size:0.8rem;line-height:1.35;">
       <div style="text-align:center;margin-bottom:18px;">
         <div style="font-weight:700;color:#145A32;">RandSense</div>
         <div style="font-style:italic;color:#666;">Making Cents of It All</div>
@@ -2416,20 +2438,21 @@ function renderAFSPack(d) {
     </div>`);
 
   const letterPage2 = page('Compilation Letter (continued)', `
-    <div style="font-size:0.82rem;">
+    ${letterStyle}
+    <div class="afs-letter" style="font-size:0.8rem;line-height:1.35;">
       <p>You are responsible for adopting sound accounting policies, for maintaining an adequate and efficient accounting system for safeguarding assets, for authorizing transactions and retaining supporting documentation for those transactions and for devising an internal control system that will help assure the proper preparation of financial statements.</p>
       <p>You are also responsible for the design and implementation of programs and controls to prevent and detect fraud and informing us about all known or suspected fraud affecting the Company. In addition, you remain responsible for identifying and ensuring that the Company complies with applicable laws and regulations.</p>
       <p>Our fee for these services will be based on the amount of time required at the standard billing rate plus out of pocket expenses. However, if we encounter unexpected circumstances that require more staff time than anticipated, we will discuss the matter with you. All invoices are due and payable upon presentation.</p>
       <p>If this letter correctly expresses your understanding, please sign the enclosed copy where indicated.</p>
       <p>We appreciate the opportunity to serve you and trust that our association will be a long and pleasant one.</p>
-      <div style="margin-top:40px;font-weight:700;">Accepted and Agreed by: ${escHtml(c.name)}</div>
-      <div style="margin-top:36px;border-top:1px solid #999;padding-top:4px;max-width:280px;">
+      <div style="margin-top:40px;font-weight:700;page-break-inside:avoid;break-inside:avoid;">Accepted and Agreed by: ${escHtml(c.name)}</div>
+      <div style="margin-top:36px;border-top:1px solid #999;padding-top:4px;max-width:280px;page-break-inside:avoid;break-inside:avoid;">
         <div style="font-weight:700;">${escHtml(d.directorNames || '_____________________')} (Director)</div>
         <div>Date: ___________________</div>
       </div>
-      <div style="margin-top:36px;max-width:280px;">
-        <img src="${_AFS_SIGNATURE_IMG}" alt="Signature" style="height:38px;display:block;margin-bottom:2px;"/>
-        <div style="border-top:1px solid #999;padding-top:4px;">
+      <div style="margin-top:36px;max-width:280px;page-break-inside:avoid;break-inside:avoid;">
+        <img src="${_AFS_SIGNATURE_IMG}" alt="Signature" style="height:40px;display:block;"/>
+        <div style="border-top:1px solid #999;padding-top:4px;margin-top:-4px;">
           <div style="font-weight:700;">${_AFS_FIRM.signatory}</div>
           <div style="font-style:italic;">${_AFS_FIRM.signatoryRole}</div>
           <div>SAICA REGISTRATION NO. ${_AFS_FIRM.saicaNo}</div>
@@ -2458,15 +2481,15 @@ function renderAFSPack(d) {
     _afsMoneyRow('Operating expenses', '', r2(-totalExpenses), r2(-expCom), d.showComp),
   ].join('') + `<tr style="border-top:2px solid #145A32;font-weight:700;">
       <td style="padding:4px 8px;">${netProfit>=0?'Surplus':'Deficit'} for the year</td><td></td>
-      ${d.showComp?`<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(netProfitCom)}</td>`:''}
       <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(netProfit)}</td>
+      ${d.showComp?`<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(netProfitCom)}</td>`:''}
     </tr>`;
   const sci = page('Statement of Comprehensive Income', `
     <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
       <thead><tr style="font-weight:700;color:#555;font-size:0.78rem;">
         <td style="padding:2px 8px;">Figures in Rand</td><td></td>
-        ${d.showComp?`<td style="padding:2px 8px;text-align:right;">${escHtml(d.colPri)}</td>`:''}
         <td style="padding:2px 8px;text-align:right;">${escHtml(d.colCur)}</td>
+        ${d.showComp?`<td style="padding:2px 8px;text-align:right;">${escHtml(d.colPri)}</td>`:''}
       </tr></thead>
       <tbody>${sciRows}</tbody>
     </table>`);
@@ -2499,8 +2522,8 @@ function renderAFSPack(d) {
     scfBody = `<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
       <thead><tr style="font-weight:700;color:#555;font-size:0.78rem;">
         <td style="padding:2px 8px;">Figures in Rand</td>
-        ${d.showComp ? `<td style="padding:2px 8px;text-align:right;">${escHtml(d.colPri)}</td>` : ''}
         <td style="padding:2px 8px;text-align:right;">${escHtml(d.colCur)}</td>
+        ${d.showComp ? `<td style="padding:2px 8px;text-align:right;">${escHtml(d.colPri)}</td>` : ''}
       </tr></thead>
       <tbody>
       <tr><td colspan="4" style="padding:6px 8px;font-weight:700;">Cash flows from operating activities</td></tr>
@@ -2531,7 +2554,21 @@ function renderAFSPack(d) {
 
   // ── Detailed Statement of Comprehensive Income (reuse renderIS) ──
   // renderIS also produces a complete self-contained page — same treatment.
-  const detailedIS = `<div class="afs-page" style="page-break-before:always;padding:24px 32px;">${renderIS(d.isData, d.currentLabel, d.priorLabel, true, { hideBuildTag: true })}</div>`;
+  // renderIS's hideZeros param is a no-op (the underlying rows were already
+  // built once, up in buildAFSPack, without zero-filtering) — filter here
+  // instead: drop a line only when BOTH years are zero, keep it if either
+  // year has a real figure. Column order (current year first) is handled
+  // by renderIS's own reverseColumns opt — label ARGUMENT order stays
+  // correct (currentLabel first) so "for the year ended ..." still reads
+  // the right year.
+  const _nz = l => (l.current || 0) !== 0 || (l.comparative || 0) !== 0;
+  const isDataForDetail = {
+    ...d.isData,
+    incomeLines: d.isData.incomeLines.filter(_nz),
+    cosLines:    d.isData.cosLines.filter(_nz),
+    expLines:    d.isData.expLines.filter(_nz),
+  };
+  const detailedIS = `<div class="afs-page" style="page-break-before:always;padding:24px 32px;">${renderIS(isDataForDetail, d.currentLabel, d.priorLabel, false, { hideBuildTag: true, reverseColumns: true })}</div>`;
 
   return [cover, indexPage, letterPage1, letterPage2, sfp, sci, sce, scf, policies, notesPage, detailedIS].join('');
 }
