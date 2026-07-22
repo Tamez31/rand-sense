@@ -1926,6 +1926,8 @@ function _brandHeader(title, clientName, currentLabel, priorLabel) {
 // by design, since it's RandSense's own boilerplate, not client data.
 // ============================================================
 
+const _AFS_SIGNATURE_IMG = 'data:image/png;base64,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';
+
 const _AFS_FIRM = {
   practiceName: 'RandSense',
   slogan: 'Making Cents of It All',
@@ -2057,12 +2059,20 @@ function _buildAFSNotesList({ coa, tbR, isR, netProfit }) {
 
   const hasBal = l => (l.debit||0) || (l.credit||0) || (l.priorDebit||0) || (l.priorCredit||0);
 
+  // Every note below also carries sfpSection + codes: which face-of-Balance-
+  // Sheet section it collapses into, and exactly which account codes it
+  // claims — renderAFSPack's grouped SFP uses this to show ONE total per
+  // note on the statement face, with the full account breakdown only in
+  // the note itself (any account no note claims still shows individually,
+  // e.g. VAT accounts, so nothing silently disappears from the SFP).
+
   // 1. Property, Plant and Equipment — any 15xx asset (excl. 1600 control a/c)
   const ppeLines = assetLines.filter(l => /^15\d\d$/.test(l.code) && l.code !== '1600' && hasBal(l));
   if (ppeLines.length) {
     const depAcct = expLines.find(l => /depreciation/i.test(l.name || ''));
     notes.push({
-      number: n++, title: 'Property, Plant and Equipment',
+      number: n++, title: 'Property, Plant and Equipment', sfpSection: 'nonCurrentAssets',
+      codes: ppeLines.map(l => l.code),
       rows: ppeLines.map(l => ({ label: l.name, current: r2(l.debit - l.credit), prior: r2(l.priorDebit - l.priorCredit) })),
       total: true,
       memo: depAcct && depAcct.current ? `Depreciation charged to the Statement of Comprehensive Income during the year: ${fmtR1(depAcct.current)}` : null,
@@ -2070,34 +2080,55 @@ function _buildAFSNotesList({ coa, tbR, isR, netProfit }) {
   }
 
   // 2. Investments and loans — non-current asset accounts (17xx by convention,
-  // or explicitly named loan/investment) excluding bank, debtors, VAT, PPE.
+  // or explicitly named loan/investment) excluding bank/VAT/PPE. Takes
+  // priority over the receivables note below — an account like "Loan
+  // Receivable: HA Gabler" is a loan, not a trade debtor, even though its
+  // name also contains the word "Receivable".
   const loanAssetLines = assetLines.filter(l =>
     hasBal(l) && !/^15\d\d$/.test(l.code) &&
     (/^17\d\d$/.test(l.code) || /loan|investment/i.test(coa.find(a=>a.account_code===l.code)?.account_name || l.name)) &&
-    !/vat|debtor|bank/i.test(l.name || ''));
+    !/vat|bank/i.test(l.name || ''));
   if (loanAssetLines.length) {
     notes.push({
-      number: n++, title: 'Investments and loans',
+      number: n++, title: 'Investments and loans', sfpSection: 'nonCurrentAssets',
+      codes: loanAssetLines.map(l => l.code),
       rows: loanAssetLines.map(l => ({ label: l.name, current: r2(l.debit - l.credit), prior: r2(l.priorDebit - l.priorCredit) })),
       total: true,
     });
   }
 
-  // 3. Cash and cash equivalents
+  // 3. Trade and other receivables — debtor-type asset accounts, excluding
+  // anything already claimed above as a loan.
+  const loanCodes = new Set(loanAssetLines.map(l => l.code));
+  const receivableLines = assetLines.filter(l =>
+    hasBal(l) && !loanCodes.has(l.code) &&
+    (l.code === '1100' || /debtor|receivable/i.test(l.name || '')) && !/vat/i.test(l.name || ''));
+  if (receivableLines.length) {
+    notes.push({
+      number: n++, title: 'Trade and other receivables', sfpSection: 'currentAssets',
+      codes: receivableLines.map(l => l.code),
+      rows: receivableLines.map(l => ({ label: l.name, current: r2(l.debit - l.credit), prior: r2(l.priorDebit - l.priorCredit) })),
+      total: receivableLines.length > 1,
+    });
+  }
+
+  // 4. Cash and cash equivalents
   const cashLines = assetLines.filter(l => hasBal(l) && (l.code === '1001' || /bank/i.test(l.name || '')));
   if (cashLines.length) {
     notes.push({
-      number: n++, title: 'Cash and cash equivalents',
+      number: n++, title: 'Cash and cash equivalents', sfpSection: 'currentAssets',
+      codes: cashLines.map(l => l.code),
       rows: cashLines.map(l => ({ label: l.name, current: r2(l.debit - l.credit), prior: r2(l.priorDebit - l.priorCredit) })),
       total: cashLines.length > 1,
     });
   }
 
-  // 4. Trade and other payables — liabilities excluding VAT/loan/finance/overdraft
+  // 5. Trade and other payables — liabilities excluding VAT/loan/finance/overdraft
   const payableLines = liabLines.filter(l => hasBal(l) && !/vat|loan|finance|overdraft|instal/i.test(l.name || ''));
   if (payableLines.length) {
     notes.push({
-      number: n++, title: 'Trade and other payables',
+      number: n++, title: 'Trade and other payables', sfpSection: 'currentLiabilities',
+      codes: payableLines.map(l => l.code),
       rows: payableLines.map(l => ({ label: l.name, current: r2(l.credit - l.debit), prior: r2(l.priorCredit - l.priorDebit) })),
       total: payableLines.length > 1,
     });
@@ -2150,6 +2181,96 @@ function _buildAFSNotesList({ coa, tbR, isR, netProfit }) {
   });
 
   return notes;
+}
+
+// Grouped Statement of Financial Position — one total line per note,
+// individual account lines only for anything no note claims.
+function _afsRenderGroupedSFP(d) {
+  const c = d.client;
+  const { assetLines, liabLines, equityLines, totalAssets, totalLiabilities, totalEquity, balanceEffect } = d.tbData;
+  const claimedCodes = new Set(d.notes.flatMap(n => n.codes || []));
+  const dr = l => r2(l.debit - l.credit);
+  const cr = l => r2(l.credit - l.debit);
+
+  const row = (label, noteNum, cur, pri) => `<tr>
+    <td class="afs-desc" style="padding:4px 8px;">${escHtml(label)}</td>
+    <td class="afs-nc" style="padding:4px 8px;text-align:center;color:#555;font-size:0.76rem;">${noteNum||''}</td>
+    ${d.showComp ? `<td class="afs-amt" style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(pri)}</td>` : ''}
+    <td class="afs-amt" style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(cur)}</td>
+  </tr>`;
+  const subtotalRow = (label, cur, pri) => `<tr style="border-top:1px solid #999;font-weight:700;">
+    <td style="padding:4px 8px;">${escHtml(label)}</td><td></td>
+    ${d.showComp ? `<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(pri)}</td>` : ''}
+    <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(cur)}</td>
+  </tr>`;
+  const headRow = label => `<tr><td colspan="${d.showComp?4:3}" style="padding:8px 8px 2px;font-weight:700;">${escHtml(label)}</td></tr>`;
+
+  // Individual (unclaimed-by-any-note) lines for a given account array + section filter.
+  const individualAssetRows = (predicate) => assetLines
+    .filter(l => !claimedCodes.has(l.code) && predicate(l) && (dr(l) || l.priorDebit || l.priorCredit))
+    .map(l => row(l.name, '', dr(l), r2(l.priorDebit - l.priorCredit)));
+  const individualLiabRows = liabLines
+    .filter(l => !claimedCodes.has(l.code) && (cr(l) || l.priorDebit || l.priorCredit))
+    .map(l => row(l.name, '', cr(l), r2(l.priorCredit - l.priorDebit)));
+
+  const ncNotes = d.notes.filter(n => n.sfpSection === 'nonCurrentAssets');
+  const curAssetNotes = d.notes.filter(n => n.sfpSection === 'currentAssets');
+  const curLiabNotes = d.notes.filter(n => n.sfpSection === 'currentLiabilities');
+
+  const noteTotal = note => {
+    const cur = note.totalOverride ? note.totalOverride.current : r2(note.rows.reduce((s,r)=>s+(r.current||0),0));
+    const pri = note.totalOverride ? note.totalOverride.prior   : r2(note.rows.reduce((s,r)=>s+(r.prior||0),0));
+    return { cur, pri };
+  };
+
+  // Any asset no note claims (e.g. VAT Receivable, Inventory, Prepaid
+  // Expenses) still needs to show SOMEWHERE — classify by name into current
+  // vs non-current rather than dropping it, so nothing silently vanishes.
+  const _isCurrentByName = l => /vat|debtor|receivable|bank|prepaid|inventory/i.test(l.name || '');
+  const nonCurrentAssetRows = ncNotes.map(n => { const t = noteTotal(n); return row(n.title, n.number, t.cur, t.pri); }).join('')
+    + individualAssetRows(l => !_isCurrentByName(l)).join('');
+
+  const currentAssetRows = curAssetNotes.map(n => { const t = noteTotal(n); return row(n.title, n.number, t.cur, t.pri); }).join('')
+    + individualAssetRows(l => _isCurrentByName(l)).join('');
+
+  const currentLiabRows = curLiabNotes.map(n => { const t = noteTotal(n); return row(n.title, n.number, t.cur, t.pri); }).join('')
+    + individualLiabRows.join('');
+
+  const equityRows = equityLines
+    .filter(l => cr(l) || l.priorDebit || l.priorCredit)
+    .map(l => row(l.name, '', cr(l), r2(l.priorCredit - l.priorDebit))).join('');
+
+  const priorTotalLiabEquity = r2((d.tbData.priorTotalLiabilities||0) + (d.tbData.priorTotalEquity||0));
+
+  return `<div class="statement-wrap"><div class="afs-wrap">
+    ${_afsHeader(c.name, 'Statement of Financial Position', d.periodStr)}
+    <table class="afs-table">
+      <thead><tr>
+        <th class="afs-th-left" style="width:44%">Description</th>
+        <th class="afs-th-center" style="width:6%">Note(s)</th>
+        ${d.showComp ? `<th style="width:25%">${escHtml(d.colPri)}</th>` : ''}
+        <th style="width:25%">${escHtml(d.colCur)}</th>
+      </tr></thead>
+      <tbody>
+        ${headRow('Assets')}
+        ${headRow('Non-current assets')}
+        ${nonCurrentAssetRows}
+        ${headRow('Current assets')}
+        ${currentAssetRows}
+        ${subtotalRow('Total assets', totalAssets, d.tbData.priorTotalAssets)}
+        ${headRow('Funds and Liabilities')}
+        ${headRow('Capital and reserves')}
+        ${equityRows}
+        ${subtotalRow('', totalEquity, d.tbData.priorTotalEquity)}
+        ${headRow('Current liabilities')}
+        ${currentLiabRows}
+        ${subtotalRow('Total funds and liabilities', r2(totalLiabilities+totalEquity), priorTotalLiabEquity)}
+      </tbody>
+    </table>
+    <div class="afs-balance-check"><span class="afs-bc-label">Trial Balance Check</span>
+      <span class="afs-bc-item ${Math.abs(balanceEffect)<=0.02?'ok':'bad'}">${Math.abs(balanceEffect)<=0.02?'Balanced':'Out of balance by R'+fmtR1(balanceEffect).replace('R','')}</span>
+    </div>
+  </div></div>`;
 }
 
 // ── Render: the full printable pack ─────────────────────────────
@@ -2226,7 +2347,7 @@ function renderAFSPack(d) {
       <div style="margin-top:36px;border-top:1px solid #145A32;padding-top:6px;max-width:260px;">
         <div style="font-weight:700;">${escHtml(d.directorNames || '_____________________')}</div>
         <div style="font-style:italic;">(Director)</div>
-        <div style="margin-top:10px;">${escHtml(d.approvalDate)}</div>
+        <div style="margin-top:10px;">Date: ___________________</div>
       </div>
     </div>`);
 
@@ -2274,18 +2395,26 @@ function renderAFSPack(d) {
         <div style="font-weight:700;">${escHtml(d.directorNames || '_____________________')} (Director)</div>
         <div>Date: ___________________</div>
       </div>
-      <div style="margin-top:36px;border-top:1px solid #999;padding-top:4px;max-width:280px;">
-        <div style="font-weight:700;">${_AFS_FIRM.signatory}</div>
-        <div style="font-style:italic;">${_AFS_FIRM.signatoryRole}</div>
-        <div>SAICA REGISTRATION NO. ${_AFS_FIRM.saicaNo}</div>
-        <div style="margin-top:6px;">Date: ${escHtml(d.approvalDate)}</div>
+      <div style="margin-top:36px;max-width:280px;">
+        <img src="${_AFS_SIGNATURE_IMG}" alt="Signature" style="height:38px;display:block;margin-bottom:2px;"/>
+        <div style="border-top:1px solid #999;padding-top:4px;">
+          <div style="font-weight:700;">${_AFS_FIRM.signatory}</div>
+          <div style="font-style:italic;">${_AFS_FIRM.signatoryRole}</div>
+          <div>SAICA REGISTRATION NO. ${_AFS_FIRM.saicaNo}</div>
+          <div style="margin-top:6px;">Date: ${escHtml(d.approvalDate)}</div>
+        </div>
       </div>
     </div>`);
 
-  // ── Statement of Financial Position (reuse the SAME TB-driven BS) ─────
-  // renderBSFromTB already produces a complete .statement-wrap>.afs-wrap
-  // page (with its own header) — just give it a page break, don't re-wrap.
-  const sfp = `<div class="afs-page" style="page-break-before:always;">${renderBSFromTB(d.tbData, d.currentLabel, d.priorLabel, {})}</div>`;
+  // ── Statement of Financial Position ───────────────────────────
+  // Statutory presentation: each note collapses to ONE total line on the
+  // face of the SFP (the account-by-account breakdown lives only in the
+  // note) — any account no note claims (e.g. VAT accounts, an unmatched
+  // loan liability) still shows individually, so nothing silently drops
+  // off the statement. Totals themselves come straight from tbData, so
+  // Total Assets / Total Liabilities / Total Equity can never disagree
+  // with the on-screen Balance Sheet or the Trial Balance check.
+  const sfp = `<div class="afs-page" style="page-break-before:always;">${_afsRenderGroupedSFP(d)}</div>`;
 
   // ── Statement of Comprehensive Income (summary, 3 lines) ──────
   // "Revenue" here is net of cost of sales (matches grossProfit — i.e. the
