@@ -945,6 +945,7 @@ function renderClientDetail() {
       <button class="subnav-tab ${tab==='irp6'?'active':''}" onclick="setClientTab('irp6')">IRP6</button>
       <button class="subnav-tab ${tab==='invoices'?'active':''}" onclick="setClientTab('invoices')">Invoices</button>
       <button class="subnav-tab ${tab==='journals'?'active':''}" onclick="setClientTab('journals')">Journals</button>
+      ${isComp ? `<button class="subnav-tab ${tab==='assets'?'active':''}" onclick="setClientTab('assets')">Assets</button>` : ''}
       <button class="subnav-tab ${tab==='settings'?'active':''}" onclick="setClientTab('settings')">Settings</button>
     </div>`;
 
@@ -968,6 +969,7 @@ function renderClientDetail() {
   else if (tab === 'irp6')         tabContent = renderIRP6Tab();
   else if (tab === 'invoices')     tabContent = renderClientInvoicesTab();
   else if (tab === 'journals')     tabContent = renderJournalsTab();
+  else if (tab === 'assets')       tabContent = renderAssetsTab();
   else if (tab === 'settings')     tabContent = renderSettingsTab();
 
   setContent(`
@@ -4073,6 +4075,155 @@ function renderJournalsTab() {
       ${newBtn}
     </div>
     ${cards}`;
+}
+
+// ============================================================
+// ASSETS — fixed asset register & loan/finance liability movement
+// Derived entirely from the same double-entry ledger that feeds the
+// Balance Sheet / Trial Balance (F.buildTrialBalance), so it can never
+// drift out of sync with those reports. No separate storage — an asset
+// "is" whatever sits in a 15xx-range asset account, a linked loan "is"
+// whatever sits in a liability account named like a loan/finance facility.
+// ============================================================
+function renderAssetsTab() {
+  const c = state.currentClient;
+  if (c.entity_type === 'commission_earner') {
+    return `<div class="empty-state">
+      <div class="empty-state-icon">&#128188;</div>
+      <div class="empty-state-title">Not applicable</div>
+      <div class="empty-state-sub">The fixed asset register is only available for company clients.</div>
+    </div>`;
+  }
+
+  const F   = window.FinancialOutputs;
+  const coa = state.coa || [];
+  const isR = F.buildIncomeStatement(state.transactions, coa, [], false);
+  const np  = isR.ok ? isR.data.netProfit : 0;
+  const priorTxs = (state.priorTransactions || []).filter(t => t.account_code);
+  const tbR = F.buildTrialBalance(state.transactions, coa, false, state.openingBalances, np, priorTxs, state.staticComparatives);
+
+  if (!tbR.ok) return `<div class="info-box red">${escH(tbR.error)}</div>`;
+  const { assetLines, liabLines } = tbR.data;
+
+  const r2  = n => Math.round((n + Number.EPSILON) * 100) / 100;
+  const fmt = n => 'R ' + Math.abs(r2(n||0)).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const dr  = l => r2((l?.debit||0)  - (l?.credit||0));       // asset-normal balance
+  const cr  = l => r2((l?.credit||0) - (l?.debit||0));        // liability-normal balance
+
+  // Fixed assets: any active asset account coded 1500-1599, excluding the
+  // Accumulated Depreciation control account (1600) which is a contra-asset.
+  const ACCUM_DEP_CODE = '1600';
+  const assetAccounts = coa.filter(a => a.is_active && a.account_type === 'asset' &&
+    /^15\d\d$/.test(a.account_code) && a.account_code !== ACCUM_DEP_CODE);
+  const accumDepAcct  = coa.find(a => a.account_code === ACCUM_DEP_CODE && a.is_active);
+  const accumDepLine  = accumDepAcct ? assetLines.find(l => l.code === ACCUM_DEP_CODE) : null;
+  const accumDepBal   = dr(accumDepLine); // negative once depreciation journals are posted
+
+  const assetRows = assetAccounts.map(a => {
+    const line = assetLines.find(l => l.code === a.account_code);
+    return { code: a.account_code, name: a.account_name, opening: dr({debit:line?.priorDebit||0,credit:line?.priorCredit||0}), cost: dr(line) };
+  });
+  const totalCost = r2(assetRows.reduce((s,r) => s + r.cost, 0));
+  const nbv       = r2(totalCost + accumDepBal);
+
+  const assetCards = assetRows.map(a => `
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div style="font-weight:700;">${escH(a.name)}</div>
+          <div style="color:#6c757d;font-size:0.78rem;">${escH(a.code)}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="openDepreciationJournal('${escH(a.code)}','${escH(a.name.replace(/'/g,"\\'"))}')">+ Record Depreciation</button>
+      </div>
+      <div style="display:flex;gap:24px;margin-top:10px;font-size:0.85rem;">
+        <div><span style="color:#6c757d;">Opening</span><br><strong>${fmt(a.opening)}</strong></div>
+        <div><span style="color:#6c757d;">Cost (closing)</span><br><strong>${fmt(a.cost)}</strong></div>
+      </div>
+    </div>`).join('');
+
+  const assetSection = !assetAccounts.length ? `
+    <div class="empty-state">
+      <div class="empty-state-icon">&#128663;</div>
+      <div class="empty-state-title">No fixed assets on record</div>
+      <div class="empty-state-sub">Assets show up here once a purchase is journaled to a 15xx asset account (e.g. Motor Vehicles).</div>
+    </div>` : `
+    ${assetCards}
+    <div class="card" style="margin-bottom:24px;background:#f8f9fb;">
+      <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.85rem;">
+        <div><span style="color:#6c757d;">Total Cost</span><br><strong>${fmt(totalCost)}</strong></div>
+        <div><span style="color:#6c757d;">Accumulated Depreciation</span><br><strong>${fmt(Math.abs(accumDepBal))}</strong></div>
+        <div><span style="color:#6c757d;">Net Book Value</span><br><strong style="color:#2e7d32;">${fmt(nbv)}</strong></div>
+      </div>
+    </div>`;
+
+  // Loan / finance liability accounts — matched by name, excludes VAT/PAYE/Trade Creditors.
+  const loanAccounts = coa.filter(a => a.is_active && a.account_type === 'liability' &&
+    /loan|finance|instal/i.test(a.account_name || ''));
+
+  const loanSections = loanAccounts.map(a => {
+    const line    = liabLines.find(l => l.code === a.account_code);
+    const opening = cr({debit:line?.priorDebit||0,credit:line?.priorCredit||0});
+    const closing = cr(line);
+    const movementTxns = (state.transactions || [])
+      .filter(t => t.account_code === a.account_code)
+      .sort((x,y) => (x.date||'').localeCompare(y.date||''));
+    const rows = movementTxns.map(t => {
+      const isJournal = t.source_bank === 'Journal';
+      // Bank leg: money out (t.amount<0) reduces the liability (debit); money in increases it (credit).
+      // Journal leg: amount>0 is a debit (reduces liability), amount<0 is a credit (increases it).
+      const debit  = isJournal ? Math.max(t.amount||0, 0)         : Math.max(-(t.amount||0), 0);
+      const credit = isJournal ? Math.max(-(t.amount||0), 0)      : Math.max(t.amount||0, 0);
+      return `<tr style="border-bottom:1px solid #f0f0f0;">
+        <td style="padding:3px 6px;">${fmtDate(t.date)}</td>
+        <td style="padding:3px 6px;">${escH(t.description||'')}</td>
+        <td style="padding:3px 6px;text-align:right;">${debit  ? fmt(debit)  : ''}</td>
+        <td style="padding:3px 6px;text-align:right;">${credit ? fmt(credit) : ''}</td>
+      </tr>`;
+    }).join('');
+    return `
+      <div class="card" style="margin-bottom:16px;">
+        <div style="font-weight:700;margin-bottom:2px;">${escH(a.account_name)}</div>
+        <div style="color:#6c757d;font-size:0.78rem;margin-bottom:10px;">${escH(a.account_code)}</div>
+        <div style="display:flex;gap:24px;margin-bottom:10px;font-size:0.85rem;">
+          <div><span style="color:#6c757d;">Opening balance</span><br><strong>${fmt(opening)}</strong></div>
+          <div><span style="color:#6c757d;">Movement this year</span><br><strong>${fmt(closing-opening)}</strong></div>
+          <div><span style="color:#6c757d;">Closing balance</span><br><strong>${fmt(closing)}</strong></div>
+        </div>
+        ${rows ? `<table style="width:100%;border-collapse:collapse;font-size:0.78rem;">
+          <thead><tr style="border-bottom:2px solid #dee2e6;color:#6c757d;">
+            <th style="text-align:left;padding:3px 6px;">Date</th>
+            <th style="text-align:left;padding:3px 6px;">Description</th>
+            <th style="text-align:right;padding:3px 6px;width:110px;">Capital/Interest Dr</th>
+            <th style="text-align:right;padding:3px 6px;width:110px;">Draw-down Cr</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>` : `<div style="color:#6c757d;font-size:0.8rem;">No movement posted this year.</div>`}
+      </div>`;
+  }).join('');
+
+  const loanSectionWrap = !loanAccounts.length ? '' : `
+    <h3 style="margin:24px 0 12px;font-size:1rem;">Loan &amp; Finance Liability Movement</h3>
+    ${loanSections}`;
+
+  return `
+    <h3 style="margin:0 0 12px;font-size:1rem;">Fixed Asset Register</h3>
+    ${assetSection}
+    ${loanSectionWrap}`;
+}
+
+// Pre-fills the existing journal form with the standard depreciation entry
+// (Dr Depreciation Expense / Cr Accumulated Depreciation) for a given asset
+// account — the accountant still enters the amount and posts it themselves.
+async function openDepreciationJournal(assetCode, assetName) {
+  await openJournalForm();
+  document.getElementById('jnl-narration').value = `Depreciation - ${assetName}`;
+
+  const depExpense = (state.coa || []).find(a => a.is_active && /depreciation/i.test(a.account_name||'') && a.account_type === 'expense');
+  const accumDep   = (state.coa || []).find(a => a.is_active && a.account_code === '1600');
+
+  if (depExpense) { _jnlLines[0].account_code = depExpense.account_code; _jnlLines[0].account_name = depExpense.account_name; }
+  if (accumDep)   { _jnlLines[1].account_code = accumDep.account_code;   _jnlLines[1].account_name  = accumDep.account_name; }
+  renderJnlLines();
 }
 
 // Journal form state
