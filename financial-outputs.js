@@ -2089,13 +2089,11 @@ function _buildAFSNotesList({ coa, tbR, isR, netProfit }) {
   // 1. Property, Plant and Equipment — any 15xx asset (excl. 1600 control a/c)
   const ppeLines = assetLines.filter(l => /^15\d\d$/.test(l.code) && l.code !== '1600' && hasBal(l));
   if (ppeLines.length) {
-    const depAcct = expLines.find(l => /depreciation/i.test(l.name || ''));
     notes.push({
       number: n++, title: 'Property, Plant and Equipment', sfpSection: 'nonCurrentAssets',
       codes: ppeLines.map(l => l.code),
       rows: ppeLines.map(l => ({ label: l.name, current: r2(l.debit - l.credit), prior: r2(l.priorDebit - l.priorCredit) })),
       total: true,
-      memo: depAcct && depAcct.current ? `Depreciation charged to the Statement of Comprehensive Income during the year: ${fmtR1(depAcct.current)}` : null,
     });
   }
 
@@ -2348,10 +2346,20 @@ function renderAFSPack(d) {
       <td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(totCur)}</td>
       ${d.showComp ? `<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(totPri)}</td>` : ''}
     </tr>` : '';
+    // table-layout:fixed with the SAME column widths on every note's table —
+    // each note is its own separate <table>, so without fixed widths the
+    // browser auto-sizes columns per-note based on that note's own longest
+    // label, and the year figures drift left/right note to note even though
+    // each table is internally consistent. colgroup keeps every note's
+    // number columns landing at the exact same horizontal position.
+    const colgroup = d.showComp
+      ? `<colgroup><col style="width:56%"><col style="width:22%"><col style="width:22%"></colgroup>`
+      : `<colgroup><col style="width:56%"><col style="width:44%"></colgroup>`;
     return `
       <div style="margin-bottom:18px;page-break-inside:avoid;break-inside:avoid;">
         <div style="font-weight:700;margin-bottom:4px;">${note.number}. ${escHtml(note.title)}</div>
-        <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+        <table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:0.85rem;">
+          ${colgroup}
           <thead><tr style="color:#555;font-size:0.78rem;">
             <td style="padding:2px 8px;">Figures in Rand</td>
             <td style="padding:2px 8px;text-align:right;">${escHtml(d.colCur)}</td>
@@ -2359,7 +2367,6 @@ function renderAFSPack(d) {
           </tr></thead>
           <tbody>${rows}${totalRow}</tbody>
         </table>
-        ${note.memo ? `<div style="font-size:0.78rem;color:#555;margin-top:4px;font-style:italic;">${escHtml(note.memo)}</div>` : ''}
       </div>`;
   };
 
@@ -2523,6 +2530,7 @@ function renderAFSPack(d) {
     scfBody = `<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
       <thead><tr style="font-weight:700;color:#555;font-size:0.78rem;">
         <td style="padding:2px 8px;">Figures in Rand</td>
+        <td style="padding:2px 8px;"></td>
         <td style="padding:2px 8px;text-align:right;">${escHtml(d.colCur)}</td>
         ${d.showComp ? `<td style="padding:2px 8px;text-align:right;">${escHtml(d.colPri)}</td>` : ''}
       </tr></thead>
@@ -2545,9 +2553,7 @@ function renderAFSPack(d) {
     <div style="font-size:0.85rem;">
       <div style="font-weight:700;color:#145A32;border-bottom:2px solid #145A32;padding-bottom:4px;margin-bottom:10px;">1. Basis of preparation</div>
       <p>The financial statements are prepared on the historical cost basis and incorporate the following accounting policies which are consistent with that of the previous years.</p>
-      ${d.accountingPolicies
-        ? `<div style="white-space:pre-line;">${escHtml(d.accountingPolicies)}</div>`
-        : `<p style="color:#999;font-style:italic;">No accounting policy text has been captured for this client yet — add it under Settings.</p>`}
+      ${d.accountingPolicies ? `<div style="white-space:pre-line;">${escHtml(d.accountingPolicies)}</div>` : ''}
     </div>`);
 
   // ── Notes ────────────────────────────────────────────────────
