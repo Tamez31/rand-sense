@@ -4137,7 +4137,8 @@ function renderAssetsTab() {
       </div>
       <div style="display:flex;gap:24px;margin-top:10px;font-size:0.85rem;">
         <div><span style="color:#6c757d;">Opening</span><br><strong>${fmt(a.opening)}</strong></div>
-        <div><span style="color:#6c757d;">Cost (closing)</span><br><strong>${fmt(a.cost)}</strong></div>
+        <div><span style="color:#6c757d;">Current Value</span><br><strong>${fmt(a.cost)}</strong></div>
+        ${a.opening !== a.cost ? `<div><span style="color:#6c757d;">Movement</span><br><strong style="color:#c0392b;">${fmt(a.cost-a.opening)}</strong></div>` : ''}
       </div>
     </div>`).join('');
 
@@ -4150,8 +4151,8 @@ function renderAssetsTab() {
     ${assetCards}
     <div class="card" style="margin-bottom:24px;background:#f8f9fb;">
       <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.85rem;">
-        <div><span style="color:#6c757d;">Total Cost</span><br><strong>${fmt(totalCost)}</strong></div>
-        <div><span style="color:#6c757d;">Accumulated Depreciation</span><br><strong>${fmt(Math.abs(accumDepBal))}</strong></div>
+        <div><span style="color:#6c757d;">Total Carrying Value</span><br><strong>${fmt(totalCost)}</strong></div>
+        ${accumDepBal ? `<div><span style="color:#6c757d;">Accumulated Depreciation (pooled)</span><br><strong>${fmt(Math.abs(accumDepBal))}</strong></div>` : ''}
         <div><span style="color:#6c757d;">Net Book Value</span><br><strong style="color:#2e7d32;">${fmt(nbv)}</strong></div>
       </div>
     </div>`;
@@ -4212,17 +4213,19 @@ function renderAssetsTab() {
 }
 
 // Pre-fills the existing journal form with the standard depreciation entry
-// (Dr Depreciation Expense / Cr Accumulated Depreciation) for a given asset
-// account — the accountant still enters the amount and posts it themselves.
+// — Dr Depreciation Expense / Cr the asset account itself, so the vehicle's
+// own Balance Sheet line drops in value each year rather than depreciation
+// sitting off in a separate pooled contra-asset account. The accountant
+// still enters the amount and posts it themselves.
 async function openDepreciationJournal(assetCode, assetName) {
   await openJournalForm();
   document.getElementById('jnl-narration').value = `Depreciation - ${assetName}`;
 
   const depExpense = (state.coa || []).find(a => a.is_active && /depreciation/i.test(a.account_name||'') && a.account_type === 'expense');
-  const accumDep   = (state.coa || []).find(a => a.is_active && a.account_code === '1600');
 
   if (depExpense) { _jnlLines[0].account_code = depExpense.account_code; _jnlLines[0].account_name = depExpense.account_name; }
-  if (accumDep)   { _jnlLines[1].account_code = accumDep.account_code;   _jnlLines[1].account_name  = accumDep.account_name; }
+  _jnlLines[1].account_code = assetCode;
+  _jnlLines[1].account_name = assetName;
   renderJnlLines();
 }
 
