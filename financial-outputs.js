@@ -2451,7 +2451,7 @@ function renderAFSPack(d) {
         <div>Date: ___________________</div>
       </div>
       <div style="margin-top:36px;max-width:280px;page-break-inside:avoid;break-inside:avoid;">
-        <img src="${_AFS_SIGNATURE_IMG}" alt="Signature" style="height:40px;display:block;"/>
+        <img src="${_AFS_SIGNATURE_IMG}" alt="Signature" width="218" height="40" style="height:40px;width:218px;display:block;"/>
         <div style="border-top:1px solid #999;padding-top:4px;margin-top:-4px;">
           <div style="font-weight:700;">${_AFS_FIRM.signatory}</div>
           <div style="font-style:italic;">${_AFS_FIRM.signatoryRole}</div>
@@ -2550,7 +2550,26 @@ function renderAFSPack(d) {
     </div>`);
 
   // ── Notes ────────────────────────────────────────────────────
-  const notesPage = page('Notes to the Financial Statements', d.notes.map(renderNote).join(''));
+  // Split notes across as many pages as needed by an approximate per-page
+  // row budget, so a page that overflows still gets its own proper header
+  // ("... (continued)") instead of relying on the browser's automatic,
+  // header-less mid-flow page break.
+  const NOTES_PER_PAGE_BUDGET = 11; // ~1 unit per note + 1 per row
+  const noteChunks = [];
+  let chunk = [], weight = 0;
+  for (const note of d.notes) {
+    const w = 1 + note.rows.length + (note.total ? 1 : 0);
+    if (chunk.length && weight + w > NOTES_PER_PAGE_BUDGET) {
+      noteChunks.push(chunk);
+      chunk = []; weight = 0;
+    }
+    chunk.push(note); weight += w;
+  }
+  if (chunk.length) noteChunks.push(chunk);
+  const notesPages = (noteChunks.length ? noteChunks : [[]]).map((notesOnPage, i) =>
+    page(i === 0 ? 'Notes to the Financial Statements' : 'Notes to the Financial Statements (continued)',
+      notesOnPage.map(renderNote).join(''))
+  ).join('');
 
   // ── Detailed Statement of Comprehensive Income (reuse renderIS) ──
   // renderIS also produces a complete self-contained page — same treatment.
@@ -2570,7 +2589,7 @@ function renderAFSPack(d) {
   };
   const detailedIS = `<div class="afs-page" style="page-break-before:always;padding:24px 32px;">${renderIS(isDataForDetail, d.currentLabel, d.priorLabel, false, { hideBuildTag: true, reverseColumns: true })}</div>`;
 
-  return [cover, indexPage, letterPage1, letterPage2, sfp, sci, sce, scf, policies, notesPage, detailedIS].join('');
+  return [cover, indexPage, letterPage1, letterPage2, sfp, sci, sce, scf, policies, notesPages, detailedIS].join('');
 }
 
 // ============================================================
