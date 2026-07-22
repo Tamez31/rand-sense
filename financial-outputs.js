@@ -1874,7 +1874,7 @@ function renderEnhancedVATReport(data, currentLabel, opts) {
   html += `<tr class="${netCls}">
     <td class="label">${netLabel}</td>
     <td class="amt"></td>
-    <td class="amt">${fmt(Math.abs(netVAT))}</td>
+    <td class="amt">${fmt(netVAT)}</td>
     <td class="amt"></td>
   </tr>`;
 

@@ -2151,7 +2151,7 @@ function _buildVAT201Card(txs, fromIso, toIso, client) {
       </div>`
     : `<div style="background:#1E8449;color:#FFFFFF;font-weight:700;font-size:1rem;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
         <span>VAT REFUNDABLE</span>
-        <span style="font-family:var(--font-mono);">${fmtAmt(Math.abs(net))}</span>
+        <span style="font-family:var(--font-mono);">-${fmtAmt(net)}</span>
       </div>`;
 
   return `
