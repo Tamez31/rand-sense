@@ -230,4 +230,14 @@ alter table payments disable row level security;
 -- alter table invoices add column if not exists discount       numeric default 0;
 -- alter table invoices add column if not exists finalized_date timestamptz;
 
+-- ============================================================
+-- MIGRATION: add AFS (Annual Financial Statements) fields to clients
+-- Run this once — required before the AFS Pack report can save/show
+-- per-client director name(s) and accounting policy text. Both are
+-- genuinely static, accountant-edited fields (never computed from
+-- transactions) — see financial-outputs.js buildAFSPack/renderAFSPack.
+-- ============================================================
+alter table clients add column if not exists afs_director_names      text;
+alter table clients add column if not exists afs_accounting_policies text;
+
 -- Done. All tables ready.

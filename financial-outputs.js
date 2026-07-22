@@ -1908,6 +1908,464 @@ function _brandHeader(title, clientName, currentLabel, priorLabel) {
 }
 
 // ============================================================
+// ANNUAL FINANCIAL STATEMENTS (AFS) PACK
+// ============================================================
+// Statutory-style multi-page pack: cover, index, compilation letter,
+// primary statements, accounting policies, notes, detailed IS.
+//
+// Everything numeric on every page is derived live from buildIncomeStatement /
+// buildTrialBalance / buildCashFlow — the SAME engines that drive the
+// on-screen reports — so it is structurally impossible for a number here to
+// disagree with the Balance Sheet / Income Statement elsewhere in the app.
+// Only the following are genuine static inputs, sourced from client Settings
+// (never computed, never inferred from transactions):
+//   - director name(s) for the approval/compilation-letter signature block
+//   - accounting policy paragraph text
+// Everything else (firm letterhead, SAICA number, engagement-letter legal
+// wording) is a fixed practice constant — identical on every client's pack,
+// by design, since it's RandSense's own boilerplate, not client data.
+// ============================================================
+
+const _AFS_FIRM = {
+  practiceName: 'RandSense',
+  slogan: 'Making Cents of It All',
+  nicky: { name: 'NICKY LE ROUX', title: 'REGISTERED ACCOUNTING TECHNICIAN (SA)\nREGISTERED TAX PRACTITIONER', cell: '082 717 1049' },
+  matthew: { name: 'MATTHEW LE ROUX', title: 'CERTIFIED SENIOR BOOKKEEPER, ICB(SA)', cell: '076 140 8717', email: 'matthewlr25@gmail.com' },
+  signatory: 'NH Le Roux',
+  signatoryRole: 'Signed on behalf of RandSense',
+  saicaNo: '30745377',
+};
+
+function _afsMoneyRow(label, code, cur, pri, showComp, opts) {
+  opts = opts || {};
+  const bold = opts.bold ? 'font-weight:700;' : '';
+  return `<tr>
+    <td style="padding:4px 8px;${bold}">${escHtml(label)}</td>
+    <td style="padding:4px 8px;text-align:center;color:#555;font-size:0.76rem;">${escHtml(code||'')}</td>
+    ${showComp ? `<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);${bold}">${pri==null?'':fmtR1(pri)}</td>` : ''}
+    <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);${bold}">${cur==null?'':fmtR1(cur)}</td>
+  </tr>`;
+}
+
+// Assemble every numeric section of the pack from live data. Returns
+// { ok, error, data } — data is consumed by renderAFSPack().
+function buildAFSPack(opts) {
+  try {
+    const {
+      client, currentYear, coa,
+      transactions, priorYearTransactions, openingBalances, staticComparatives,
+      priorOpeningBalances,
+      directorNames, accountingPolicies,
+    } = opts;
+
+    const priorYear    = String(parseInt(currentYear, 10) - 1);
+    const currentLabel = yearEndLabel(client.financial_year_end, currentYear);
+    const priorLabel   = yearEndLabel(client.financial_year_end, priorYear);
+    const { periodStr, colCur, colPri } = _afsPeriod(currentLabel, priorLabel);
+
+    const priorTxsClean = (priorYearTransactions || []).filter(t => t.account_code);
+
+    // Pass the prior year through so isR.data's comparative fields
+    // (revComparative / cosCom / expCom / netProfitCom) are actually populated
+    // — every note and the SCE below depend on these being real, not zero.
+    const isR = buildIncomeStatement(transactions, coa, priorTxsClean, false, staticComparatives);
+    if (!isR.ok) return { ok: false, error: 'Income Statement: ' + isR.error };
+    const netProfit = isR.data.netProfit;
+    const priorNetProfit = isR.data.netProfitCom;
+
+    const tbR = buildTrialBalance(transactions, coa, false, openingBalances, netProfit, priorTxsClean, staticComparatives);
+    if (!tbR.ok) return { ok: false, error: 'Trial Balance: ' + tbR.error };
+
+    const cfR = buildCashFlow(transactions, coa, openingBalances, priorTxsClean, staticComparatives);
+
+    // ── Statement of Changes in Equity ──────────────────────────
+    // openingRE = this year's opening Retained Earnings (= prior year's
+    // closing balance, by definition). Working BACKWARDS from that plus the
+    // prior year's own net profit gives the balance b/f at the start of the
+    // prior year — exactly two movement rows, matching the two years of
+    // comparative data this app actually carries (no synthetic 3rd year).
+    const reAcct = coa.find(a => a.is_active && a.account_type === 'equity' &&
+      (a.account_code === '3002' || /retained/i.test(a.account_name || '')));
+    const obMapCur = buildOpeningMap(openingBalances || []);
+    const openingRE = reAcct ? r2(-(obMapCur.get(reAcct.account_code)?.amount || 0)) : 0; // stored credit-sign
+    const priorYearAvailable = tbR.data.priorYearAvailable;
+    const sceRows = priorYearAvailable ? [
+      { label: `Balance at ${_afsOpeningDate(priorLabel)}`, amount: r2(openingRE - priorNetProfit) },
+      { label: `Net profit/(loss) for the year`, amount: priorNetProfit },
+      { label: `Balance at ${_afsClosingDateFromLabel(priorLabel, client.financial_year_end)}`, amount: openingRE },
+      { label: `Net profit/(loss) for the year`, amount: netProfit },
+      { label: `Balance at ${_afsClosingDateFromLabel(currentLabel, client.financial_year_end)}`, amount: r2(openingRE + netProfit) },
+    ] : [
+      { label: `Balance at ${_afsOpeningDate(currentLabel)}`, amount: openingRE },
+      { label: `Net profit/(loss) for the year`, amount: netProfit },
+      { label: `Balance at ${_afsClosingDateFromLabel(currentLabel, client.financial_year_end)}`, amount: r2(openingRE + netProfit) },
+    ];
+
+    // ── Notes ────────────────────────────────────────────────────
+    const notes = _buildAFSNotesList({ coa, tbR, isR, netProfit });
+
+    return {
+      ok: true,
+      data: {
+        client, currentYear, priorYear, currentLabel, priorLabel, colCur, colPri, periodStr,
+        showComp: priorYearAvailable,
+        isData: isR.data, tbData: tbR.data, cfData: cfR.ok ? cfR.data : null,
+        netProfit, priorNetProfit, openingRE, sceRows, notes,
+        directorNames: directorNames || '',
+        accountingPolicies: accountingPolicies || '',
+        approvalDate: _afsTodayDMY(),
+      },
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function _afsTodayDMY() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+// currentLabel e.g. "YE Feb 2026" → last day of that month/year, DD Month YYYY
+function _afsClosingDateFromLabel(label, feMonth) {
+  const m = _afsParseLbl(label);
+  if (!m.yr) return label;
+  const mnum = _AFS_MONTH_NUM[m.mon] || 12;
+  const lastDay = new Date(parseInt(m.yr), mnum, 0).getDate();
+  return `${lastDay} ${_AFS_MONTH_FULL[m.mon] || m.mon} ${m.yr}`;
+}
+// The FIRST day of the financial year that ENDS in the given label's year.
+function _afsOpeningDate(label) {
+  const m = _afsParseLbl(label);
+  if (!m.yr) return label;
+  const startYear = parseInt(m.yr, 10) - 1;
+  const mnum = _AFS_MONTH_NUM[m.mon] || 12;
+  const startMonth = (mnum % 12) + 1; // day after the FYE month
+  const startMonthName = Object.keys(_AFS_MONTH_NUM).find(k => _AFS_MONTH_NUM[k] === startMonth) || m.mon;
+  return `1 ${_AFS_MONTH_FULL[startMonthName] || startMonthName} ${startYear}`;
+}
+
+// Ordered, presence-driven note list. A note only appears when the
+// underlying account group actually carries a balance/movement — nothing is
+// hardcoded per client, so a note that doesn't apply simply doesn't render.
+function _buildAFSNotesList({ coa, tbR, isR, netProfit }) {
+  const { assetLines, liabLines } = tbR.data;
+  const { incomeLines, cosLines, expLines, revenue, totalCOS, totalExpenses, revComparative, cosCom, expCom, netProfitCom } = isR.data;
+  const notes = [];
+  // Numbering starts at 2 — Note 1 is "Basis of preparation" on the
+  // Accounting Policies page (matches the reference AFS convention).
+  let n = 2;
+
+  const hasBal = l => (l.debit||0) || (l.credit||0) || (l.priorDebit||0) || (l.priorCredit||0);
+
+  // 1. Property, Plant and Equipment — any 15xx asset (excl. 1600 control a/c)
+  const ppeLines = assetLines.filter(l => /^15\d\d$/.test(l.code) && l.code !== '1600' && hasBal(l));
+  if (ppeLines.length) {
+    const depAcct = expLines.find(l => /depreciation/i.test(l.name || ''));
+    notes.push({
+      number: n++, title: 'Property, Plant and Equipment',
+      rows: ppeLines.map(l => ({ label: l.name, current: r2(l.debit - l.credit), prior: r2(l.priorDebit - l.priorCredit) })),
+      total: true,
+      memo: depAcct && depAcct.current ? `Depreciation charged to the Statement of Comprehensive Income during the year: ${fmtR1(depAcct.current)}` : null,
+    });
+  }
+
+  // 2. Investments and loans — non-current asset accounts (17xx by convention,
+  // or explicitly named loan/investment) excluding bank, debtors, VAT, PPE.
+  const loanAssetLines = assetLines.filter(l =>
+    hasBal(l) && !/^15\d\d$/.test(l.code) &&
+    (/^17\d\d$/.test(l.code) || /loan|investment/i.test(coa.find(a=>a.account_code===l.code)?.account_name || l.name)) &&
+    !/vat|debtor|bank/i.test(l.name || ''));
+  if (loanAssetLines.length) {
+    notes.push({
+      number: n++, title: 'Investments and loans',
+      rows: loanAssetLines.map(l => ({ label: l.name, current: r2(l.debit - l.credit), prior: r2(l.priorDebit - l.priorCredit) })),
+      total: true,
+    });
+  }
+
+  // 3. Cash and cash equivalents
+  const cashLines = assetLines.filter(l => hasBal(l) && (l.code === '1001' || /bank/i.test(l.name || '')));
+  if (cashLines.length) {
+    notes.push({
+      number: n++, title: 'Cash and cash equivalents',
+      rows: cashLines.map(l => ({ label: l.name, current: r2(l.debit - l.credit), prior: r2(l.priorDebit - l.priorCredit) })),
+      total: cashLines.length > 1,
+    });
+  }
+
+  // 4. Trade and other payables — liabilities excluding VAT/loan/finance/overdraft
+  const payableLines = liabLines.filter(l => hasBal(l) && !/vat|loan|finance|overdraft|instal/i.test(l.name || ''));
+  if (payableLines.length) {
+    notes.push({
+      number: n++, title: 'Trade and other payables',
+      rows: payableLines.map(l => ({ label: l.name, current: r2(l.credit - l.debit), prior: r2(l.priorCredit - l.priorDebit) })),
+      total: payableLines.length > 1,
+    });
+  }
+
+  const nonZeroIS = l => (l.current || 0) || (l.comparative || 0);
+
+  // 5. Revenue / services rendered — income account breakdown
+  const revLines = incomeLines.filter(nonZeroIS);
+  if (revLines.length) {
+    notes.push({
+      number: n++, title: 'Revenue',
+      rows: revLines.map(l => ({ label: l.name, current: l.current, prior: l.comparative })),
+      total: revLines.length > 1,
+    });
+  }
+
+  // 6. Cost of sales — only if the client actually has any
+  const cosLinesNZ = cosLines.filter(nonZeroIS);
+  if (cosLinesNZ.length) {
+    notes.push({
+      number: n++, title: 'Cost of sales',
+      rows: cosLinesNZ.map(l => ({ label: l.name, current: l.current, prior: l.comparative })),
+      total: true,
+    });
+  }
+
+  // 7. Interest paid — only if a dedicated "interest" line exists
+  // expLines come from buildIncomeStatement (current/comparative), NOT the TB
+  // debit/credit shape hasBal() checks — a distinct presence test is needed here.
+  const interestLines = expLines.filter(l => ((l.current||0) || (l.comparative||0)) && /interest/i.test(l.name || ''));
+  if (interestLines.length) {
+    notes.push({
+      number: n++, title: 'Interest paid',
+      rows: interestLines.map(l => ({ label: l.name, current: l.current, prior: l.comparative })),
+      total: interestLines.length > 1,
+    });
+  }
+
+  // 8. Cash generated in operations — reconciliation to net profit
+  notes.push({
+    number: n++, title: 'Cash generated in operations',
+    rows: [
+      { label: 'Revenue', current: revenue, prior: revComparative },
+      { label: 'Less: cost of sales', current: r2(-totalCOS), prior: r2(-cosCom) },
+      { label: 'Less: operating expenses', current: r2(-totalExpenses), prior: r2(-expCom) },
+    ].concat(interestLines.length ? [{ label: 'Add back: interest paid', current: r2(interestLines.reduce((s,l)=>s+(l.current||0),0)), prior: r2(interestLines.reduce((s,l)=>s+(l.comparative||0),0)) }] : []),
+    total: true,
+    totalOverride: { current: netProfit, prior: netProfitCom },
+  });
+
+  return notes;
+}
+
+// ── Render: the full printable pack ─────────────────────────────
+function renderAFSPack(d) {
+  const c = d.client;
+  const page = (title, body, opts) => `
+    <div class="statement-wrap afs-page" style="${opts && opts.noBreak ? '' : 'page-break-before:always;'}">
+      <div class="afs-wrap">
+        ${_afsHeader(c.name, title, d.periodStr)}
+        ${body}
+      </div>
+    </div>`;
+
+  // 2-column (prior/current) note renderer.
+  const renderNote = note => {
+    const rows = note.rows.map(r => `<tr>
+      <td style="padding:3px 8px;">${escHtml(r.label)}</td>
+      ${d.showComp ? `<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${r.prior==null?'–':fmtR1(r.prior)}</td>` : ''}
+      <td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${r.current==null?'–':fmtR1(r.current)}</td>
+    </tr>`).join('');
+    const totCur = note.totalOverride ? note.totalOverride.current : r2(note.rows.reduce((s,r)=>s+(r.current||0),0));
+    const totPri = note.totalOverride ? note.totalOverride.prior   : r2(note.rows.reduce((s,r)=>s+(r.prior||0),0));
+    const totalRow = note.total ? `<tr style="border-top:1px solid #999;font-weight:700;">
+      <td style="padding:3px 8px;"></td>
+      ${d.showComp ? `<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(totPri)}</td>` : ''}
+      <td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(totCur)}</td>
+    </tr>` : '';
+    return `
+      <div style="margin-bottom:18px;">
+        <div style="font-weight:700;margin-bottom:4px;">${note.number}. ${escHtml(note.title)}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+          <thead><tr style="color:#555;font-size:0.78rem;">
+            <td style="padding:2px 8px;">Figures in Rand</td>
+            ${d.showComp ? `<td style="padding:2px 8px;text-align:right;">${escHtml(d.colPri)}</td>` : ''}
+            <td style="padding:2px 8px;text-align:right;">${escHtml(d.colCur)}</td>
+          </tr></thead>
+          <tbody>${rows}${totalRow}</tbody>
+        </table>
+        ${note.memo ? `<div style="font-size:0.78rem;color:#555;margin-top:4px;font-style:italic;">${escHtml(note.memo)}</div>` : ''}
+      </div>`;
+  };
+
+  // ── Cover ────────────────────────────────────────────────────
+  const cover = `
+    <div class="statement-wrap afs-page">
+      <div class="afs-wrap" style="text-align:center;padding-top:120px;">
+        <div style="font-weight:700;color:#145A32;font-size:1.1rem;">RandSense</div>
+        <div style="font-size:0.7rem;letter-spacing:0.05em;color:#666;border-bottom:1px solid #ccc;padding-bottom:14px;margin-bottom:60px;">MAKING CENTS OF IT ALL</div>
+        <div style="font-size:1.6rem;font-weight:700;color:#145A32;margin-bottom:14px;">${escHtml(c.name)}</div>
+        <div style="font-size:1.05rem;">Annual Financial Statements</div>
+        <div style="font-size:1.05rem;">for the Year-end ${escHtml(d.currentYear)}</div>
+      </div>
+    </div>`;
+
+  // ── Index & approval ─────────────────────────────────────────
+  const idx = [
+    ['Compilation letter', '2-3'], ['Statement of financial position', '4'],
+    ['Statement of comprehensive income', '5'], ['Statement of changes in equity', '6'],
+    ['Statement of cash flows', '7'], ['Accounting policies', '8'],
+    ['Notes to the financial statements', '9'], ['Detailed statement of comprehensive income', '10'],
+  ];
+  const indexPage = page('Index', `
+    <div style="font-size:0.85rem;">
+      <p>The reports and statements set out below comprise the annual financial statements presented to members:</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <thead><tr style="font-weight:700;"><td style="padding:4px 0;">Index</td><td style="padding:4px 0;text-align:right;">Page</td></tr></thead>
+        <tbody>${idx.map(([l,p]) => `<tr><td style="padding:3px 0;">${escHtml(l)}</td><td style="padding:3px 0;text-align:right;">${escHtml(p)}</td></tr>`).join('')}</tbody>
+      </table>
+      <div style="font-weight:700;color:#145A32;border-bottom:2px solid #145A32;padding-bottom:4px;margin-bottom:10px;">Approval and statement of responsibility</div>
+      <p>The executive committee members are responsible for the maintenance of adequate accounting records and integrity of the financial statements and related information.</p>
+      <p>The executive committee is responsible for the organisation's system of internal financial control. These are designed to provide reasonable, but not absolute, assurance as to the reliability of the financial statements, and to adequately safeguard, verify and maintain accountability of assets, and to prevent and detect misstatement and loss. Nothing has come to the attention of the executive committee to indicate that any material breakdown in the functioning of these controls, procedures and system has occurred during the year under review.</p>
+      <p>The financial statements have been prepared on the going concern basis, since the executive committee has every reason to believe that the organisation has adequate resources in place to continue in operation for the foreseeable future.</p>
+      <p>The financial statements which appear on pages 5 to 11 were approved by the executive committee on the ${escHtml(d.approvalDate)}.</p>
+      <div style="margin-top:36px;border-top:1px solid #145A32;padding-top:6px;max-width:260px;">
+        <div style="font-weight:700;">${escHtml(d.directorNames || '_____________________')}</div>
+        <div style="font-style:italic;">(Director)</div>
+        <div style="margin-top:10px;">${escHtml(d.approvalDate)}</div>
+      </div>
+    </div>`);
+
+  // ── Compilation letter ───────────────────────────────────────
+  const letterPage1 = page('Compilation Letter', `
+    <div style="font-size:0.82rem;">
+      <div style="text-align:center;margin-bottom:18px;">
+        <div style="font-weight:700;color:#145A32;">RandSense</div>
+        <div style="font-style:italic;color:#666;">Making Cents of It All</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:20px;">
+        <div>
+          <div style="font-weight:700;">${_AFS_FIRM.nicky.name}</div>
+          <div style="white-space:pre-line;">${_AFS_FIRM.nicky.title}</div>
+          <div>CELL: NICKY (${_AFS_FIRM.nicky.cell})</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-weight:700;">${_AFS_FIRM.matthew.name}</div>
+          <div>${_AFS_FIRM.matthew.title}</div>
+          <div>CELL: MATTHEW (${_AFS_FIRM.matthew.cell})</div>
+          <div>Email: ${_AFS_FIRM.matthew.email}</div>
+        </div>
+      </div>
+      <p><strong>Dear ${escHtml(c.name)}:</strong></p>
+      <p>This letter will confirm our understanding of the terms and objectives of our engagement and the nature and limitations of the services we will provide.</p>
+      <p>We will compile, from information you provide, the balance sheet as of ${escHtml(_afsClosingDateFromLabel(d.currentLabel, c.financial_year_end))}, and the related statements of income, retained earnings, and cash flows of ${escHtml(c.name)} for the year then ended in accordance with International Financial Reporting Standards. We will not audit or review such financial statements. Our services will be limited to presenting in financial statement form information that management represents to us.</p>
+      <p>Our report on the financial statements of ${escHtml(c.name)} for ${escHtml(_afsClosingDateFromLabel(d.currentLabel, c.financial_year_end))} is currently expected to read as follows:</p>
+      <p>We have compiled the accompanying balance sheet of ${escHtml(c.name)} as of ${escHtml(_afsClosingDateFromLabel(d.currentLabel, c.financial_year_end))} and the related statements of income, retained earnings, and cash flows for the year then ended, in accordance with International Financial Reporting Standards. A compilation is limited to presenting in the form of financial statements information that is the representation of management. We have not audited or reviewed the accompanying financial statements and, accordingly, do not express an opinion or any other form of assurance on them.</p>
+      <p>If management elects to omit substantially all disclosures from the financial statements, we will include an additional paragraph that reads as follows:</p>
+      <p>Management has elected to omit substantially all of the disclosures required by generally accepted accounting principles and the statement of cash flows. If the omitted disclosures and the statement of cash flows were included in the financial statements, they might influence the users conclusions about the company's financial position, results of operations and cash flows. Accordingly these financial statements are not designed for those who are not informed about such matters.</p>
+      <p>If for any reason we are unable to complete the compilation of your financial statements, we will not issue a compilation report on such statements as a result of this engagement.</p>
+      <p>A compilation differs significantly from a review or an audit of financial statements. A compilation does not include performing any analytical procedures, inquiry or other procedures performed in a review. In addition, in a compilation one does not seek to obtain an understanding of an entity's internal control or assess fraud risk; test accounting records or examine source documents or other, more detailed procedures ordinarily performed in an audit. As a consequence, we will not express an opinion or provide any assurance regarding the financial statements being compiled.</p>
+      <p>Our engagement cannot be relied on to disclose errors, irregularities, or illegal acts, including fraud or embezzlements that may exist. However, we will inform the appropriate level of management of any material errors that come to our attention and any irregularities or illegal acts that come to our attention, unless they are clearly inconsequential.</p>
+    </div>`);
+
+  const letterPage2 = page('Compilation Letter (continued)', `
+    <div style="font-size:0.82rem;">
+      <p>You are responsible for adopting sound accounting policies, for maintaining an adequate and efficient accounting system for safeguarding assets, for authorizing transactions and retaining supporting documentation for those transactions and for devising an internal control system that will help assure the proper preparation of financial statements.</p>
+      <p>You are also responsible for the design and implementation of programs and controls to prevent and detect fraud and informing us about all known or suspected fraud affecting the Company. In addition, you remain responsible for identifying and ensuring that the Company complies with applicable laws and regulations.</p>
+      <p>Our fee for these services will be based on the amount of time required at the standard billing rate plus out of pocket expenses. However, if we encounter unexpected circumstances that require more staff time than anticipated, we will discuss the matter with you. All invoices are due and payable upon presentation.</p>
+      <p>If this letter correctly expresses your understanding, please sign the enclosed copy where indicated.</p>
+      <p>We appreciate the opportunity to serve you and trust that our association will be a long and pleasant one.</p>
+      <div style="margin-top:40px;font-weight:700;">Accepted and Agreed by: ${escHtml(c.name)}</div>
+      <div style="margin-top:36px;border-top:1px solid #999;padding-top:4px;max-width:280px;">
+        <div style="font-weight:700;">${escHtml(d.directorNames || '_____________________')} (Director)</div>
+        <div>Date: ___________________</div>
+      </div>
+      <div style="margin-top:36px;border-top:1px solid #999;padding-top:4px;max-width:280px;">
+        <div style="font-weight:700;">${_AFS_FIRM.signatory}</div>
+        <div style="font-style:italic;">${_AFS_FIRM.signatoryRole}</div>
+        <div>SAICA REGISTRATION NO. ${_AFS_FIRM.saicaNo}</div>
+        <div style="margin-top:6px;">Date: ${escHtml(d.approvalDate)}</div>
+      </div>
+    </div>`);
+
+  // ── Statement of Financial Position (reuse the SAME TB-driven BS) ─────
+  // renderBSFromTB already produces a complete .statement-wrap>.afs-wrap
+  // page (with its own header) — just give it a page break, don't re-wrap.
+  const sfp = `<div class="afs-page" style="page-break-before:always;">${renderBSFromTB(d.tbData, d.currentLabel, d.priorLabel, {})}</div>`;
+
+  // ── Statement of Comprehensive Income (summary, 3 lines) ──────
+  // "Revenue" here is net of cost of sales (matches grossProfit — i.e. the
+  // statutory-pack convention seen on the reference AFS, where cost of sales
+  // is folded into revenue and "Operating expenses" is everything else).
+  const { totalCOS, totalExpenses, netProfit, grossProfit, grossProfitCom, expCom, netProfitCom } = d.isData;
+  const sciRows = [
+    _afsMoneyRow('Revenue', '', grossProfit, grossProfitCom, d.showComp),
+    _afsMoneyRow('Operating expenses', '', r2(-totalExpenses), r2(-expCom), d.showComp),
+  ].join('') + `<tr style="border-top:2px solid #145A32;font-weight:700;">
+      <td style="padding:4px 8px;">${netProfit>=0?'Surplus':'Deficit'} for the year</td><td></td>
+      ${d.showComp?`<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(netProfitCom)}</td>`:''}
+      <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(netProfit)}</td>
+    </tr>`;
+  const sci = page('Statement of Comprehensive Income', `
+    <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+      <thead><tr style="font-weight:700;color:#555;font-size:0.78rem;">
+        <td style="padding:2px 8px;">Figures in Rand</td><td></td>
+        ${d.showComp?`<td style="padding:2px 8px;text-align:right;">${escHtml(d.colPri)}</td>`:''}
+        <td style="padding:2px 8px;text-align:right;">${escHtml(d.colCur)}</td>
+      </tr></thead>
+      <tbody>${sciRows}</tbody>
+    </table>`);
+
+  // ── Statement of Changes in Equity ────────────────────────────
+  const sceRows = d.sceRows.map((r,i) => `<tr style="${/^Balance/.test(r.label) ? 'font-weight:700;border-top:1px solid #999;border-bottom:1px solid #999;' : ''}">
+    <td style="padding:4px 8px;">${escHtml(r.label)}</td>
+    <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(r.amount)}</td>
+    <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmtR1(r.amount)}</td>
+  </tr>`).join('');
+  const sce = page('Statement of Changes in Equity', `
+    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+      <thead><tr style="font-weight:700;color:#555;font-size:0.78rem;">
+        <td style="padding:2px 8px;">Figures in Rand</td>
+        <td style="padding:2px 8px;text-align:right;">Retained earnings</td>
+        <td style="padding:2px 8px;text-align:right;">Total funds</td>
+      </tr></thead>
+      <tbody>${sceRows}</tbody>
+    </table>`);
+
+  // ── Statement of Cash Flows ────────────────────────────────────
+  let scfBody = `<div style="font-size:0.85rem;color:#555;">Cash flow data unavailable for this period.</div>`;
+  if (d.cfData) {
+    const cf = d.cfData;
+    const line = (label, cur, pri, bold) => _afsMoneyRow(label, '', cur, pri, d.showComp, { bold });
+    scfBody = `<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><tbody>
+      <tr><td colspan="4" style="padding:6px 8px;font-weight:700;">Cash flows from operating activities</td></tr>
+      ${line('Net cash from operations', cf.operating, cf.priorOperating)}
+      <tr><td colspan="4" style="padding:6px 8px;font-weight:700;">Cash flow from investing activities</td></tr>
+      ${line('Net cash used in investing', cf.investing, cf.priorInvesting)}
+      <tr><td colspan="4" style="padding:6px 8px;font-weight:700;">Cash flow from financing activities</td></tr>
+      ${line('Net cash from financing', cf.financing, cf.priorFinancing)}
+      ${line('Net increase/(decrease) in cash and cash equivalents', cf.netMovement, cf.priorNetMovement, true)}
+      ${line('Cash and cash equivalents at beginning of year', cf.bankOB, null)}
+      ${line('Cash and cash equivalents at end of year', cf.closingBankBalance, null, true)}
+    </tbody></table>`;
+  }
+  const scf = page('Statement of Cash Flows', scfBody);
+
+  // ── Accounting Policies ────────────────────────────────────────
+  const policies = page('Accounting Policies', `
+    <div style="font-size:0.85rem;">
+      <div style="font-weight:700;color:#145A32;border-bottom:2px solid #145A32;padding-bottom:4px;margin-bottom:10px;">1. Basis of preparation</div>
+      <p>The financial statements are prepared on the historical cost basis and incorporate the following accounting policies which are consistent with that of the previous years.</p>
+      ${d.accountingPolicies
+        ? `<div style="white-space:pre-line;">${escHtml(d.accountingPolicies)}</div>`
+        : `<p style="color:#999;font-style:italic;">No accounting policy text has been captured for this client yet — add it under Settings.</p>`}
+    </div>`);
+
+  // ── Notes ────────────────────────────────────────────────────
+  const notesPage = page('Notes to the Financial Statements', d.notes.map(renderNote).join(''));
+
+  // ── Detailed Statement of Comprehensive Income (reuse renderIS) ──
+  // renderIS also produces a complete self-contained page — same treatment.
+  const detailedIS = `<div class="afs-page" style="page-break-before:always;">${renderIS(d.isData, d.currentLabel, d.priorLabel, false, {})}</div>`;
+
+  return [cover, indexPage, letterPage1, letterPage2, sfp, sci, sce, scf, policies, notesPage, detailedIS].join('');
+}
+
+// ============================================================
 // EXPORTS
 // ============================================================
 window.FinancialOutputs = {
@@ -1917,6 +2375,8 @@ window.FinancialOutputs = {
   buildTrialBalance,
   buildCommissionIS,
   buildFullPack,
+  buildAFSPack,
+  renderAFSPack,
   renderIS,
   renderBS,
   renderBSFromTB,

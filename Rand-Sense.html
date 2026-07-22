@@ -1538,6 +1538,7 @@ function renderReportsTab() {
       <button class="btn btn-ghost btn-sm report-pdf-btn" onclick="printReport()">&#128424; PDF</button>
       <button class="btn btn-ghost btn-sm" onclick="csvReport()">&#8595; CSV</button>
       ${!isC ? `<button class="btn btn-dark btn-sm" onclick="generateFullPack()">Full Pack</button>` : ''}
+      ${!isC ? `<button class="btn btn-ghost btn-sm" onclick="downloadAFSReport()" title="Statutory-style Annual Financial Statements pack">&#128203; Download AFS</button>` : ''}
       <button class="btn btn-primary btn-sm"
         onclick="triggerReadyToInvoice('${rt === 'VAT' ? 'VAT201' : 'Annual Financial Statements'} \u2014 ${state.currentYear}', ${rt === 'VAT' ? 450 : 0})"
         title="Mark this work as done and open the invoice form">
@@ -2448,6 +2449,46 @@ async function generateReport() {
   }
 }
 
+// Downloads the statutory-style AFS Pack (cover, index, compilation letter,
+// primary statements, accounting policies, notes, detailed IS) as a print-
+// ready document. Every figure comes straight from buildIncomeStatement /
+// buildTrialBalance / buildCashFlow — see buildAFSPack in financial-outputs.js
+// for exactly what's hardcoded (firm letterhead) vs. per-client-static
+// (director names, accounting policies) vs. fully live (everything else).
+async function downloadAFSReport() {
+  const c = state.currentClient;
+  const F = window.FinancialOutputs;
+  showLoading('Building AFS pack…');
+  try {
+    const priorYear = String(parseInt(state.currentYear, 10) - 1);
+    const priorTransactions = await DB.Transactions.listByYear(c.id, priorYear).catch(() => []);
+    const staticComparatives = await DB.OpeningBalances.list(c.id, priorYear).catch(() => []);
+
+    const packR = F.buildAFSPack({
+      client: c,
+      currentYear: state.currentYear,
+      coa: state.coa,
+      transactions: state.transactions,
+      priorYearTransactions: priorTransactions,
+      openingBalances: state.openingBalances,
+      staticComparatives,
+      directorNames: c.afs_director_names,
+      accountingPolicies: c.afs_accounting_policies,
+    });
+
+    if (!packR.ok) { toast('Could not build AFS pack: ' + packR.error, 'error'); hideLoading(); return; }
+
+    const html = F.renderAFSPack(packR.data);
+    let target = document.getElementById('print-target');
+    if (!target) { target = document.createElement('div'); target.id = 'print-target'; document.body.appendChild(target); }
+    target.innerHTML = `<div style="font-family:'Poppins',sans-serif;color:#1A1A1A;font-size:11pt;">${html}</div>`;
+    window.print();
+  } catch(e) {
+    toast('Error building AFS pack: ' + e.message, 'error');
+  }
+  hideLoading();
+}
+
 async function generateFullPack() {
   showLoading('Building financial pack…');
   try {
@@ -2578,8 +2619,26 @@ function renderSettingsTab() {
       }
     </div>` : '';
 
+  const afsSection = c.entity_type !== 'commission_earner' ? `
+    <div class="card">
+      <div class="card-title">Annual Financial Statements — details</div>
+      <div class="form-hint" style="margin-bottom:10px;">
+        Static, editable text used on the AFS Pack (Reports &rarr; Download AFS) — it never changes on its own when transactions or figures change; only the numbers on the AFS move with the data.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Director name(s) (for approval &amp; compilation letter signature)</label>
+        <input class="form-control" id="set-afs-directors" value="${escH(c.afs_director_names || '')}" placeholder="e.g. HA Gabler"/>
+      </div>
+      <div class="form-group" style="margin-top:10px;">
+        <label class="form-label">Accounting policies</label>
+        <textarea class="form-control" id="set-afs-policies" rows="4" placeholder="e.g. 1.1 Property, plant and equipment&#10;Fixed assets are written-off against income. No depreciation is provided for fixed assets.">${escH(c.afs_accounting_policies || '')}</textarea>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="saveAFSSettings()">Save AFS details</button>
+    </div>` : '';
+
   return `<div>
     ${vatSection}
+    ${afsSection}
     <div class="card">
       <div class="card-title">
         Chart of Accounts
@@ -3963,6 +4022,23 @@ async function deactivateVAT() {
     toast('VAT deactivated.');
     renderClientDetail();
   } catch(e) { toast(e.message,'error'); }
+  hideLoading();
+}
+
+async function saveAFSSettings() {
+  const directors = document.getElementById('set-afs-directors')?.value?.trim() || '';
+  const policies  = document.getElementById('set-afs-policies')?.value?.trim() || '';
+  showLoading('Saving…');
+  try {
+    await DB.Clients.update(state.currentClient.id, { afs_director_names: directors, afs_accounting_policies: policies });
+    state.currentClient = await DB.Clients.get(state.currentClient.id);
+    toast('AFS details saved.');
+    renderClientDetail();
+  } catch(e) {
+    // Most likely cause: the one-time schema migration (afs_director_names /
+    // afs_accounting_policies columns on clients) hasn't been run yet.
+    toast('Could not save — has the AFS schema migration been run? ' + e.message, 'error');
+  }
   hideLoading();
 }
 
