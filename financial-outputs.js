@@ -321,9 +321,21 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
         })
         .filter(a => !hideZeros || a.current !== 0 || a.comparative !== 0);
 
-    const assetLines  = buildLines('asset',     +1);
+    let assetLines  = buildLines('asset',     +1);
     const liabLines   = buildLines('liability', -1);
     const equityLines = buildLines('equity',    -1);
+
+    // Director's loan accounts: when current balance is negative (credit),
+    // move the line from assets to liabilities on the balance sheet.
+    const loanFlips = [];
+    assetLines = assetLines.filter(a => {
+      if (/^17\d\d$/.test(a.code) && (a.name || '').toLowerCase().includes('loan receivable') && a.current < 0) {
+        loanFlips.push({ ...a, type: 'liability', current: Math.abs(a.current), comparative: Math.abs(a.comparative) });
+        return false;
+      }
+      return true;
+    });
+    liabLines.push(...loanFlips);
 
     // If no retained earnings account exists in the COA or opening_balances,
     // inject a synthetic line so net profit always appears on the BS face.
@@ -747,6 +759,18 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
       }
     }
     // ──────────────────────────────────────────────────────────
+
+    // Director's loan accounts: when net balance is credit (credit > debit),
+    // move from assets to liabilities on the balance sheet.
+    const loanFlipsTB = [];
+    for (let i = assetLines.length - 1; i >= 0; i--) {
+      const l = assetLines[i];
+      if (/^17\d\d$/.test(l.code) && (l.name || '').toLowerCase().includes('loan receivable') && l.credit > l.debit) {
+        loanFlipsTB.push({ ...l, type: 'liability' });
+        assetLines.splice(i, 1);
+      }
+    }
+    liabLines.push(...loanFlipsTB);
 
     // BS derived values
     const totalAssets      = r2(assetLines.reduce((s, l)  => s + l.debit  - l.credit, 0));
