@@ -329,7 +329,7 @@ function buildBalanceSheet(transactions, coa, openingBalances, netProfit, hideZe
     // move the line from assets to liabilities on the balance sheet.
     const loanFlips = [];
     assetLines = assetLines.filter(a => {
-      if (/^17\d\d$/.test(a.code) && (a.name || '').toLowerCase().includes('loan receivable') && a.current < 0) {
+      if (/^17\d\d$/.test(a.code) && (a.name || '').toLowerCase().includes('loan') && a.current < 0) {
         loanFlips.push({ ...a, type: 'liability', current: Math.abs(a.current), comparative: Math.abs(a.comparative) });
         return false;
       }
@@ -765,7 +765,7 @@ function buildTrialBalance(transactions, coa, hideZeros, openingBalances, netPro
     const loanFlipsTB = [];
     for (let i = assetLines.length - 1; i >= 0; i--) {
       const l = assetLines[i];
-      if (/^17\d\d$/.test(l.code) && (l.name || '').toLowerCase().includes('loan receivable') && l.credit > l.debit) {
+      if (/^17\d\d$/.test(l.code) && (l.name || '').toLowerCase().includes('loan') && l.credit > l.debit) {
         loanFlipsTB.push({ ...l, type: 'liability' });
         assetLines.splice(i, 1);
       }
