@@ -1190,7 +1190,22 @@ const _AFS_NAME = {
   '6022':'Members remuneration', '6023':'Fuel',
   '6024':'Rental: motor vehicles',
 };
-const _afsAcctName = l => _AFS_NAME[l.code] || l.name;
+// Only apply the AFS presentation name when the COA still carries the
+// default Gabler Group account name for that code — custom accounts
+// (e.g. Director's Remuneration on a different client) keep their own name.
+const _AFS_DEFAULT_COA = {
+  '4001':'Sales / Revenue', '5003':'Funeral Expenses',
+  '6012':'Office Expenses', '6013':'Printing & Stationery', '6014':'Rent',
+  '6016':'Salaries & Wages', '6021':'Other Expenses',
+  '6022':'Members Remuneration', '6023':'Fuel', '6024':'Rental: motor vehicles',
+};
+const _afsAcctName = l => {
+  const override = _AFS_NAME[l.code];
+  if (!override) return l.name;
+  const defaultName = _AFS_DEFAULT_COA[l.code];
+  if (defaultName && l.name && l.name.toLowerCase() !== defaultName.toLowerCase()) return l.name;
+  return override;
+};
 const _AFS_NOTE_ACCT = { '6001':'5', '6021':'8' };
 
 // Build marker — bumped manually whenever financial-outputs.js changes, so a
