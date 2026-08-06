@@ -121,6 +121,7 @@
             <option value="standard_bank">Standard Bank</option>
             <option value="capitec">Capitec</option>
             <option value="nedbank">Nedbank</option>
+            <option value="fnb">FNB</option>
           </select>
         </div>
         <div class="form-group" id="vat-group" style="display:none;">
@@ -2941,6 +2942,7 @@ function _impBankSelectHTML(idx, selectedVal) {
     ['standard_bank', 'Standard Bank'],
     ['capitec', 'Capitec'],
     ['nedbank', 'Nedbank'],
+    ['fnb', 'FNB'],
   ].map(([v, l]) => `<option value="${v}"${v === selectedVal ? ' selected' : ''}>${escH(l)}</option>`).join('');
   return `<select class="form-control" style="min-width:140px;" onchange="updateImportFileBank(${idx}, this.value)">${opts}</select>`;
 }

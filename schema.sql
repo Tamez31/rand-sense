@@ -15,7 +15,7 @@ create table if not exists clients (
   name              text not null,
   entity_type       text not null check (entity_type in ('company_cc', 'company_pty', 'commission_earner')),
   financial_year_end text not null,
-  bank              text not null check (bank in ('absa', 'standard_bank', 'capitec', 'nedbank')),
+  bank              text not null check (bank in ('absa', 'standard_bank', 'capitec', 'nedbank', 'fnb')),
   vat_number             text,
   vat_active             boolean default false,
   vat_period             text check (vat_period in ('monthly', '2monthly', 'yearly')),

@@ -231,9 +231,10 @@ function parseCSV(bank, text) {
     case 'standard_bank':
     case 'capitec':
     case 'nedbank':
+    case 'fnb':
       return parseUniversal(t, bank);
     default:
-      return parseError(`Unknown bank "${bank}". Must be one of: absa, standard_bank, capitec, nedbank.`);
+      return parseError(`Unknown bank "${bank}". Must be one of: absa, standard_bank, capitec, nedbank, fnb.`);
   }
 }
 
