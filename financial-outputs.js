@@ -2657,29 +2657,29 @@ function buildManagementReport(opts) {
       periodEndDate,
     } = opts;
 
-    const isR = buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOptions, travelOptions, cellPhoneOptions);
+    // Filter transactions to period-end date when specified
+    const filteredTx = periodEndDate
+      ? transactions.filter(t => t.date <= periodEndDate)
+      : transactions;
+
+    const isR = buildCommissionIS(filteredTx, hideZeros, incomeOverride, homeOfficeOptions, travelOptions, cellPhoneOptions);
     if (!isR.ok) return { ok: false, error: 'Income Statement: ' + isR.error };
 
     const d = isR.data;
 
-    // Compute opening bank from the earliest transaction's balance field
-    const sortedTx = [...transactions].sort((a, b) => a.date > b.date ? 1 : a.date < b.date ? -1 : 0);
+    const sortedTx = [...filteredTx].sort((a, b) => a.date > b.date ? 1 : a.date < b.date ? -1 : 0);
     const firstTx = sortedTx[0];
     const openingBankBalance = firstTx
       ? r2((parseFloat(firstTx.balance) || 0) - (parseFloat(firstTx.amount) || 0))
       : 0;
 
-    // Closing bank = opening + sum(all transaction amounts).
-    // We derive this rather than reading the last tx's balance field because
-    // multiple same-day transactions may be stored out of statement order,
-    // making the balance column unreliable for picking the true closing row.
-    const totalFlow = r2(transactions.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
+    const totalFlow = r2(filteredTx.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
     const bankBalance = r2(openingBankBalance + totalFlow);
 
     const netProfit = d.netIncome;
     const drawings = d.totalPersonal;
 
-    const unclassifiedTx = transactions.filter(t => !t.account_code);
+    const unclassifiedTx = filteredTx.filter(t => !t.account_code);
     const unclassifiedTotal = r2(unclassifiedTx.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
 
     const openingCapital = openingBankBalance;
@@ -2836,17 +2836,17 @@ function renderManagementReport(d) {
     const topBorder = opts && opts.topBorder;
     const doubleBorder = opts && opts.doubleBorder;
     const negParen = amount < 0;
-    const displayAmt = negParen ? `(${fmt(Math.abs(amount))})` : fmt(amount);
+    const displayAmt = negParen ? `(R ${fmt(Math.abs(amount)).replace('R ','')})` : fmt(amount);
     return `<tr style="${bold ? 'font-weight:700;' : ''}${topBorder ? 'border-top:2px solid #145A32;' : ''}${doubleBorder ? 'border-bottom:2px double #145A32;' : ''}">
       <td style="padding:10px ${indent ? '24px' : '12px'};font-size:0.88rem;">${escHtml(label)}</td>
-      <td style="padding:10px 12px;text-align:right;font-size:0.88rem;white-space:nowrap;">${displayAmt}</td>
+      <td style="padding:10px 16px 10px 12px;text-align:right;font-size:0.88rem;white-space:nowrap;width:140px;min-width:140px;">${displayAmt}</td>
     </tr>`;
   };
   const sfpSectionHead = label =>
     `<tr><td colspan="2" style="padding:16px 12px 8px;font-weight:700;font-size:0.95rem;color:#145A32;border-bottom:2px solid #145A32;">${escHtml(label)}</td></tr>`;
   const sfpSpacer = `<tr><td colspan="2" style="padding:6px 0;"></td></tr>`;
 
-  let sfpHTML = `<table style="width:100%;border-collapse:collapse;">`;
+  let sfpHTML = `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><col style="width:auto;"/><col style="width:160px;"/>`;
   sfpHTML += sfpSectionHead('Assets');
   sfpHTML += sfpRow('Bank balance', d.bankBalance, { indent: true });
   sfpHTML += sfpRow('Total Assets', d.totalAssets, { bold: true, topBorder: true, doubleBorder: true });

@@ -2598,9 +2598,14 @@ function downloadManagementReport() {
   const c = state.currentClient;
   const F = window.FinancialOutputs;
 
-  // Show period-end date picker modal
+  // Show period-end date picker modal — default to end of last complete month
   const txDates = (state.transactions || []).map(t => t.date).filter(Boolean).sort();
-  const defaultEnd = txDates.length ? txDates[txDates.length - 1] : '';
+  let defaultEnd = '';
+  if (txDates.length) {
+    const lastTxDate = new Date(txDates[txDates.length - 1] + 'T00:00:00');
+    const endOfPrevMonth = new Date(lastTxDate.getFullYear(), lastTxDate.getMonth(), 0);
+    defaultEnd = endOfPrevMonth.toISOString().slice(0, 10);
+  }
 
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
