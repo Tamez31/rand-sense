@@ -2614,7 +2614,9 @@ function downloadManagementReport() {
       <div style="font-weight:700;font-size:1.05rem;color:#145A32;margin-bottom:14px;">Management Report Period</div>
       <p style="font-size:0.88rem;color:#444;margin-bottom:16px;">Select the period-end date for this report. The report will cover from the start of FY${c.financial_year_end ? '' : ''}${state.currentYear} up to this date.</p>
       <label style="font-size:0.82rem;font-weight:600;color:#333;display:block;margin-bottom:6px;">Period ended</label>
-      <input type="date" id="mr-period-end" value="${defaultEnd}" style="width:100%;padding:8px 12px;border:1.5px solid #C8E6C9;border-radius:6px;font-size:0.92rem;margin-bottom:20px;"/>
+      <input type="date" id="mr-period-end" value="${defaultEnd}" style="width:100%;padding:8px 12px;border:1.5px solid #C8E6C9;border-radius:6px;font-size:0.92rem;margin-bottom:16px;"/>
+      <label style="font-size:0.82rem;font-weight:600;color:#333;display:block;margin-bottom:6px;">Closing bank balance (per bank statement)</label>
+      <input type="number" id="mr-closing-bank" step="0.01" placeholder="e.g. 15288.83" style="width:100%;padding:8px 12px;border:1.5px solid #C8E6C9;border-radius:6px;font-size:0.92rem;margin-bottom:20px;"/>
       <div style="display:flex;gap:10px;justify-content:flex-end;">
         <button id="mr-cancel" class="btn btn-ghost btn-sm" style="min-width:80px;">Cancel</button>
         <button id="mr-generate" class="btn btn-dark btn-sm" style="min-width:120px;">Generate</button>
@@ -2627,6 +2629,8 @@ function downloadManagementReport() {
 
   overlay.querySelector('#mr-generate').onclick = async () => {
     const periodEnd = overlay.querySelector('#mr-period-end').value || '';
+    const closingBankInput = overlay.querySelector('#mr-closing-bank').value;
+    const closingBankOverride = closingBankInput !== '' ? parseFloat(closingBankInput) : undefined;
     overlay.remove();
 
     showLoading('Building Management Report…');
@@ -2641,6 +2645,7 @@ function downloadManagementReport() {
         travelOptions: state.cmTravel,
         cellPhoneOptions: state.cmCellPhone,
         periodEndDate: periodEnd || undefined,
+        closingBankOverride: closingBankOverride,
       });
       if (!packR.ok) { toast('Could not build Management Report: ' + packR.error, 'error'); hideLoading(); return; }
       const html = F.renderManagementReport(packR.data);

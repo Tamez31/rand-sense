@@ -2654,7 +2654,7 @@ function buildManagementReport(opts) {
     const {
       client, currentYear, transactions,
       hideZeros, incomeOverride, homeOfficeOptions, travelOptions, cellPhoneOptions,
-      periodEndDate,
+      periodEndDate, closingBankOverride,
     } = opts;
 
     // Filter transactions to period-end date when specified
@@ -2674,7 +2674,7 @@ function buildManagementReport(opts) {
       : 0;
 
     const totalFlow = r2(filteredTx.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
-    const bankBalance = r2(openingBankBalance + totalFlow);
+    const bankBalance = (closingBankOverride !== undefined) ? r2(closingBankOverride) : r2(openingBankBalance + totalFlow);
 
     const netProfit = d.netIncome;
     const drawings = d.totalPersonal;
@@ -2682,7 +2682,7 @@ function buildManagementReport(opts) {
     const unclassifiedTx = filteredTx.filter(t => !t.account_code);
     const unclassifiedTotal = r2(unclassifiedTx.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
 
-    const openingCapital = openingBankBalance;
+    const openingCapital = r2(bankBalance - netProfit + drawings - unclassifiedTotal);
     const closingCapital = r2(openingCapital + netProfit - drawings + unclassifiedTotal);
 
     const totalAssets = bankBalance;
@@ -2714,6 +2714,7 @@ function buildManagementReport(opts) {
     const cfFinancing = r2(filteredTx.filter(t => t.account_code && t.account_code.startsWith('ITR-PERS')).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
     const cfUnclassified = unclassifiedTotal;
     const cfNetMovement = r2(cfOperatingNet + cfFinancing + cfUnclassified);
+    const cfOpeningBank = r2(bankBalance - cfNetMovement);
 
     return {
       ok: true,
@@ -2724,7 +2725,7 @@ function buildManagementReport(opts) {
         unclassifiedTotal, unclassifiedCount: unclassifiedTx.length,
         closingCapital, totalAssets, totalLiabilities, totalCapitalAndLiab,
         balances, balanceDiff,
-        cfOperatingIn, cfOperatingOut, cfOperatingNet, cfFinancing, cfUnclassified, cfNetMovement,
+        cfOperatingIn, cfOperatingOut, cfOperatingNet, cfFinancing, cfUnclassified, cfNetMovement, cfOpeningBank,
       },
     };
   } catch (err) {
@@ -2846,7 +2847,7 @@ function renderManagementReport(d) {
     const topBorder = opts && opts.topBorder;
     const doubleBorder = opts && opts.doubleBorder;
     const negParen = amount < 0;
-    const displayAmt = negParen ? `(R ${fmt(Math.abs(amount)).replace('R ','')})` : fmt(amount);
+    const displayAmt = negParen ? `(R ${fmt(Math.abs(amount)).replace(/R[\s ]/,'')})` : fmt(amount);
     return `<tr style="${bold ? 'font-weight:700;' : ''}${topBorder ? 'border-top:2px solid #145A32;' : ''}${doubleBorder ? 'border-bottom:2px double #145A32;' : ''}">
       <td style="padding:10px ${indent ? '24px' : '12px'};font-size:0.88rem;">${escHtml(label)}</td>
       <td style="padding:10px 16px 10px 12px;text-align:right;font-size:0.88rem;white-space:nowrap;width:140px;min-width:140px;">${displayAmt}</td>
@@ -2902,7 +2903,7 @@ function renderManagementReport(d) {
   }
   cfHTML += sfpSectionHead('Summary');
   cfHTML += sfpRow('Net increase / (decrease) in cash', d.cfNetMovement, { indent: true });
-  cfHTML += sfpRow('Cash at beginning of period', d.openingBankBalance, { indent: true });
+  cfHTML += sfpRow('Cash at beginning of period', d.cfOpeningBank, { indent: true });
   cfHTML += sfpRow('Cash at end of period', d.bankBalance, { bold: true, topBorder: true, doubleBorder: true });
   cfHTML += `</table>`;
   const cfPage = page('Cash Flow Statement', cfHTML);
