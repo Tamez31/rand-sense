@@ -2594,43 +2594,60 @@ async function downloadAFSReport() {
   hideLoading();
 }
 
-async function downloadManagementReport() {
+function downloadManagementReport() {
   const c = state.currentClient;
   const F = window.FinancialOutputs;
 
-  // Prompt for period-end date — default to last transaction date
-  const txDates = state.transactions.map(t => t.date).filter(Boolean).sort();
+  // Show period-end date picker modal
+  const txDates = (state.transactions || []).map(t => t.date).filter(Boolean).sort();
   const defaultEnd = txDates.length ? txDates[txDates.length - 1] : '';
-  const periodEnd = prompt(
-    'Enter the period-end date for this Management Report (YYYY-MM-DD).\n\n' +
-    'Leave blank for the full financial year-end.',
-    defaultEnd
-  );
-  if (periodEnd === null) return; // cancelled
 
-  showLoading('Building Management Report…');
-  try {
-    const packR = F.buildManagementReport({
-      client: c,
-      currentYear: state.currentYear,
-      transactions: state.transactions,
-      hideZeros: state.hideZeros,
-      incomeOverride: state.cmIncomeOverride,
-      homeOfficeOptions: state.cmHomeOffice,
-      travelOptions: state.cmTravel,
-      cellPhoneOptions: state.cmCellPhone,
-      periodEndDate: periodEnd || undefined,
-    });
-    if (!packR.ok) { toast('Could not build Management Report: ' + packR.error, 'error'); hideLoading(); return; }
-    const html = F.renderManagementReport(packR.data);
-    let target = document.getElementById('print-target');
-    if (!target) { target = document.createElement('div'); target.id = 'print-target'; document.body.appendChild(target); }
-    target.innerHTML = `<div style="font-family:'Poppins',sans-serif;color:#1A1A1A;font-size:11pt;">${html}</div>`;
-    window.print();
-  } catch(e) {
-    toast('Error building Management Report: ' + e.message, 'error');
-  }
-  hideLoading();
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <div style="font-weight:700;font-size:1.05rem;color:#145A32;margin-bottom:14px;">Management Report Period</div>
+      <p style="font-size:0.88rem;color:#444;margin-bottom:16px;">Select the period-end date for this report. The report will cover from the start of FY${c.financial_year_end ? '' : ''}${state.currentYear} up to this date.</p>
+      <label style="font-size:0.82rem;font-weight:600;color:#333;display:block;margin-bottom:6px;">Period ended</label>
+      <input type="date" id="mr-period-end" value="${defaultEnd}" style="width:100%;padding:8px 12px;border:1.5px solid #C8E6C9;border-radius:6px;font-size:0.92rem;margin-bottom:20px;"/>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button id="mr-cancel" class="btn btn-ghost btn-sm" style="min-width:80px;">Cancel</button>
+        <button id="mr-generate" class="btn btn-dark btn-sm" style="min-width:120px;">Generate</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#mr-cancel').onclick = () => overlay.remove();
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector('#mr-generate').onclick = async () => {
+    const periodEnd = overlay.querySelector('#mr-period-end').value || '';
+    overlay.remove();
+
+    showLoading('Building Management Report…');
+    try {
+      const packR = F.buildManagementReport({
+        client: c,
+        currentYear: state.currentYear,
+        transactions: state.transactions,
+        hideZeros: state.hideZeros,
+        incomeOverride: state.cmIncomeOverride,
+        homeOfficeOptions: state.cmHomeOffice,
+        travelOptions: state.cmTravel,
+        cellPhoneOptions: state.cmCellPhone,
+        periodEndDate: periodEnd || undefined,
+      });
+      if (!packR.ok) { toast('Could not build Management Report: ' + packR.error, 'error'); hideLoading(); return; }
+      const html = F.renderManagementReport(packR.data);
+      let target = document.getElementById('print-target');
+      if (!target) { target = document.createElement('div'); target.id = 'print-target'; document.body.appendChild(target); }
+      target.innerHTML = `<div style="font-family:'Poppins',sans-serif;color:#1A1A1A;font-size:11pt;">${html}</div>`;
+      window.print();
+    } catch(e) {
+      toast('Error building Management Report: ' + e.message, 'error');
+    }
+    hideLoading();
+  };
 }
 
 async function generateFullPack() {
