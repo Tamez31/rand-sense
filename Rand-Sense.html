@@ -1542,7 +1542,7 @@ function renderReportsTab() {
       <button class="btn btn-ghost btn-sm" onclick="csvReport()">&#8595; CSV</button>
       ${!isC ? `<button class="btn btn-dark btn-sm" onclick="generateFullPack()">Full Pack</button>` : ''}
       ${!isC ? `<button class="btn btn-ghost btn-sm" onclick="downloadAFSReport()" title="Statutory-style Annual Financial Statements pack">&#128203; Download AFS</button>` : ''}
-      ${isC ? `<button class="btn btn-dark btn-sm" onclick="downloadManagementReport()" title="Management Report for sole proprietor / commission earner">&#128203; Management Report</button>` : ''}
+      ${isC ? `<button class="btn btn-dark btn-sm mr-btn" onclick="downloadManagementReport()" title="Management Report for sole proprietor / commission earner">&#128203; Management Report</button>` : ''}
       <button class="btn btn-primary btn-sm"
         onclick="triggerReadyToInvoice('${rt === 'VAT' ? 'VAT201' : 'Annual Financial Statements'} \u2014 ${state.currentYear}', ${rt === 'VAT' ? 450 : 0})"
         title="Mark this work as done and open the invoice form">
@@ -1836,7 +1836,7 @@ function _enforceReportReadOnly() {
   if (!container) return;
   // PDF download stays enabled even on a finalized/locked return — it's a
   // read-only export, not an edit, and the practitioner still needs it.
-  container.querySelectorAll('input, select, textarea, button:not(.revise-return-btn):not(.report-pdf-btn)').forEach(el => {
+  container.querySelectorAll('input, select, textarea, button:not(.revise-return-btn):not(.report-pdf-btn):not(.mr-btn)').forEach(el => {
     el.disabled = true;
     if (el.tagName === 'BUTTON') el.style.opacity = '0.45';
   });
