@@ -2763,8 +2763,6 @@ function renderManagementReport(d) {
     ['Statement of Financial Position', '4'],
     ['Cash Flow Statement', '5'],
     ['Income Statement', '6'],
-    ['Notes', '7'],
-    ['Declaration', '7'],
   ];
   const indexPage = page('Index', `
     <div style="font-size:0.85rem;">
@@ -2777,7 +2775,7 @@ function renderManagementReport(d) {
       <p>The sole proprietor is responsible for the maintenance of adequate accounting records and the integrity of the financial information contained herein.</p>
       <p>The sole proprietor is responsible for the organisation's system of internal financial control. These controls are designed to provide reasonable, but not absolute, assurance as to the reliability of the financial information, and to adequately safeguard, verify and maintain accountability of assets, and to prevent and detect misstatement and loss.</p>
       <p>The management report has been prepared on the going concern basis, as the sole proprietor has every reason to believe that the business has adequate resources in place to continue in operation for the foreseeable future.</p>
-      <p>The management report which appears on pages 4 to 7 was approved by the sole proprietor.</p>
+      <p>The management report which appears on pages 4 to 6 was approved by the sole proprietor.</p>
       <div style="margin-top:36px;max-width:260px;page-break-inside:avoid;break-inside:avoid;">
         <div style="font-weight:700;">${escHtml(c.name)}</div>
 
@@ -2848,11 +2846,16 @@ function renderManagementReport(d) {
     const topBorder = opts && opts.topBorder;
     const doubleBorder = opts && opts.doubleBorder;
     const negParen = amount < 0;
-    const displayAmt = negParen ? `(R ${fmt(Math.abs(amount)).replace(/R[\s ]/,'')})` : fmt(amount);
-    return `<tr style="${bold ? 'font-weight:700;' : ''}${topBorder ? 'border-top:2px solid #145A32;' : ''}${doubleBorder ? 'border-bottom:2px double #145A32;' : ''}">
-      <td style="padding:10px ${indent ? '24px' : '12px'};font-size:0.88rem;">${escHtml(label)}</td>
-      <td style="padding:10px 16px 10px 12px;text-align:right;font-size:0.88rem;white-space:nowrap;width:140px;min-width:140px;">${displayAmt}</td>
-    </tr>`;
+    const tight = opts && opts.tight;
+    const numStr = fmt(Math.abs(amount)).replace(/R./,'');
+    const displayAmt = negParen
+      ? '<span style="position:absolute;left:0;">(</span><span style="margin-right:10px;">R ' + numStr + '</span><span style="position:absolute;right:4px;">)</span>'
+      : '<span style="margin-right:10px;">R ' + numStr + '</span>';
+    const vpad = tight ? '4px' : '10px';
+    return '<tr style="' + (bold ? 'font-weight:700;' : '') + (topBorder ? 'border-top:2px solid #145A32;' : '') + (doubleBorder ? 'border-bottom:2px double #145A32;' : '') + '">' +
+      '<td style="padding:' + vpad + ' ' + (indent ? '24px' : '12px') + ';font-size:0.88rem;">' + escHtml(label) + '</td>' +
+      '<td style="padding:' + vpad + ' 16px ' + vpad + ' 12px;text-align:right;font-size:0.88rem;white-space:nowrap;width:160px;min-width:160px;position:relative;">' + displayAmt + '</td>' +
+    '</tr>';
   };
   const sfpSectionHead = label =>
     `<tr><td colspan="2" style="padding:16px 12px 8px;font-weight:700;font-size:0.95rem;color:#145A32;border-bottom:2px solid #145A32;">${escHtml(label)}</td></tr>`;
@@ -2913,51 +2916,18 @@ function renderManagementReport(d) {
   const isD = d.isData;
   let isHTML = `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><col style="width:auto;"/><col style="width:160px;"/>`;
   isHTML += sfpSectionHead('Income');
-  isD.incomeLines.forEach(l => { if (!d.hideZeros || l.amount !== 0) isHTML += sfpRow(l.name, l.amount, { indent: true }); });
-  isHTML += sfpRow('Total Income', isD.totalIncome, { bold: true, topBorder: true });
+  isD.incomeLines.forEach(l => { if (!d.hideZeros || l.amount !== 0) isHTML += sfpRow(l.name, l.amount, { indent: true, tight: true }); });
+  isHTML += sfpRow('Total Income', isD.totalIncome, { bold: true, topBorder: true, tight: true });
   isHTML += sfpSpacer;
   isHTML += sfpSectionHead('Expenses');
-  isD.expenseLines.forEach(l => { if (!d.hideZeros || l.amount !== 0) isHTML += sfpRow(l.name, l.amount, { indent: true }); });
-  isHTML += sfpRow('Total Expenses', isD.totalExpenses, { bold: true, topBorder: true });
+  isD.expenseLines.forEach(l => { if (!d.hideZeros || l.amount !== 0) isHTML += sfpRow(l.name, l.amount, { indent: true, tight: true }); });
+  isHTML += sfpRow('Total Expenses', isD.totalExpenses, { bold: true, topBorder: true, tight: true });
   isHTML += sfpSpacer;
-  isHTML += sfpRow('Net Income', isD.netIncome, { bold: true, topBorder: true, doubleBorder: true });
+  isHTML += sfpRow('Net Income', isD.netIncome, { bold: true, topBorder: true, doubleBorder: true, tight: true });
   isHTML += `</table>`;
   const isPage = page('Income Statement', isHTML);
 
-  // Notes
-  let notesHTML = `<div style="font-size:0.85rem;">
-    <div style="font-weight:700;margin-bottom:8px;">1. Basis of preparation</div>
-    <p style="margin-bottom:14px;">This management report has been prepared on the historical cost basis and is compiled from the bank statements and supporting documentation provided by the sole proprietor.</p>
-    <div style="font-weight:700;margin-bottom:8px;">2. Bank balance</div>
-    <p style="margin-bottom:14px;">The bank balance of ${fmt(d.bankBalance)} represents the closing balance as at ${escHtml(d.closingDate)} per the bank statement provided by ${escHtml(c.name)}.</p>
-    <div style="font-weight:700;margin-bottom:8px;">3. Liabilities</div>
-    <p style="margin-bottom:14px;">No liabilities have been disclosed by the sole proprietor as at the date of this report.</p>`;
-  if (d.unclassifiedCount > 0) {
-    notesHTML += `
-    <div style="font-weight:700;margin-bottom:8px;">4. Unclassified transactions</div>
-    <p style="margin-bottom:14px;">${d.unclassifiedCount} transaction(s) totalling ${fmt(d.unclassifiedTotal)} have not yet been allocated to an income or expense category. These are included in the Capital Account as a reconciling item until classification is completed.</p>`;
-  }
-  notesHTML += `</div>`;
-  const notesPage = page('Notes', notesHTML);
-
-  // Declaration
-  const declarationBody = `
-    <div style="font-size:0.85rem;">
-      <div style="font-weight:700;color:#145A32;border-bottom:2px solid #145A32;padding-bottom:4px;margin-bottom:14px;">Declaration by the Sole Proprietor</div>
-      <p>I, the undersigned, confirm that the information contained in this management report is a true and accurate reflection of the financial position and results of operations ${escHtml(d.periodStr)}.</p>
-      <p>I accept responsibility for the fair presentation of the management report and confirm that adequate accounting records have been maintained.</p>
-      <div style="margin-top:48px;max-width:300px;page-break-inside:avoid;break-inside:avoid;">
-        <div style="border-top:1px solid #999;padding-top:4px;">
-          <div style="font-weight:700;">${escHtml(c.name)}</div>
-  
-          <div style="margin-top:10px;">Date: ${escHtml(d.today)}</div>
-          <div style="margin-top:6px;">Place: ___________________</div>
-        </div>
-      </div>
-    </div>`;
-  const declarationPage = page('Declaration', declarationBody);
-
-  return [cover, indexPage, letterPage1, letterPage2, sfpPage, cfPage, isPage, notesPage, declarationPage].join('');
+  return [cover, indexPage, letterPage1, letterPage2, sfpPage, cfPage, isPage].join('');
 }
 
 // ============================================================
