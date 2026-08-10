@@ -2707,15 +2707,24 @@ function buildManagementReport(opts) {
       periodStr = ps;
     }
 
+    // Cash flow data — classify by ITR12 prefix
+    const cfOperatingIn = r2(filteredTx.filter(t => t.account_code && t.account_code.startsWith('ITR-INC')).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
+    const cfOperatingOut = r2(filteredTx.filter(t => t.account_code && t.account_code.startsWith('ITR-EXP')).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
+    const cfOperatingNet = r2(cfOperatingIn + cfOperatingOut);
+    const cfFinancing = r2(filteredTx.filter(t => t.account_code && t.account_code.startsWith('ITR-PERS')).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
+    const cfUnclassified = unclassifiedTotal;
+    const cfNetMovement = r2(cfOperatingNet + cfFinancing + cfUnclassified);
+
     return {
       ok: true,
       data: {
         client, currentYear, currentLabel, periodStr, closingDate, today,
         isData: d, hideZeros,
-        bankBalance, openingCapital, netProfit, drawings,
+        bankBalance, openingBankBalance, openingCapital, netProfit, drawings,
         unclassifiedTotal, unclassifiedCount: unclassifiedTx.length,
         closingCapital, totalAssets, totalLiabilities, totalCapitalAndLiab,
         balances, balanceDiff,
+        cfOperatingIn, cfOperatingOut, cfOperatingNet, cfFinancing, cfUnclassified, cfNetMovement,
       },
     };
   } catch (err) {
@@ -2751,9 +2760,10 @@ function renderManagementReport(d) {
   const idx = [
     ['Compilation letter', '2-3'],
     ['Statement of Financial Position', '4'],
-    ['Income Statement', '5'],
-    ['Notes', '6'],
-    ['Declaration', '6'],
+    ['Cash Flow Statement', '5'],
+    ['Income Statement', '6'],
+    ['Notes', '7'],
+    ['Declaration', '7'],
   ];
   const indexPage = page('Index', `
     <div style="font-size:0.85rem;">
@@ -2766,7 +2776,7 @@ function renderManagementReport(d) {
       <p>The sole proprietor is responsible for the maintenance of adequate accounting records and the integrity of the financial information contained herein.</p>
       <p>The sole proprietor is responsible for the organisation's system of internal financial control. These controls are designed to provide reasonable, but not absolute, assurance as to the reliability of the financial information, and to adequately safeguard, verify and maintain accountability of assets, and to prevent and detect misstatement and loss.</p>
       <p>The management report has been prepared on the going concern basis, as the sole proprietor has every reason to believe that the business has adequate resources in place to continue in operation for the foreseeable future.</p>
-      <p>The management report which appears on pages 4 to 6 was approved by the sole proprietor.</p>
+      <p>The management report which appears on pages 4 to 7 was approved by the sole proprietor.</p>
       <div style="margin-top:36px;max-width:260px;page-break-inside:avoid;break-inside:avoid;">
         <div style="font-weight:700;">${escHtml(c.name)}</div>
         <div style="font-style:italic;">(Sole Proprietor)</div>
@@ -2798,7 +2808,7 @@ function renderManagementReport(d) {
       </div>
       <p><strong>Dear ${escHtml(c.name)}:</strong></p>
       <p>This letter will confirm our understanding of the terms and objectives of our engagement and the nature and limitations of the services we will provide.</p>
-      <p>We will compile, from information you provide, the income statement and statement of financial position as of ${escHtml(d.closingDate)}, for the period then ended. We will not audit or review such financial statements. Our services will be limited to presenting in financial statement form information that you represent to us.</p>
+      <p>We will compile, from information you provide, the income statement, statement of financial position and cash flow statement as of ${escHtml(d.closingDate)}, for the period then ended. We will not audit or review such financial statements. Our services will be limited to presenting in financial statement form information that you represent to us.</p>
       <p>Our report on the management report of ${escHtml(c.name)} for ${escHtml(d.closingDate)} is currently expected to read as follows:</p>
       <p>We have compiled the accompanying income statement and statement of financial position of ${escHtml(c.name)} as of ${escHtml(d.closingDate)} for the period then ended. A compilation is limited to presenting in the form of financial statements information that is the representation of the sole proprietor. We have not audited or reviewed the accompanying financial statements and, accordingly, do not express an opinion or any other form of assurance on them.</p>
       <p>If for any reason we are unable to complete the compilation of your management report, we will not issue a compilation report on such statements as a result of this engagement.</p>
@@ -2874,7 +2884,30 @@ function renderManagementReport(d) {
   }
   const sfpPage = page('Statement of Financial Position', sfpHTML);
 
-  // Income Statement (after SFP)
+  // Cash Flow Statement (between SFP and IS)
+  let cfHTML = `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><col style="width:auto;"/><col style="width:160px;"/>`;
+  cfHTML += sfpSectionHead('Cash flows from operating activities');
+  cfHTML += sfpRow('Cash receipts from customers / income', d.cfOperatingIn, { indent: true });
+  cfHTML += sfpRow('Cash paid for expenses', d.cfOperatingOut, { indent: true });
+  cfHTML += sfpRow('Net cash from operating activities', d.cfOperatingNet, { bold: true, topBorder: true });
+  cfHTML += sfpSpacer;
+  cfHTML += sfpSectionHead('Cash flows from financing activities');
+  cfHTML += sfpRow('Drawings / personal transactions', d.cfFinancing, { indent: true });
+  cfHTML += sfpRow('Net cash from financing activities', d.cfFinancing, { bold: true, topBorder: true });
+  cfHTML += sfpSpacer;
+  if (d.unclassifiedCount > 0) {
+    cfHTML += sfpSectionHead('Unclassified cash movements');
+    cfHTML += sfpRow(`Unclassified transactions (${d.unclassifiedCount})`, d.cfUnclassified, { indent: true });
+    cfHTML += sfpSpacer;
+  }
+  cfHTML += sfpSectionHead('Summary');
+  cfHTML += sfpRow('Net increase / (decrease) in cash', d.cfNetMovement, { indent: true });
+  cfHTML += sfpRow('Cash at beginning of period', d.openingBankBalance, { indent: true });
+  cfHTML += sfpRow('Cash at end of period', d.bankBalance, { bold: true, topBorder: true, doubleBorder: true });
+  cfHTML += `</table>`;
+  const cfPage = page('Cash Flow Statement', cfHTML);
+
+  // Income Statement (after Cash Flow)
   const isHTML = renderCommissionIS(d.isData, d.hideZeros, { hideCalcDetail: true });
   const isPage = page('Income Statement', isHTML);
 
@@ -2911,7 +2944,7 @@ function renderManagementReport(d) {
     </div>`;
   const declarationPage = page('Declaration', declarationBody);
 
-  return [cover, indexPage, letterPage1, letterPage2, sfpPage, isPage, notesPage, declarationPage].join('');
+  return [cover, indexPage, letterPage1, letterPage2, sfpPage, cfPage, isPage, notesPage, declarationPage].join('');
 }
 
 // ============================================================
