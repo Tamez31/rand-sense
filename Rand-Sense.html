@@ -1542,6 +1542,7 @@ function renderReportsTab() {
       <button class="btn btn-ghost btn-sm" onclick="csvReport()">&#8595; CSV</button>
       ${!isC ? `<button class="btn btn-dark btn-sm" onclick="generateFullPack()">Full Pack</button>` : ''}
       ${!isC ? `<button class="btn btn-ghost btn-sm" onclick="downloadAFSReport()" title="Statutory-style Annual Financial Statements pack">&#128203; Download AFS</button>` : ''}
+      ${isC ? `<button class="btn btn-dark btn-sm" onclick="downloadManagementReport()" title="Management Report for sole proprietor / commission earner">&#128203; Management Report</button>` : ''}
       <button class="btn btn-primary btn-sm"
         onclick="triggerReadyToInvoice('${rt === 'VAT' ? 'VAT201' : 'Annual Financial Statements'} \u2014 ${state.currentYear}', ${rt === 'VAT' ? 450 : 0})"
         title="Mark this work as done and open the invoice form">
@@ -2589,6 +2590,33 @@ async function downloadAFSReport() {
     window.print();
   } catch(e) {
     toast('Error building AFS pack: ' + e.message, 'error');
+  }
+  hideLoading();
+}
+
+async function downloadManagementReport() {
+  const c = state.currentClient;
+  const F = window.FinancialOutputs;
+  showLoading('Building Management Report…');
+  try {
+    const packR = F.buildManagementReport({
+      client: c,
+      currentYear: state.currentYear,
+      transactions: state.transactions,
+      hideZeros: state.hideZeros,
+      incomeOverride: state.cmIncomeOverride,
+      homeOfficeOptions: state.cmHomeOffice,
+      travelOptions: state.cmTravel,
+      cellPhoneOptions: state.cmCellPhone,
+    });
+    if (!packR.ok) { toast('Could not build Management Report: ' + packR.error, 'error'); hideLoading(); return; }
+    const html = F.renderManagementReport(packR.data);
+    let target = document.getElementById('print-target');
+    if (!target) { target = document.createElement('div'); target.id = 'print-target'; document.body.appendChild(target); }
+    target.innerHTML = `<div style="font-family:'Poppins',sans-serif;color:#1A1A1A;font-size:11pt;">${html}</div>`;
+    window.print();
+  } catch(e) {
+    toast('Error building Management Report: ' + e.message, 'error');
   }
   hideLoading();
 }
