@@ -2849,12 +2849,12 @@ function renderManagementReport(d) {
     const tight = opts && opts.tight;
     const numStr = fmt(Math.abs(amount)).replace(/R./,'');
     const displayAmt = negParen
-      ? '<span style="position:absolute;left:0;">(</span><span style="margin-right:10px;">R ' + numStr + '</span><span style="position:absolute;right:4px;">)</span>'
-      : '<span style="margin-right:10px;">R ' + numStr + '</span>';
+      ? '(R ' + numStr + ')'
+      : 'R ' + numStr;
     const vpad = tight ? '4px' : '10px';
     return '<tr style="' + (bold ? 'font-weight:700;' : '') + (topBorder ? 'border-top:2px solid #145A32;' : '') + (doubleBorder ? 'border-bottom:2px double #145A32;' : '') + '">' +
       '<td style="padding:' + vpad + ' ' + (indent ? '24px' : '12px') + ';font-size:0.88rem;">' + escHtml(label) + '</td>' +
-      '<td style="padding:' + vpad + ' 16px ' + vpad + ' 12px;text-align:right;font-size:0.88rem;white-space:nowrap;width:160px;min-width:160px;position:relative;">' + displayAmt + '</td>' +
+      '<td style="padding:' + vpad + ' 16px ' + vpad + ' 12px;text-align:right;font-size:0.88rem;white-space:nowrap;width:160px;min-width:160px;">' + displayAmt + '</td>' +
     '</tr>';
   };
   const sfpSectionHead = label =>
