@@ -2780,7 +2780,7 @@ function renderManagementReport(d) {
       <p>The management report which appears on pages 4 to 7 was approved by the sole proprietor.</p>
       <div style="margin-top:36px;max-width:260px;page-break-inside:avoid;break-inside:avoid;">
         <div style="font-weight:700;">${escHtml(c.name)}</div>
-        <div style="font-style:italic;">(Sole Proprietor)</div>
+
         <div style="margin-top:10px;">Date: ${escHtml(d.today)}</div>
       </div>
     </div>`);
@@ -2827,7 +2827,7 @@ function renderManagementReport(d) {
       <div style="margin-top:40px;font-weight:700;page-break-inside:avoid;break-inside:avoid;">Accepted and Agreed by: ${escHtml(c.name)}</div>
       <div style="margin-top:36px;border-top:1px solid #999;padding-top:4px;max-width:280px;page-break-inside:avoid;break-inside:avoid;">
         <div style="font-weight:700;">${escHtml(c.name)}</div>
-        <div style="font-style:italic;">(Sole Proprietor)</div>
+
         <div>Date: ${escHtml(d.today)}</div>
       </div>
       <div style="margin-top:36px;max-width:280px;page-break-inside:avoid;break-inside:avoid;">
@@ -2909,15 +2909,19 @@ function renderManagementReport(d) {
   cfHTML += `</table>`;
   const cfPage = page('Cash Flow Statement', cfHTML);
 
-  // Income Statement (after Cash Flow) — override font to match SFP/other pages
-  const isHTML = `<style>
-    .mr-is .statement-wrap { font-family: inherit; }
-    .mr-is .stmt-table { font-size: 0.88rem; }
-    .mr-is .stmt-table td.amt { font-family: inherit; white-space: nowrap; width: 140px; min-width: 140px; text-align: right; padding-right: 16px; }
-    .mr-is .stmt-table td.label { padding-left: 12px; }
-    .mr-is .stmt-table td.label.indent { padding-left: 24px; }
-    .mr-is .stmt-col-heads { font-size: 0.88rem; }
-  </style><div class="mr-is">${renderCommissionIS(d.isData, d.hideZeros, { hideCalcDetail: true })}</div>`;
+  // Income Statement (after Cash Flow) — built with same sfpRow helpers for visual consistency
+  const isD = d.isData;
+  let isHTML = `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><col style="width:auto;"/><col style="width:160px;"/>`;
+  isHTML += sfpSectionHead('Income');
+  isD.incomeLines.forEach(l => { if (!d.hideZeros || l.amount !== 0) isHTML += sfpRow(l.name, l.amount, { indent: true }); });
+  isHTML += sfpRow('Total Income', isD.totalIncome, { bold: true, topBorder: true });
+  isHTML += sfpSpacer;
+  isHTML += sfpSectionHead('Expenses');
+  isD.expenseLines.forEach(l => { if (!d.hideZeros || l.amount !== 0) isHTML += sfpRow(l.name, l.amount, { indent: true }); });
+  isHTML += sfpRow('Total Expenses', isD.totalExpenses, { bold: true, topBorder: true });
+  isHTML += sfpSpacer;
+  isHTML += sfpRow('Net Income', isD.netIncome, { bold: true, topBorder: true, doubleBorder: true });
+  isHTML += `</table>`;
   const isPage = page('Income Statement', isHTML);
 
   // Notes
@@ -2945,7 +2949,7 @@ function renderManagementReport(d) {
       <div style="margin-top:48px;max-width:300px;page-break-inside:avoid;break-inside:avoid;">
         <div style="border-top:1px solid #999;padding-top:4px;">
           <div style="font-weight:700;">${escHtml(c.name)}</div>
-          <div style="font-style:italic;">(Sole Proprietor)</div>
+  
           <div style="margin-top:10px;">Date: ${escHtml(d.today)}</div>
           <div style="margin-top:6px;">Place: ___________________</div>
         </div>
