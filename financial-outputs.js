@@ -2826,7 +2826,8 @@ function renderManagementReport(d) {
       <p>We appreciate the opportunity to serve you and trust that our association will be a long and pleasant one.</p>
       <div style="margin-top:40px;font-weight:700;page-break-inside:avoid;break-inside:avoid;">Accepted and Agreed by: ${escHtml(c.name)}</div>
       <div style="margin-top:36px;border-top:1px solid #999;padding-top:4px;max-width:280px;page-break-inside:avoid;break-inside:avoid;">
-        <div style="font-weight:700;">${escHtml(c.name)} (Sole Proprietor)</div>
+        <div style="font-weight:700;">${escHtml(c.name)}</div>
+        <div style="font-style:italic;">(Sole Proprietor)</div>
         <div>Date: ${escHtml(d.today)}</div>
       </div>
       <div style="margin-top:36px;max-width:280px;page-break-inside:avoid;break-inside:avoid;">
@@ -2908,8 +2909,15 @@ function renderManagementReport(d) {
   cfHTML += `</table>`;
   const cfPage = page('Cash Flow Statement', cfHTML);
 
-  // Income Statement (after Cash Flow)
-  const isHTML = renderCommissionIS(d.isData, d.hideZeros, { hideCalcDetail: true });
+  // Income Statement (after Cash Flow) — override font to match SFP/other pages
+  const isHTML = `<style>
+    .mr-is .statement-wrap { font-family: inherit; }
+    .mr-is .stmt-table { font-size: 0.88rem; }
+    .mr-is .stmt-table td.amt { font-family: inherit; white-space: nowrap; width: 140px; min-width: 140px; text-align: right; padding-right: 16px; }
+    .mr-is .stmt-table td.label { padding-left: 12px; }
+    .mr-is .stmt-table td.label.indent { padding-left: 24px; }
+    .mr-is .stmt-col-heads { font-size: 0.88rem; }
+  </style><div class="mr-is">${renderCommissionIS(d.isData, d.hideZeros, { hideCalcDetail: true })}</div>`;
   const isPage = page('Income Statement', isHTML);
 
   // Notes
