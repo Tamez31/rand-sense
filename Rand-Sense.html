@@ -2597,6 +2597,17 @@ async function downloadAFSReport() {
 async function downloadManagementReport() {
   const c = state.currentClient;
   const F = window.FinancialOutputs;
+
+  // Prompt for period-end date — default to last transaction date
+  const txDates = state.transactions.map(t => t.date).filter(Boolean).sort();
+  const defaultEnd = txDates.length ? txDates[txDates.length - 1] : '';
+  const periodEnd = prompt(
+    'Enter the period-end date for this Management Report (YYYY-MM-DD).\n\n' +
+    'Leave blank for the full financial year-end.',
+    defaultEnd
+  );
+  if (periodEnd === null) return; // cancelled
+
   showLoading('Building Management Report…');
   try {
     const packR = F.buildManagementReport({
@@ -2608,6 +2619,7 @@ async function downloadManagementReport() {
       homeOfficeOptions: state.cmHomeOffice,
       travelOptions: state.cmTravel,
       cellPhoneOptions: state.cmCellPhone,
+      periodEndDate: periodEnd || undefined,
     });
     if (!packR.ok) { toast('Could not build Management Report: ' + packR.error, 'error'); hideLoading(); return; }
     const html = F.renderManagementReport(packR.data);

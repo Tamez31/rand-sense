@@ -2649,68 +2649,73 @@ function renderAFSPack(d) {
 // Income Statement → Statement of Financial Position → Notes → Declaration.
 // ============================================================
 
-const _MR_SIGNATURE_IMG = 'data:image/png;base64,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';
-
 function buildManagementReport(opts) {
   try {
     const {
       client, currentYear, transactions,
       hideZeros, incomeOverride, homeOfficeOptions, travelOptions, cellPhoneOptions,
+      periodEndDate,
     } = opts;
 
     const isR = buildCommissionIS(transactions, hideZeros, incomeOverride, homeOfficeOptions, travelOptions, cellPhoneOptions);
     if (!isR.ok) return { ok: false, error: 'Income Statement: ' + isR.error };
 
     const d = isR.data;
-    const txMap = netByAccount(transactions);
 
-    // Statement of Financial Position — condensed
-    // Assets: bank balance (closing balance from last transaction)
+    // Compute opening bank from the earliest transaction's balance field
     const sortedTx = [...transactions].sort((a, b) => a.date > b.date ? 1 : a.date < b.date ? -1 : 0);
-    const bankBalance = sortedTx.length > 0 ? r2(parseFloat(sortedTx[sortedTx.length - 1].balance) || 0) : 0;
+    const firstTx = sortedTx[0];
+    const openingBankBalance = firstTx
+      ? r2((parseFloat(firstTx.balance) || 0) - (parseFloat(firstTx.amount) || 0))
+      : 0;
 
-    // Capital account
-    // For commission earners there are no opening balances typically tracked,
-    // so opening capital = 0 for FY1, or carried forward.
-    // Net profit from IS
+    // Closing bank = opening + sum(all transaction amounts).
+    // We derive this rather than reading the last tx's balance field because
+    // multiple same-day transactions may be stored out of statement order,
+    // making the balance column unreliable for picking the true closing row.
+    const totalFlow = r2(transactions.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
+    const bankBalance = r2(openingBankBalance + totalFlow);
+
     const netProfit = d.netIncome;
     const drawings = d.totalPersonal;
-    const openingCapital = 0; // placeholder — no opening balance table for commission earners
-    const closingCapital = r2(openingCapital + netProfit - drawings);
 
-    // Liabilities — for a sole proprietor this is typically 0
+    const unclassifiedTx = transactions.filter(t => !t.account_code);
+    const unclassifiedTotal = r2(unclassifiedTx.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
+
+    const openingCapital = openingBankBalance;
+    const closingCapital = r2(openingCapital + netProfit - drawings + unclassifiedTotal);
+
     const totalAssets = bankBalance;
     const totalLiabilities = 0;
     const totalCapitalAndLiab = r2(closingCapital + totalLiabilities);
 
-    // Balance check
     const balanceDiff = r2(totalAssets - totalCapitalAndLiab);
     const balances = Math.abs(balanceDiff) < 0.01;
 
     const currentLabel = yearEndLabel(client.financial_year_end, currentYear);
-    const { periodStr } = _afsPeriod(currentLabel, '');
-    const closingDate = _afsClosingDateFromLabel(currentLabel, client.financial_year_end);
+    const today = _afsTodayDMY();
+
+    let periodStr, closingDate;
+    if (periodEndDate) {
+      const ped = new Date(periodEndDate + 'T00:00:00');
+      const _MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      closingDate = `${ped.getDate()} ${_MONTHS[ped.getMonth()]} ${ped.getFullYear()}`;
+      periodStr = `for the period ended ${closingDate}`;
+    } else {
+      closingDate = _afsClosingDateFromLabel(currentLabel, client.financial_year_end);
+      const { periodStr: ps } = _afsPeriod(currentLabel, '');
+      periodStr = ps;
+    }
 
     return {
       ok: true,
       data: {
-        client,
-        currentYear,
-        currentLabel,
-        periodStr,
-        closingDate,
-        isData: d,
-        hideZeros,
-        bankBalance,
-        openingCapital,
-        netProfit,
-        drawings,
-        closingCapital,
-        totalAssets,
-        totalLiabilities,
-        totalCapitalAndLiab,
-        balances,
-        balanceDiff,
+        client, currentYear, currentLabel, periodStr, closingDate, today,
+        isData: d, hideZeros,
+        bankBalance, openingCapital, netProfit, drawings,
+        unclassifiedTotal, unclassifiedCount: unclassifiedTx.length,
+        closingCapital, totalAssets, totalLiabilities, totalCapitalAndLiab,
+        balances, balanceDiff,
       },
     };
   } catch (err) {
@@ -2730,7 +2735,7 @@ function renderManagementReport(d) {
       </div>
     </div>`;
 
-  // ── Cover ────────────────────────────────────────────────────
+  // Cover
   const cover = `
     <div class="statement-wrap afs-page" style="padding:24px 32px;">
       <div class="afs-wrap" style="text-align:center;padding-top:120px;">
@@ -2738,15 +2743,15 @@ function renderManagementReport(d) {
         <div style="font-size:0.7rem;letter-spacing:0.05em;color:#666;border-bottom:1px solid #ccc;padding-bottom:14px;margin-bottom:60px;">MAKING CENTS OF IT ALL</div>
         <div style="font-size:1.6rem;font-weight:700;color:#145A32;margin-bottom:14px;">${escHtml(c.name)}</div>
         <div style="font-size:1.05rem;">Management Report</div>
-        <div style="font-size:1.05rem;">for the Year-end ${escHtml(d.currentYear)}</div>
+        <div style="font-size:1.05rem;">${escHtml(d.periodStr)}</div>
       </div>
     </div>`;
 
-  // ── Index & Approval ─────────────────────────────────────────
+  // Index & Approval
   const idx = [
     ['Compilation letter', '2-3'],
-    ['Income Statement', '4'],
-    ['Statement of Financial Position', '5'],
+    ['Statement of Financial Position', '4'],
+    ['Income Statement', '5'],
     ['Notes', '6'],
     ['Declaration', '6'],
   ];
@@ -2765,11 +2770,11 @@ function renderManagementReport(d) {
       <div style="margin-top:36px;max-width:260px;page-break-inside:avoid;break-inside:avoid;">
         <div style="font-weight:700;">${escHtml(c.name)}</div>
         <div style="font-style:italic;">(Sole Proprietor)</div>
-        <div style="margin-top:10px;">Date: ___________________</div>
+        <div style="margin-top:10px;">Date: ${escHtml(d.today)}</div>
       </div>
     </div>`);
 
-  // ── Compilation Letter ───────────────────────────────────────
+  // Compilation Letter
   const letterStyle = `<style>.mr-letter p{page-break-inside:avoid;break-inside:avoid;}</style>`;
   const letterPage1 = page('Compilation Letter', `
     ${letterStyle}
@@ -2793,9 +2798,9 @@ function renderManagementReport(d) {
       </div>
       <p><strong>Dear ${escHtml(c.name)}:</strong></p>
       <p>This letter will confirm our understanding of the terms and objectives of our engagement and the nature and limitations of the services we will provide.</p>
-      <p>We will compile, from information you provide, the income statement and statement of financial position as of ${escHtml(d.closingDate)}, for the year then ended. We will not audit or review such financial statements. Our services will be limited to presenting in financial statement form information that you represent to us.</p>
+      <p>We will compile, from information you provide, the income statement and statement of financial position as of ${escHtml(d.closingDate)}, for the period then ended. We will not audit or review such financial statements. Our services will be limited to presenting in financial statement form information that you represent to us.</p>
       <p>Our report on the management report of ${escHtml(c.name)} for ${escHtml(d.closingDate)} is currently expected to read as follows:</p>
-      <p>We have compiled the accompanying income statement and statement of financial position of ${escHtml(c.name)} as of ${escHtml(d.closingDate)} for the year then ended. A compilation is limited to presenting in the form of financial statements information that is the representation of the sole proprietor. We have not audited or reviewed the accompanying financial statements and, accordingly, do not express an opinion or any other form of assurance on them.</p>
+      <p>We have compiled the accompanying income statement and statement of financial position of ${escHtml(c.name)} as of ${escHtml(d.closingDate)} for the period then ended. A compilation is limited to presenting in the form of financial statements information that is the representation of the sole proprietor. We have not audited or reviewed the accompanying financial statements and, accordingly, do not express an opinion or any other form of assurance on them.</p>
       <p>If for any reason we are unable to complete the compilation of your management report, we will not issue a compilation report on such statements as a result of this engagement.</p>
       <p>A compilation differs significantly from a review or an audit of financial statements. A compilation does not include performing any analytical procedures, inquiry or other procedures performed in a review. In addition, in a compilation one does not seek to obtain an understanding of an entity's internal control or assess fraud risk; test accounting records or examine source documents or other, more detailed procedures ordinarily performed in an audit. As a consequence, we will not express an opinion or provide any assurance regarding the financial statements being compiled.</p>
       <p>Our engagement cannot be relied on to disclose errors, irregularities, or illegal acts, including fraud or embezzlements that may exist. However, we will inform the appropriate level of management of any material errors that come to our attention and any irregularities or illegal acts that come to our attention, unless they are clearly inconsequential.</p>
@@ -2811,90 +2816,102 @@ function renderManagementReport(d) {
       <div style="margin-top:40px;font-weight:700;page-break-inside:avoid;break-inside:avoid;">Accepted and Agreed by: ${escHtml(c.name)}</div>
       <div style="margin-top:36px;border-top:1px solid #999;padding-top:4px;max-width:280px;page-break-inside:avoid;break-inside:avoid;">
         <div style="font-weight:700;">${escHtml(c.name)} (Sole Proprietor)</div>
-        <div>Date: ___________________</div>
+        <div>Date: ${escHtml(d.today)}</div>
       </div>
       <div style="margin-top:36px;max-width:280px;page-break-inside:avoid;break-inside:avoid;">
-        <img src="${_MR_SIGNATURE_IMG}" alt="Signature" style="height:48px;width:auto;display:block;margin-bottom:2px;"/>
+        <div style="font-family:'Segoe Script','Brush Script MT','Lucida Handwriting',cursive;font-size:1.7rem;color:#1a1a2e;line-height:1;padding-bottom:2px;">${_AFS_FIRM.signatureText}</div>
         <div style="border-top:1px solid #999;padding-top:4px;">
           <div style="font-weight:700;">${_AFS_FIRM.signatory}</div>
           <div style="font-style:italic;">${_AFS_FIRM.signatoryRole}</div>
           <div>SAICA REGISTRATION NO. ${_AFS_FIRM.saicaNo}</div>
-          <div style="margin-top:6px;">Date: ___________________</div>
+          <div style="margin-top:6px;">Date: ${escHtml(d.today)}</div>
         </div>
       </div>
     </div>`);
 
-  // ── Income Statement ─────────────────────────────────────────
+  // Statement of Financial Position (before Income Statement)
+  const sfpRow = (label, amount, opts) => {
+    const bold = opts && opts.bold;
+    const indent = opts && opts.indent;
+    const topBorder = opts && opts.topBorder;
+    const doubleBorder = opts && opts.doubleBorder;
+    const negParen = amount < 0;
+    const displayAmt = negParen ? `(${fmt(Math.abs(amount))})` : fmt(amount);
+    return `<tr style="${bold ? 'font-weight:700;' : ''}${topBorder ? 'border-top:2px solid #145A32;' : ''}${doubleBorder ? 'border-bottom:2px double #145A32;' : ''}">
+      <td style="padding:10px ${indent ? '24px' : '12px'};font-size:0.88rem;">${escHtml(label)}</td>
+      <td style="padding:10px 12px;text-align:right;font-size:0.88rem;white-space:nowrap;">${displayAmt}</td>
+    </tr>`;
+  };
+  const sfpSectionHead = label =>
+    `<tr><td colspan="2" style="padding:16px 12px 8px;font-weight:700;font-size:0.95rem;color:#145A32;border-bottom:2px solid #145A32;">${escHtml(label)}</td></tr>`;
+  const sfpSpacer = `<tr><td colspan="2" style="padding:6px 0;"></td></tr>`;
+
+  let sfpHTML = `<table style="width:100%;border-collapse:collapse;">`;
+  sfpHTML += sfpSectionHead('Assets');
+  sfpHTML += sfpRow('Bank balance', d.bankBalance, { indent: true });
+  sfpHTML += sfpRow('Total Assets', d.totalAssets, { bold: true, topBorder: true, doubleBorder: true });
+  sfpHTML += sfpSpacer;
+
+  sfpHTML += sfpSectionHead('Capital Account');
+  sfpHTML += sfpRow('Opening balance', d.openingCapital, { indent: true });
+  sfpHTML += sfpRow('Net profit / (loss) for the period', d.netProfit, { indent: true });
+  sfpHTML += sfpRow('Less: Drawings', r2(-d.drawings), { indent: true });
+  if (d.unclassifiedCount > 0) {
+    sfpHTML += sfpRow(`Unclassified transactions (${d.unclassifiedCount})`, d.unclassifiedTotal, { indent: true });
+  }
+  sfpHTML += sfpRow('Closing capital', d.closingCapital, { bold: true, topBorder: true, doubleBorder: true });
+  sfpHTML += sfpSpacer;
+
+  sfpHTML += sfpSectionHead('Liabilities');
+  sfpHTML += sfpRow('Current liabilities', d.totalLiabilities, { indent: true });
+  sfpHTML += sfpRow('Total Capital and Liabilities', d.totalCapitalAndLiab, { bold: true, topBorder: true, doubleBorder: true });
+  sfpHTML += `</table>`;
+
+  if (!d.balances) {
+    sfpHTML += `<div style="margin-top:20px;padding:12px 16px;background:#FFF3CD;border:1px solid #FFEEBA;border-radius:6px;font-size:0.84rem;color:#856404;">
+      <strong>&#9888; Balance discrepancy:</strong> Total Assets (${fmt(d.totalAssets)}) &ne; Capital + Liabilities (${fmt(d.totalCapitalAndLiab)}). Difference: ${fmt(d.balanceDiff)}.
+    </div>`;
+  }
+  const sfpPage = page('Statement of Financial Position', sfpHTML);
+
+  // Income Statement (after SFP)
   const isHTML = renderCommissionIS(d.isData, d.hideZeros, { hideCalcDetail: true });
   const isPage = page('Income Statement', isHTML);
 
-  // ── Statement of Financial Position ──────────────────────────
-  const moneyRow = (label, amount, bold) =>
-    `<tr style="${bold ? 'font-weight:700;' : ''}">
-      <td style="padding:4px 8px;">${escHtml(label)}</td>
-      <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmt(amount)}</td>
-    </tr>`;
-  const sectionHead = label =>
-    `<tr><td colspan="2" style="padding:8px 8px 4px;font-weight:700;color:#145A32;border-bottom:2px solid #145A32;">${escHtml(label)}</td></tr>`;
-  const totalRow = (label, amount) =>
-    `<tr style="font-weight:700;border-top:2px solid #145A32;border-bottom:2px double #145A32;">
-      <td style="padding:4px 8px;">${escHtml(label)}</td>
-      <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">${fmt(amount)}</td>
-    </tr>`;
+  // Notes
+  let notesHTML = `<div style="font-size:0.85rem;">
+    <div style="font-weight:700;margin-bottom:8px;">1. Basis of preparation</div>
+    <p style="margin-bottom:14px;">This management report has been prepared on the historical cost basis and is compiled from the bank statements and supporting documentation provided by the sole proprietor.</p>
+    <div style="font-weight:700;margin-bottom:8px;">2. Bank balance</div>
+    <p style="margin-bottom:14px;">The bank balance of ${fmt(d.bankBalance)} represents the closing balance as at ${escHtml(d.closingDate)} per the bank statement provided by ${escHtml(c.name)}.</p>
+    <div style="font-weight:700;margin-bottom:8px;">3. Liabilities</div>
+    <p style="margin-bottom:14px;">No liabilities have been disclosed by the sole proprietor as at the date of this report.</p>`;
+  if (d.unclassifiedCount > 0) {
+    notesHTML += `
+    <div style="font-weight:700;margin-bottom:8px;">4. Unclassified transactions</div>
+    <p style="margin-bottom:14px;">${d.unclassifiedCount} transaction(s) totalling ${fmt(d.unclassifiedTotal)} have not yet been allocated to an income or expense category. These are included in the Capital Account as a reconciling item until classification is completed.</p>`;
+  }
+  notesHTML += `</div>`;
+  const notesPage = page('Notes', notesHTML);
 
-  const sfpBody = `
-    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
-      ${sectionHead('Assets')}
-      ${moneyRow('Bank balance', d.bankBalance)}
-      ${totalRow('Total Assets', d.totalAssets)}
-    </table>
-    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:20px;">
-      ${sectionHead('Capital Account')}
-      ${moneyRow('Opening balance', d.openingCapital)}
-      ${moneyRow('Net profit / (loss) for the year', d.netProfit)}
-      ${moneyRow('Less: Drawings', r2(-d.drawings))}
-      ${totalRow('Closing capital / Retained earnings', d.closingCapital)}
-    </table>
-    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:20px;">
-      ${sectionHead('Liabilities')}
-      ${moneyRow('Current liabilities', d.totalLiabilities)}
-      ${totalRow('Total Capital and Liabilities', d.totalCapitalAndLiab)}
-    </table>
-    ${!d.balances ? `<div style="margin-top:16px;padding:10px;background:#FFF3CD;border:1px solid #FFEEBA;border-radius:4px;font-size:0.82rem;color:#856404;">
-      <strong>&#9888; Balance discrepancy:</strong> Total Assets (${fmt(d.totalAssets)}) ≠ Capital + Liabilities (${fmt(d.totalCapitalAndLiab)}). Difference: ${fmt(d.balanceDiff)}.
-    </div>` : ''}`;
-  const sfpPage = page('Statement of Financial Position', sfpBody);
-
-  // ── Notes ────────────────────────────────────────────────────
-  const notesBody = `
-    <div style="font-size:0.85rem;">
-      <div style="font-weight:700;margin-bottom:8px;">1. Basis of preparation</div>
-      <p style="margin-bottom:14px;">This management report has been prepared on the historical cost basis and is compiled from the bank statements and supporting documentation provided by the sole proprietor.</p>
-      <div style="font-weight:700;margin-bottom:8px;">2. Bank balance</div>
-      <p style="margin-bottom:14px;">The bank balance of ${fmt(d.bankBalance)} represents the closing balance as at ${escHtml(d.closingDate)} per the bank statement provided by ${escHtml(c.name)}.</p>
-      <div style="font-weight:700;margin-bottom:8px;">3. Liabilities</div>
-      <p style="margin-bottom:14px;">No liabilities have been disclosed by the sole proprietor as at the date of this report.</p>
-    </div>`;
-  const notesPage = page('Notes', notesBody);
-
-  // ── Declaration ──────────────────────────────────────────────
+  // Declaration
   const declarationBody = `
     <div style="font-size:0.85rem;">
       <div style="font-weight:700;color:#145A32;border-bottom:2px solid #145A32;padding-bottom:4px;margin-bottom:14px;">Declaration by the Sole Proprietor</div>
-      <p>I, the undersigned, confirm that the information contained in this management report is a true and accurate reflection of the financial position and results of operations for the year ended ${escHtml(d.closingDate)}.</p>
+      <p>I, the undersigned, confirm that the information contained in this management report is a true and accurate reflection of the financial position and results of operations ${escHtml(d.periodStr)}.</p>
       <p>I accept responsibility for the fair presentation of the management report and confirm that adequate accounting records have been maintained.</p>
       <div style="margin-top:48px;max-width:300px;page-break-inside:avoid;break-inside:avoid;">
         <div style="border-top:1px solid #999;padding-top:4px;">
           <div style="font-weight:700;">${escHtml(c.name)}</div>
           <div style="font-style:italic;">(Sole Proprietor)</div>
-          <div style="margin-top:10px;">Date: ___________________</div>
+          <div style="margin-top:10px;">Date: ${escHtml(d.today)}</div>
           <div style="margin-top:6px;">Place: ___________________</div>
         </div>
       </div>
     </div>`;
   const declarationPage = page('Declaration', declarationBody);
 
-  return [cover, indexPage, letterPage1, letterPage2, isPage, sfpPage, notesPage, declarationPage].join('');
+  return [cover, indexPage, letterPage1, letterPage2, sfpPage, isPage, notesPage, declarationPage].join('');
 }
 
 // ============================================================
