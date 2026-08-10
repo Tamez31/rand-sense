@@ -1537,6 +1537,10 @@ function renderReportsTab() {
         <input type="checkbox" ${state.hideZeros?'checked':''} onchange="toggleHideZeros(this.checked)"/>
         Hide zero lines
       </label>
+      ${isC ? `<label class="toggle-row" style="margin-left:12px;font-size:0.78rem;font-weight:600;color:#333;">
+        Period ended
+        <input type="date" value="${state.cmPeriodEnd || ''}" onchange="setCmPeriodEnd(this.value)" style="padding:3px 8px;border:1.5px solid #C8E6C9;border-radius:6px;font-size:0.82rem;margin-left:4px;"/>
+      </label>` : ''}
       <div class="topnav-spacer"></div>
       <button class="btn btn-ghost btn-sm report-pdf-btn" onclick="printReport()">&#128424; PDF</button>
       <button class="btn btn-ghost btn-sm" onclick="csvReport()">&#8595; CSV</button>
@@ -2092,6 +2096,11 @@ function toggleHideZeros(val) {
   generateReport();
 }
 
+function setCmPeriodEnd(val) {
+  state.cmPeriodEnd = val || '';
+  generateReport();
+}
+
 // ── VAT201 Summary card ────────────────────────────────────────
 function _buildVAT201Card(txs, fromIso, toIso, client) {
   // Classified transactions with an actual VAT amount, keyed by vat_type
@@ -2441,7 +2450,10 @@ async function generateReport() {
   el.innerHTML = '<div style="padding:30px;text-align:center;"><div class="spinner"></div></div>';
 
   try {
-    const txs     = state.transactions.filter(t => t.account_code);
+    const allTxs  = state.cmPeriodEnd
+      ? state.transactions.filter(t => t.date <= state.cmPeriodEnd)
+      : state.transactions;
+    const txs     = allTxs.filter(t => t.account_code);
     const ob      = state.openingBalances;
     const coa     = state.coa;
     const hz      = state.hideZeros;
@@ -2600,8 +2612,8 @@ function downloadManagementReport() {
 
   // Show period-end date picker modal — default to end of last complete month
   const txDates = (state.transactions || []).map(t => t.date).filter(Boolean).sort();
-  let defaultEnd = '';
-  if (txDates.length) {
+  let defaultEnd = state.cmPeriodEnd || '';
+  if (!defaultEnd && txDates.length) {
     const lastTxDate = new Date(txDates[txDates.length - 1] + 'T00:00:00');
     const endOfPrevMonth = new Date(lastTxDate.getFullYear(), lastTxDate.getMonth(), 0);
     defaultEnd = endOfPrevMonth.toISOString().slice(0, 10);
