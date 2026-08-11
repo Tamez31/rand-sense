@@ -518,6 +518,7 @@ const state = {
   // Finalized ITR12 snapshot (localStorage-backed) for the current commission
   // earner + year (null = not finalized). No invoice is created by finalizing.
   _itr12Finalize:      null,
+  _irp6Finalize:       null,
   // Payment modal state
   _paymentModal:       null,
   // Client invoices tab
@@ -988,6 +989,10 @@ function renderClientDetail() {
       ${tab !== 'settings' && tab !== 'invoices' ? actionBar : ''}
       ${tabContent}
     </div>`);
+
+  if (tab === 'irp6' && state._irp6Finalize && state._irp6Finalize.finalized) {
+    _enforceIrp6ReadOnly();
+  }
 }
 
 async function setClientTab(tab) {
@@ -1935,6 +1940,105 @@ async function reviseReturn() {
   } finally {
     hideLoading();
   }
+}
+
+// ── IRP6 Finalize / Revise ─────────────────────────────────────
+
+function _irp6FinalizeKey(clientId, year, period) {
+  return `rs_irp6_finalize_${clientId}_${year}_${period}`;
+}
+
+function _loadIrp6Finalize(clientId, year, period) {
+  try {
+    const raw = localStorage.getItem(_irp6FinalizeKey(clientId, year, period));
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function _saveIrp6Finalize(clientId, year, period, data) {
+  localStorage.setItem(_irp6FinalizeKey(clientId, year, period), JSON.stringify(data));
+}
+
+function _clearIrp6Finalize(clientId, year, period) {
+  localStorage.removeItem(_irp6FinalizeKey(clientId, year, period));
+}
+
+function _getIrp6Period() {
+  const c = state.currentClient;
+  if (!c) return { year: null, period: null };
+  const isC = c.entity_type === 'commission_earner';
+  if (!isC) {
+    return { year: state.irp6c?.year, period: state.irp6c?.period || 'first' };
+  }
+  return { year: state.irp6?.year, period: state.irp6?.period || 'first' };
+}
+
+function _refreshIrp6Finalize() {
+  const c = state.currentClient;
+  if (!c) { state._irp6Finalize = null; return; }
+  const { year, period } = _getIrp6Period();
+  if (!year || !period) { state._irp6Finalize = null; return; }
+  state._irp6Finalize = _loadIrp6Finalize(c.id, year, period);
+}
+
+function finalizeIRP6() {
+  const c = state.currentClient;
+  if (!c) return;
+  const { year, period } = _getIrp6Period();
+  if (!year || !period) return;
+  const snapshot = {
+    v: 1,
+    finalized: true,
+    snapshotTakenAt: new Date().toISOString(),
+    year, period,
+  };
+  _saveIrp6Finalize(c.id, year, period, snapshot);
+  state._irp6Finalize = snapshot;
+  toast(`IRP6 ${period === 'first' ? 'First' : 'Second'} Period ${year} finalized.`, 'success');
+  renderClientDetail();
+}
+
+function reviseIRP6() {
+  const c = state.currentClient;
+  if (!c) return;
+  const { year, period } = _getIrp6Period();
+  if (!year || !period) return;
+  _clearIrp6Finalize(c.id, year, period);
+  state._irp6Finalize = null;
+  toast(`IRP6 ${period === 'first' ? 'First' : 'Second'} Period ${year} re-opened for editing.`, 'success');
+  renderClientDetail();
+}
+
+function _enforceIrp6ReadOnly() {
+  const tab = document.getElementById('irp6-tab-content');
+  if (!tab) return;
+  tab.querySelectorAll('input, select, button:not(.irp6-revise-btn):not(.irp6-print-btn)').forEach(el => {
+    el.disabled = true;
+    if (el.tagName === 'BUTTON') el.style.opacity = '0.45';
+  });
+}
+
+function _irp6FinalizeSection() {
+  const fin = state._irp6Finalize;
+  const isFinalized = !!(fin && fin.finalized);
+
+  if (isFinalized) {
+    const when = fin.snapshotTakenAt ? new Date(fin.snapshotTakenAt).toLocaleDateString('en-ZA') : '';
+    return `<div style="margin-top:16px;padding:14px 18px;background:#D5F5E3;border:1.5px solid #27AE60;border-radius:8px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:0.88rem;font-weight:600;color:#145A32;">IRP6 finalized${when ? ' on ' + when : ''}.</span>
+      <button class="btn btn-ghost btn-sm irp6-revise-btn" onclick="reviseIRP6()"
+        style="color:#C0392B;border-color:#C0392B;"
+        title="Re-open so you can make changes, then finalize again when ready">
+        Revise
+      </button>
+    </div>`;
+  }
+
+  return `<div style="margin-top:16px;text-align:right;">
+    <button class="irp6-print-btn" style="background:#145A32;color:#fff;font-family:Poppins,sans-serif;font-weight:600;font-size:0.88rem;padding:10px 22px;border-radius:8px;cursor:pointer;border:none;" onclick="finalizeIRP6()">
+      Finalize IRP6
+    </button>
+  </div>`;
 }
 
 // ── VAT date range helpers ─────────────────────────────────────
@@ -3713,7 +3817,11 @@ function renderIRP6Tab() {
       `<button class="subnav-tab ${compType===key?'active':''}" style="font-size:0.82rem;padding:7px 16px;"
         onclick="setIRP6CompType('${key}')">${lbl}</button>`;
 
-    return _irp6ReadyToInvoiceBtn(year) + statusBar + `
+    _refreshIrp6Finalize();
+    const irp6FinSection = _irp6FinalizeSection();
+    const irp6Finalized  = !!(state._irp6Finalize && state._irp6Finalize.finalized);
+
+    return `<div id="irp6-tab-content">` + _irp6ReadyToInvoiceBtn(year) + statusBar + `
       <div class="card" style="margin-bottom:16px;">
         <div class="card-title">IRP6 Provisional Tax — Company</div>
 
@@ -3770,7 +3878,9 @@ function renderIRP6Tab() {
         </div>
       </div>
 
-      <div id="irp6c-result"></div>`;
+      <div id="irp6c-result"></div>
+      ${irp6FinSection}
+    </div>`;
   }
 
   // ── Commission Earner individual calculator ──────────────────
@@ -3797,7 +3907,11 @@ function renderIRP6Tab() {
   const yearOpts = availIndiv
     .map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('');
 
-  return _irp6ReadyToInvoiceBtn(year) + statusBar + `
+  _refreshIrp6Finalize();
+  const irp6FinSection = _irp6FinalizeSection();
+  const irp6Finalized  = !!(state._irp6Finalize && state._irp6Finalize.finalized);
+
+  return `<div id="irp6-tab-content">` + _irp6ReadyToInvoiceBtn(year) + statusBar + `
     <div class="card" style="margin-bottom:16px;">
       <div class="card-title">IRP6 Provisional Tax — Individual</div>
 
@@ -3875,7 +3989,9 @@ function renderIRP6Tab() {
       </div>
     </div>
 
-    <div id="irp6-result"></div>`;
+    <div id="irp6-result"></div>
+    ${irp6FinSection}
+  </div>`;
 }
 
 // ── IRP6 state sync ────────────────────────────────────────────
