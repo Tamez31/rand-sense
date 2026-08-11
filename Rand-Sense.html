@@ -963,6 +963,7 @@ function renderClientDetail() {
     <div class="btn-row" style="margin-bottom:18px;">
       <select class="form-control" style="width:auto;" onchange="onYearChange(this.value)">${yearOptions}</select>
       <button class="btn btn-primary btn-sm" onclick="openImportModal()">&#8593; Import Statement</button>
+      <button class="btn btn-ghost btn-sm" onclick="downloadTransactionData()">&#8595; Download Data</button>
       ${isComp ? `<button class="btn btn-ghost btn-sm" onclick="openOBModal()">Opening Balances</button>` : ''}
     </div>`;
 
@@ -2734,6 +2735,24 @@ function csvReport() {
   if (rt==='TB' && state._TB) { window.Export.exportTBCSV(state._TB, c.name, fy); return; }
   if (rt==='VAT' && state._VAT) { window.Export.exportEnhancedVATCSV(state._VAT, c.name, fy); return; }
   toast('Generate the report first.', 'warning');
+}
+
+function downloadTransactionData() {
+  const c = state.currentClient;
+  const txs = state.transactions || [];
+  if (!txs.length) { toast('No transactions to download.', 'warning'); return; }
+  const header = 'Date,Description,Amount,Balance,Account Code,Account Name,Period,Source Bank';
+  const rows = txs.map(t =>
+    [t.date, '"'+(t.description||'').replace(/"/g,'""')+'"', t.amount, t.balance||'', t.account_code||'', '"'+(t.account_name||'')+'"', t.period||'', t.source_bank||''].join(',')
+  );
+  const csv = header + '\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${c.name.replace(/[^a-zA-Z0-9 ]/g,'_')}_FY${state.currentYear}_data.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── Settings tab ──────────────────────────────────────────────
