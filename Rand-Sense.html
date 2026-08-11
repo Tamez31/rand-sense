@@ -960,7 +960,7 @@ function renderClientDetail() {
     return years.map(y => `<option value="${y}" ${y===state.currentYear?'selected':''}>${y}</option>`).join('');
   })();
 
-  const actionBar = `
+  const actionBar = tab === 'irp6' ? _buildIrp6ActionBar(c, isComp) : `
     <div class="btn-row" style="margin-bottom:18px;">
       <select class="form-control" style="width:auto;" onchange="onYearChange(this.value)">${yearOptions}</select>
       <button class="btn btn-primary btn-sm" onclick="openImportModal()">&#8593; Import Statement</button>
@@ -3749,6 +3749,33 @@ function _renderIRP6StatusBar(fin) {
   </div>`;
 }
 
+// ── IRP6 action bar (replaces year dropdown when on IRP6 tab) ──
+function _buildIrp6ActionBar(client, isCompany) {
+  const availYears = isCompany
+    ? Object.keys(taxTables.company).sort((a,b) => b-a)
+    : Object.keys(taxTables.individual).sort((a,b) => b-a);
+  const st = isCompany ? (state.irp6c || {}) : (state.irp6 || {});
+  const curYear   = st.year   || availYears[0];
+  const curPeriod = st.period || 'first';
+  const curSel = `${curYear}-${curPeriod}`;
+  const handler = isCompany ? 'onIRP6CompanySubmissionChange' : 'onIRP6SubmissionChange';
+
+  let opts = '';
+  for (const y of availYears) {
+    const fin1 = _loadIrp6Finalize(client.id, y, 'first');
+    const fin2 = _loadIrp6Finalize(client.id, y, 'second');
+    const tag1 = fin1 && fin1.finalized ? ' ✓ Finalized' : '';
+    const tag2 = fin2 && fin2.finalized ? ' ✓ Finalized' : '';
+    opts += `<option value="${y}-first" ${curSel===y+'-first'?'selected':''}>${y}-01 First Period${tag1}</option>`;
+    opts += `<option value="${y}-second" ${curSel===y+'-second'?'selected':''}>${y}-02 Second Period${tag2}</option>`;
+  }
+
+  return `<div class="btn-row" style="margin-bottom:18px;">
+    <select class="form-control" style="width:auto;min-width:260px;font-size:0.9rem;" id="irp6-action-bar-select"
+      onchange="${handler}()">${opts}</select>
+  </div>`;
+}
+
 // ── IRP6 Provisional Tax tab ───────────────────────────────────
 function _irp6DefaultYear() {
   const now = new Date();
@@ -3810,18 +3837,6 @@ function renderIRP6Tab() {
     const firstPay = ic.firstPay ?? 0;
     const compType = ic.compType || 'standard';
 
-    // Build combined year+period dropdown for company
-    const curSelC = `${year}-${period}`;
-    let irp6cOpts = '';
-    for (const y of availComp) {
-      const fin1 = _loadIrp6Finalize(c.id, y, 'first');
-      const fin2 = _loadIrp6Finalize(c.id, y, 'second');
-      const tag1 = fin1 && fin1.finalized ? ' ✓ Finalized' : '';
-      const tag2 = fin2 && fin2.finalized ? ' ✓ Finalized' : '';
-      irp6cOpts += `<option value="${y}-first" ${curSelC===y+'-first'?'selected':''}>${y}-01 First Period${tag1}</option>`;
-      irp6cOpts += `<option value="${y}-second" ${curSelC===y+'-second'?'selected':''}>${y}-02 Second Period${tag2}</option>`;
-    }
-
     const tabBtn = (key, lbl) =>
       `<button class="subnav-tab ${compType===key?'active':''}" style="font-size:0.82rem;padding:7px 16px;"
         onclick="setIRP6CompType('${key}')">${lbl}</button>`;
@@ -3840,13 +3855,6 @@ function renderIRP6Tab() {
         </div>
 
         <div class="form-grid" style="margin-bottom:0;">
-
-          <div class="form-group span-2">
-            <label class="form-label">Submission period</label>
-            <select class="form-control" id="irp6c-submission" onchange="onIRP6CompanySubmissionChange()" style="font-size:0.9rem;">
-              ${irp6cOpts}
-            </select>
-          </div>
 
           <div class="form-group span-2">
             <label class="form-label">Estimated annual taxable income <span class="req">*</span></label>
@@ -3897,18 +3905,6 @@ function renderIRP6Tab() {
   const paye       = irp6.paye       ?? 0;
   const firstPay   = irp6.firstPay   ?? 0;
 
-  // Build combined year+period dropdown options
-  const curSel = `${year}-${period}`;
-  let irp6Opts = '';
-  for (const y of availIndiv) {
-    const fin1 = _loadIrp6Finalize(c.id, y, 'first');
-    const fin2 = _loadIrp6Finalize(c.id, y, 'second');
-    const tag1 = fin1 && fin1.finalized ? ' ✓ Finalized' : '';
-    const tag2 = fin2 && fin2.finalized ? ' ✓ Finalized' : '';
-    irp6Opts += `<option value="${y}-first" ${curSel===y+'-first'?'selected':''}>${y}-01 First Period${tag1}</option>`;
-    irp6Opts += `<option value="${y}-second" ${curSel===y+'-second'?'selected':''}>${y}-02 Second Period${tag2}</option>`;
-  }
-
   _refreshIrp6Finalize();
   const irp6FinSection = _irp6FinalizeSection();
   const irp6Finalized  = !!(state._irp6Finalize && state._irp6Finalize.finalized);
@@ -3918,13 +3914,6 @@ function renderIRP6Tab() {
       <div class="card-title">IRP6 Provisional Tax — Individual</div>
 
       <div class="form-grid" style="margin-bottom:0;">
-
-        <div class="form-group span-2">
-          <label class="form-label">Submission period</label>
-          <select class="form-control" id="irp6-submission" onchange="onIRP6SubmissionChange()" style="font-size:0.9rem;">
-            ${irp6Opts}
-          </select>
-        </div>
 
         <div class="form-group">
           <label class="form-label">Age group</label>
@@ -3983,7 +3972,7 @@ function renderIRP6Tab() {
 // ── IRP6 state sync ────────────────────────────────────────────
 function onIRP6SubmissionChange() {
   if (!state.irp6) state.irp6 = {};
-  const sel = document.getElementById('irp6-submission')?.value || '';
+  const sel = document.getElementById('irp6-action-bar-select')?.value || '';
   const [y, p] = sel.split('-');
   state.irp6.year   = y || _irp6DefaultYear();
   state.irp6.period = p || 'first';
@@ -3992,7 +3981,7 @@ function onIRP6SubmissionChange() {
 
 function onIRP6Change() {
   if (!state.irp6) state.irp6 = {};
-  const sel = document.getElementById('irp6-submission')?.value || '';
+  const sel = document.getElementById('irp6-action-bar-select')?.value || '';
   const [y, p] = sel.split('-');
   state.irp6.year       = y || _irp6DefaultYear();
   state.irp6.period     = p || 'first';
@@ -4014,7 +4003,7 @@ function onIRP6Change() {
 // ── IRP6 company sub-tab switcher ─────────────────────────────
 function setIRP6CompType(key) {
   if (!state.irp6c) state.irp6c = {};
-  const selC = document.getElementById('irp6c-submission')?.value || '';
+  const selC = document.getElementById('irp6-action-bar-select')?.value || '';
   const [yc, pc] = selC.split('-');
   state.irp6c.year     = yc || _irp6DefaultYear();
   state.irp6c.period   = pc || 'first';
@@ -4026,7 +4015,7 @@ function setIRP6CompType(key) {
 
 function onIRP6CompanySubmissionChange() {
   if (!state.irp6c) state.irp6c = {};
-  const selC = document.getElementById('irp6c-submission')?.value || '';
+  const selC = document.getElementById('irp6-action-bar-select')?.value || '';
   const [yc, pc] = selC.split('-');
   state.irp6c.year   = yc || _irp6DefaultYear();
   state.irp6c.period = pc || 'first';
@@ -4036,7 +4025,7 @@ function onIRP6CompanySubmissionChange() {
 // ── IRP6 company state sync ────────────────────────────────────
 function onIRP6CompanyChange() {
   if (!state.irp6c) state.irp6c = {};
-  const selC = document.getElementById('irp6c-submission')?.value || '';
+  const selC = document.getElementById('irp6-action-bar-select')?.value || '';
   const [yc, pc] = selC.split('-');
   state.irp6c.year     = yc || _irp6DefaultYear();
   state.irp6c.period   = pc || 'first';
