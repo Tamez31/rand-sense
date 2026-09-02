@@ -1,0 +1,61 @@
+date,description,amount,balance,account_code,account_name,financial_year,period
+2024-04-02,"#Tenugkerende Item Fooi 13",-6,-743.84,6004,"Bank Charges",FY2025,April 2024
+2024-04-02,"FNB OB Kolleksie Voxtelecom",-73.52,-817.36,6005,"Cell Phone",FY2025,April 2024
+2024-04-02,"Onbetaalde Magneetband R18659839 (reversed Voxtelecom)",73.52,-737.84,6005,"Cell Phone",FY2025,April 2024
+2024-04-15,"Onbetaalde Magneetband (reversed Telkom)",731.54,908.18,6005,"Cell Phone",FY2025,April 2024
+2024-04-15,"Magband Debiet Telkc5009101118U240415",-731.54,170.64,6005,"Cell Phone",FY2025,April 2024
+2024-04-15,"#Tenugkerende Item Fooi 15",-6,902.18,6004,"Bank Charges",FY2025,April 2024
+2024-04-15,"#Tenugkerende Item Fooi 14",-6,176.64,6004,"Bank Charges",FY2025,April 2024
+2024-04-15,"Onbetaalde Magneetband (reversed debit order)",1000,182.64,6005,"Cell Phone",FY2025,April 2024
+2024-04-18,"Magband Debiet Telkommobi5036261190115458",-1000,-829.36,6005,"Cell Phone",FY2025,April 2024
+2024-04-18,"Smart-Ap Oorplasing Van Cjp",1000,170.64,3001,"Owner's Equity / Capital",FY2025,April 2024
+2024-04-22,"Magband Debiet Cap Legacy2637303671 Netcash",3500,3670.64,4001,"Sales / Revenue",FY2025,April 2024
+2024-04-22,"Magband Debiet Miwayfile Mnw10086066672 40322",-342.8,3327.84,6008,"Insurance",FY2025,April 2024
+2024-04-26,"#Maandelike Diens Fooi",-342.8,2985.04,6004,"Bank Charges",FY2025,April 2024
+2024-04-26,"Magband Debiet Telkommobi5009101118U240425",-315,2670.04,6005,"Cell Phone",FY2025,April 2024
+2024-06-15,"Magband Debiet Telkommobi5036261190115784 1490",-1000,1661.81,6005,"Cell Phone",FY2025,June 2024
+2024-06-25,"Magband Debiet Miwayfile Mmw10086066672 40625",-342.8,1319.01,6008,"Insurance",FY2025,June 2024
+2024-06-28,"#Maandelike Diens Fooi",-315,1004.01,6004,"Bank Charges",FY2025,June 2024
+2024-06-29,"Magband Debiet Telkommobi5009101180115803 0749",-359,645.01,6005,"Cell Phone",FY2025,June 2024
+2024-07-01,"DebiCheck Internal D/O Frbcc Dcre228788",-168.5,476.51,6008,"Insurance",FY2025,July 2024
+2024-07-02,"Smart-Ap Oorplasing Van Cjp",3000,3476.51,3001,"Owner's Equity / Capital",FY2025,July 2024
+2024-07-05,"Smart-Ap Betaling Na C.Fortuin",-1741,1735.51,3003,"Drawings",FY2025,July 2024
+2024-07-15,"Magband Debiet Telkommobi5036261190115931 764",-985.5,750.01,6005,"Cell Phone",FY2025,July 2024
+2024-07-25,"Magband Debiet Miwayfile Mnw10086066672 40725",-342.8,407.21,6008,"Insurance",FY2025,July 2024
+2024-07-26,"Int Oorplasing Van Cjc [Ref: 101583882]",3000,3407.21,3001,"Owner's Equity / Capital",FY2025,July 2024
+2024-07-27,"#Maandelike Diens Fooi",-330,3077.21,6004,"Bank Charges",FY2025,July 2024
+2024-07-31,"Magband Debiet Telkommobi5009101180115950 2048",-359,2718.21,6005,"Cell Phone",FY2025,July 2024
+2024-08-01,"DebiCheck Internal D/O Frbcc Dcre228788",-170.5,2547.71,6008,"Insurance",FY2025,August 2024
+2024-08-15,"Magband Debiet Telkommobi5036261190116078 6592",-899.1,1648.61,6005,"Cell Phone",FY2025,August 2024
+2024-08-23,"Magband Debiet Miwayfile Mnw10086066672 40825",-342.8,1305.81,6008,"Insurance",FY2025,August 2024
+2024-08-26,"Int Oorplasing Van Cjc",2000,3305.81,3001,"Owner's Equity / Capital",FY2025,August 2024
+2024-08-28,"#Maandelike Diens Fooi",-330,2975.81,6004,"Bank Charges",FY2025,August 2024
+2024-08-31,"Magband Debiet Telkommobi5009101180116165 934",-359,2616.81,6005,"Cell Phone",FY2025,August 2024
+2024-09-16,"Magband Debiet Telkommobi5036261190116318 8280",-899.1,1717.71,6005,"Cell Phone",FY2025,September 2024
+2024-09-25,"Magband Debiet Miwayfile Mnw10086066672 40925",-342.8,1374.91,6008,"Insurance",FY2025,September 2024
+2024-09-26,"Int Betaling Na C.Fortuin (Home)",-400.2,974.71,3003,"Drawings",FY2025,September 2024
+2024-09-28,"#Maandelike Diens Fooi",-330,644.71,6004,"Bank Charges",FY2025,September 2024
+2024-09-30,"Magband Debiet Telkommobi5009101180116374 123",-359,285.71,6005,"Cell Phone",FY2025,September 2024
+2024-10-11,"Int Oorplasing Van Cjc",5000,5285.71,3001,"Owner's Equity / Capital",FY2025,October 2024
+2024-10-15,"Magband Debiet Telkommobi5036261190116477 133",-899.1,4386.61,6005,"Cell Phone",FY2025,October 2024
+2024-10-25,"Magband Debiet Miwayfile Mnw10086066672 41025",-394.22,3992.39,6008,"Insurance",FY2025,October 2024
+2024-10-28,"#Maandelike Diens Fooi",-330,3662.39,6004,"Bank Charges",FY2025,October 2024
+2024-10-31,"Magband Debiet Telkommobi5009101180116486 1768",-359,3303.39,6005,"Cell Phone",FY2025,October 2024
+2024-11-15,"Magband Debiet Telkommobi",-899.1,2404.29,6005,"Cell Phone",FY2025,November 2024
+2024-11-25,"Magband Debiet Miwayfile Mnw10086066667",-394.22,2010.07,6008,"Insurance",FY2025,November 2024
+2024-11-28,"#Maandelike Diens Fooi",-330,1680.07,6004,"Bank Charges",FY2025,November 2024
+2024-11-30,"Magband Debiet Telkommobi5009101180116493 831",-359,1321.07,6005,"Cell Phone",FY2025,November 2024
+2024-12-10,"Int Oorplasing Van Cjc",5000,6321.07,3001,"Owner's Equity / Capital",FY2025,December 2024
+2024-12-15,"Magband Debiet Telkommobi",-899.1,5421.97,6005,"Cell Phone",FY2025,December 2024
+2024-12-25,"Magband Debiet Miwayfile Mnw10086066667",-394.22,5027.75,6008,"Insurance",FY2025,December 2024
+2024-12-28,"#Maandelike Diens Fooi",-330,4697.75,6004,"Bank Charges",FY2025,December 2024
+2024-12-31,"Magband Debiet Telkommobi",-359,4338.75,6005,"Cell Phone",FY2025,December 2024
+2025-01-15,"Magband Debiet Telkommobi5036261190115614 9182",-899.1,3439.65,6005,"Cell Phone",FY2025,January 2025
+2025-01-24,"Magband Debiet Miwayfile Mnw10086066667 250125",-394.22,3045.43,6008,"Insurance",FY2025,January 2025
+2025-01-28,"#Maandelike Diens Fooi",-330,2715.43,6004,"Bank Charges",FY2025,January 2025
+2025-01-31,"Magband Debiet Telkommobi5009101180116932 038",-359,2356.43,6005,"Cell Phone",FY2025,January 2025
+2025-02-15,"Magband Debiet Telkommobi5036261190117063 5173",-899.1,1457.33,6005,"Cell Phone",FY2025,February 2025
+2025-02-17,"Int Oorplasing Van Cjc",2000,3457.33,3001,"Owner's Equity / Capital",FY2025,February 2025
+2025-02-25,"Magband Debiet Miwayfile Mnw10086066672 50225",-394.22,3063.11,6008,"Insurance",FY2025,February 2025
+2025-02-28,"#Maandelike Diens Fooi",-330,2374.11,6004,"Bank Charges",FY2025,February 2025
+2025-02-28,"Magband Debiet Telkommobi5009101180117150 1460",-359,2704.11,6005,"Cell Phone",FY2025,February 2025

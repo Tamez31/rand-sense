@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "rand-sense-static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8934"],
+      "port": 8934,
+      "url": "http://localhost:8934/Rand-Sense.html"
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Recording RandSense Ad</title>
+<style>
+  body { margin: 0; background: #111; color: #fff; font-family: system-ui; display: flex; flex-direction: column; align-items: center; }
+  #status { padding: 20px; font-size: 18px; }
+  iframe { border: none; }
+  a { color: #7EEAA8; font-size: 20px; padding: 20px; }
+</style>
+</head>
+<body>
+<div id="status">Preparing to record...</div>
+<canvas id="canvas" width="1080" height="1920" style="display:none;"></canvas>
+<div id="download-area"></div>
+
+<script>
+async function record() {
+  const status = document.getElementById('status');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Create an offscreen iframe to render the ad at full resolution
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '0';
+  iframe.style.top = '0';
+  iframe.style.width = '1080px';
+  iframe.style.height = '1920px';
+  iframe.style.transform = 'scale(0.3)';
+  iframe.style.transformOrigin = 'top left';
+  iframe.style.zIndex = '1';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
+
+  // Load the ad
+  status.textContent = 'Loading ad...';
+
+  // We'll use MediaRecorder on the canvas
+  const stream = canvas.captureStream(30); // 30 fps
+  const chunks = [];
+
+  // Try webm first, fall back to mp4
+  let mimeType = 'video/webm;codecs=vp9';
+  if (!MediaRecorder.isTypeSupported(mimeType)) {
+    mimeType = 'video/webm;codecs=vp8';
+  }
+  if (!MediaRecorder.isTypeSupported(mimeType)) {
+    mimeType = 'video/webm';
+  }
+
+  const recorder = new MediaRecorder(stream, {
+    mimeType,
+    videoBitsPerSecond: 8000000 // 8 Mbps for quality
+  });
+
+  recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) chunks.push(e.data);
+  };
+
+  recorder.onstop = () => {
+    status.textContent = 'Encoding complete! Download below.';
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'randsense-ad-1080x1920.webm';
+    a.textContent = '⬇ Download RandSense Ad Video (WebM)';
+    document.getElementById('download-area').appendChild(a);
+
+    // Also show a video preview
+    const video = document.createElement('video');
+    video.src = url;
+    video.controls = true;
+    video.style.width = '270px';
+    video.style.height = '480px';
+    video.style.marginTop = '10px';
+    document.getElementById('download-area').appendChild(video);
+  };
+
+  // Load the ad HTML into the iframe
+  const adResponse = await fetch('randsense-ad.html');
+  const adHTML = await adResponse.text();
+
+  iframe.srcdoc = adHTML;
+
+  await new Promise(resolve => {
+    iframe.onload = resolve;
+  });
+
+  // Override the iframe's viewport scaling so it renders at 1:1
+  const iframeDoc = iframe.contentDocument;
+  const viewport = iframeDoc.getElementById('viewport');
+  if (viewport) {
+    viewport.style.transform = 'none';
+  }
+  // Remove the script that auto-scales
+  const scripts = iframeDoc.querySelectorAll('script');
+  scripts.forEach(s => s.remove());
+
+  status.textContent = 'Recording 16 seconds...';
+  recorder.start();
+
+  // Capture frames at ~30fps for 16.5 seconds
+  const fps = 30;
+  const duration = 16500;
+  const frameInterval = 1000 / fps;
+  const startTime = performance.now();
+
+  function captureFrame() {
+    const elapsed = performance.now() - startTime;
+    if (elapsed >= duration) {
+      recorder.stop();
+      iframe.remove();
+      return;
+    }
+
+    try {
+      // Use html2canvas-style approach: draw iframe content to canvas
+      // Since we can't directly drawImage an iframe, we serialize to SVG foreignObject
+      const html = iframeDoc.documentElement.outerHTML;
+      const svgData = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">
+          <foreignObject width="100%" height="100%">
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              ${html}
+            </div>
+          </foreignObject>
+        </svg>`;
+
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, 1080, 1920);
+        ctx.drawImage(img, 0, 0, 1080, 1920);
+        URL.revokeObjectURL(url);
+
+        const secs = (elapsed / 1000).toFixed(1);
+        status.textContent = `Recording... ${secs}s / 16.0s`;
+
+        requestAnimationFrame(captureFrame);
+      };
+      img.onerror = () => {
+        // If SVG foreignObject fails (tainted), fall back to solid frames
+        ctx.fillStyle = '#0D3B1E';
+        ctx.fillRect(0, 0, 1080, 1920);
+        URL.revokeObjectURL(url);
+        requestAnimationFrame(captureFrame);
+      };
+      img.src = url;
+    } catch(e) {
+      requestAnimationFrame(captureFrame);
+    }
+  }
+
+  // Small delay to let animations start
+  await new Promise(r => setTimeout(r, 100));
+  captureFrame();
+}
+
+record();
+</script>
+</body>
+</html>

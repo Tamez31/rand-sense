@@ -431,6 +431,7 @@ const ITR12_CATEGORIES = {
     { code: 'ITR-EXP-MOT',  name: 'Repairs and Maintenance - Vehicle', group: 'travel' },
     { code: 'ITR-EXP-UNI',  name: 'Uniforms / protective clothing' },
     { code: 'ITR-EXP-OTH',  name: 'Other expenses' },
+    { code: 'ITR-EXP-COS',  name: 'Cost of sales' },
   ],
   // Personal/non-business transactions pulled through the business account
   // (e.g. rent, groceries, personal purchases). Deliberately excluded from

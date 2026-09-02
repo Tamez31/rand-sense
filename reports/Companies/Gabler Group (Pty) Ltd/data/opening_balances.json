@@ -1,0 +1,191 @@
+[
+  {
+    "id": "31bb9ade-81be-40b7-bfe9-f8b0c2eb74a7",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2026",
+    "account_code": "1700",
+    "account_name": "Loan Receivable: LLN Gabler",
+    "amount": 994480,
+    "created_at": "2026-06-30T12:17:51.257028"
+  },
+  {
+    "id": "f6e76e10-e4ff-4995-9726-07ee0c1c4b7d",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2026",
+    "account_code": "1710",
+    "account_name": "Loan Receivable: HA Gabler",
+    "amount": 986224,
+    "created_at": "2026-06-30T12:17:51.257028"
+  },
+  {
+    "id": "63c617ae-7274-4f28-82e5-ecbea0318a0c",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2026",
+    "account_code": "1001",
+    "account_name": "Bank Account",
+    "amount": 15942,
+    "created_at": "2026-06-30T12:17:51.257028"
+  },
+  {
+    "id": "61e22620-4bd1-43d4-8be2-87338185329f",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2026",
+    "account_code": "3001",
+    "account_name": "Owner's Equity / Share Capital",
+    "amount": -100,
+    "created_at": "2026-06-30T12:17:51.257028"
+  },
+  {
+    "id": "72211cd9-baa6-48bc-b8e1-88b66304433d",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2026",
+    "account_code": "3002",
+    "account_name": "Retained Earnings",
+    "amount": -1994546,
+    "created_at": "2026-06-30T12:17:51.257028"
+  },
+  {
+    "id": "ce63fa8b-ad7e-40d5-81e7-aa4f012aee21",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2026",
+    "account_code": "2001",
+    "account_name": "Trade Creditors",
+    "amount": -2000,
+    "created_at": "2026-06-30T12:17:51.257028"
+  },
+  {
+    "id": "ee72c054-513e-45ac-b817-197969f1b9a2",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "4001",
+    "account_name": "Sales / Revenue",
+    "amount": 1532496,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "f7d7c472-ebee-4899-97fc-96932c7e4862",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "5003",
+    "account_name": "Funeral Expenses",
+    "amount": -225999,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "632060bf-56c2-4b21-b16c-3cfe17580a90",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "5004",
+    "account_name": "Subcontractors",
+    "amount": -91150,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "357302c6-54a8-43cb-9e04-eb7d4a5d7146",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6001",
+    "account_name": "Accounting Fees",
+    "amount": -2000,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "8ba2c16f-11fd-4785-9d3d-4614b0332ccf",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6004",
+    "account_name": "Bank Charges",
+    "amount": -12847,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "832c1348-065f-4b6c-8b6c-e9ebee7150d6",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6008",
+    "account_name": "Insurance",
+    "amount": -117423,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "b481099b-f215-43c7-a090-229723c924ac",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6012",
+    "account_name": "Office Expenses",
+    "amount": -80,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "4a97d1e2-88c5-4ca1-a7b9-135336e10f3d",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6013",
+    "account_name": "Printing & Stationery",
+    "amount": -75,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "3729d0df-949a-499d-a240-5ace0a109246",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6014",
+    "account_name": "Rent",
+    "amount": -240000,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "1ffed7ee-a06d-4f10-877b-d928644e019a",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6015",
+    "account_name": "Repairs & Maintenance",
+    "amount": -8467,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "51e271da-2296-4b10-b243-e6770dd1baed",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6016",
+    "account_name": "Salaries & Wages",
+    "amount": -312365,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "cf58a6f6-9cb7-4b6f-8ff6-3f5711485b93",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6021",
+    "account_name": "Other Expenses",
+    "amount": -26,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "e4bbcf98-3795-4373-991b-de43c8dc27ea",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6022",
+    "account_name": "Director's Remuneration",
+    "amount": -120000,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "923d4fde-897e-4da6-bcb0-1514978fe9eb",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6023",
+    "account_name": "Fuel / Petrol",
+    "amount": -85421,
+    "created_at": "2026-06-30T17:11:55.38112"
+  },
+  {
+    "id": "5b69868b-76a9-476c-8e1b-10259b008fc6",
+    "client_id": "55eaeaf2-4bbb-4d3f-a20e-9a0957bfbe8f",
+    "financial_year": "2025",
+    "account_code": "6024",
+    "account_name": "Rental — Motor Vehicles",
+    "amount": -95000,
+    "created_at": "2026-06-30T17:11:55.38112"
+  }
+]

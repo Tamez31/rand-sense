@@ -1,0 +1,407 @@
+[
+  {
+    "id": "eeb6037c-07cf-457b-8003-0a85ea57d750",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "1001",
+    "account_name": "Bank Account",
+    "account_type": "asset",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "177236f1-1ae1-4b61-bd39-33bc8f1b0b9e",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "1100",
+    "account_name": "Trade Debtors",
+    "account_type": "asset",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "f25d42a7-0386-469b-901c-e08a0a471061",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "1200",
+    "account_name": "Inventory",
+    "account_type": "asset",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "ac123f2c-e875-433e-b728-0a3499d7be0c",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "1300",
+    "account_name": "Prepaid Expenses",
+    "account_type": "asset",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "183dd73c-a38a-4a29-8854-d434f526508b",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "1500",
+    "account_name": "Property, Plant & Equipment",
+    "account_type": "asset",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "c088f948-5822-4140-a62e-cd01aea3865c",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "1600",
+    "account_name": "Accumulated Depreciation",
+    "account_type": "asset",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "d568ddbb-f9b5-48cf-b325-11d392d1b238",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "1700",
+    "account_name": "Loan Receivable: LLN Gabler",
+    "account_type": "asset",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "ea98f7af-05ce-4ef8-86cb-47bbd31ba90a",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "1710",
+    "account_name": "Loan Receivable: HA Gabler",
+    "account_type": "asset",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "2fa3a78b-f609-41ff-b1f8-f3ccaea0cf9e",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "2001",
+    "account_name": "Trade Creditors",
+    "account_type": "liability",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "69fac235-c985-421c-8107-dede12b3f0a9",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "2002",
+    "account_name": "VAT Payable",
+    "account_type": "liability",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "6566b4cb-6460-43c2-b624-820c22526324",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "2003",
+    "account_name": "PAYE Payable",
+    "account_type": "liability",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "9a967771-935d-467e-8622-7de732abf15f",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "2100",
+    "account_name": "Loans Payable",
+    "account_type": "liability",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "569667bb-2b26-45e0-8d2b-b54ed81473aa",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "3001",
+    "account_name": "Owner's Equity / Share Capital",
+    "account_type": "equity",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "aa0eb403-6dd7-4459-9ad9-f5f4bd0f651b",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "3002",
+    "account_name": "Retained Earnings",
+    "account_type": "equity",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "9cbe5bbe-739d-4fa7-a199-e97bc65f3fa0",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "3003",
+    "account_name": "Drawings",
+    "account_type": "equity",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "40e8cb0a-002d-4dba-ae96-e79ba377d582",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "4001",
+    "account_name": "Sales / Revenue",
+    "account_type": "income",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "eb893cfd-fe10-4ff7-8be2-7a17c82dabd5",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "4002",
+    "account_name": "Other Income",
+    "account_type": "income",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "bc303374-6fb9-4fe6-bde9-2513a05a3b5c",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "4003",
+    "account_name": "Commission Income",
+    "account_type": "income",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "f0d4ee94-22a1-4b38-959a-8c400d325b17",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "5001",
+    "account_name": "Cost of Goods Sold",
+    "account_type": "cost_of_sales",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "68b18338-5fae-41c3-bdc1-c5e22829c633",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "5002",
+    "account_name": "Direct Labour",
+    "account_type": "cost_of_sales",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "0702b18b-54de-4785-8894-50aee1bf5979",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "5003",
+    "account_name": "Funeral Expenses",
+    "account_type": "cost_of_sales",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "337327cb-a4dc-4b88-ac92-2fb8ba1e987f",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "5004",
+    "account_name": "Subcontractors",
+    "account_type": "cost_of_sales",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "10026e18-d386-46f8-a4e5-ccd07b582630",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6001",
+    "account_name": "Accounting Fees",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "c8bf4566-8ac5-4f4f-bcff-e1cbaa44aeb2",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6002",
+    "account_name": "Advertising",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "9af50378-b5a8-43d7-9c40-4aad76d11174",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6003",
+    "account_name": "Bad Debts",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "a0c96ab6-b2aa-4387-9fef-e5f7191e0c71",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6004",
+    "account_name": "Bank Charges",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "0d5e7a18-c140-46ed-8a65-0a31f6439dd8",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6005",
+    "account_name": "Cell Phone",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "f1358592-f3f6-4718-9570-95805eb10de4",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6006",
+    "account_name": "Depreciation / Wear & Tear",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "e40679b4-b959-4556-b4f2-ecfdce143e8e",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6007",
+    "account_name": "Entertainment",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "1660a806-d68d-44bd-a93a-bc3aec5a7041",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6008",
+    "account_name": "Insurance",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "6bc7e3a6-ca00-4f1e-9077-4df094fe8a89",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6009",
+    "account_name": "Internet",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "ccf2c9f5-d490-4a26-b652-0cc46ede6ded",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6010",
+    "account_name": "Legal Fees",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "1504c48c-a627-4291-8db2-9d839cbbc55c",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6011",
+    "account_name": "Motor Vehicle Expenses",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "f00539a9-0d76-4f38-bddb-f90a7303d937",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6012",
+    "account_name": "Office Expenses",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "a5afab58-2b77-4c02-80f1-2358e541e163",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6013",
+    "account_name": "Printing & Stationery",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "e3427e46-ae8f-4048-a4a5-0e56981b8ef9",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6014",
+    "account_name": "Rent",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "53541b3c-a294-4a6f-a1a6-e42343aa280b",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6015",
+    "account_name": "Repairs & Maintenance",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "c610edb2-780d-4570-a186-c21bd87ec5fe",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6016",
+    "account_name": "Salaries & Wages",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "2e71b4cf-4a5d-4d7a-b16c-3081a9426e6c",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6017",
+    "account_name": "Subscriptions",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "f30d5e76-706f-414e-afe6-70b58724e515",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6018",
+    "account_name": "Telephone",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "1ba3062f-3405-4473-90b2-07b563c8af45",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6019",
+    "account_name": "Travel - Local",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "4c444344-1c37-45e8-98e9-3525c2e8d61e",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6020",
+    "account_name": "Utilities",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "4c50b3f8-e24b-47c8-afe2-7713da360475",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6021",
+    "account_name": "Other Expenses",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "ffc08396-fd8c-498b-b69b-63afb1062834",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6022",
+    "account_name": "Fuel",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  },
+  {
+    "id": "13c410d5-6d0d-4b5d-845d-c1e34591df87",
+    "client_id": "dd17e346-b57d-4361-84bc-ad6df0932615",
+    "account_code": "6024",
+    "account_name": "Home Office - Bond Interest",
+    "account_type": "expense",
+    "is_active": true,
+    "created_at": "2026-07-15T12:12:01.304276"
+  }
+]

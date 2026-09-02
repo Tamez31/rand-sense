@@ -1,0 +1,504 @@
+<title>RandSense Reels Ad</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #1B5E20;
+    --bg-deep: #0E3A14;
+    --mint: #8FD9A8;
+    --white: #FFFFFF;
+    --white-70: rgba(255,255,255,0.7);
+    --white-40: rgba(255,255,255,0.4);
+    --gold: #D4A843;
+    --wa-green: #25D366;
+
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  body {
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .viewport {
+    width: 1080px;
+    height: 1920px;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Ambient glow */
+  .viewport::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 30% 45%, rgba(143,217,168,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 60%, rgba(143,217,168,0.05) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── SAFE ZONE OVERLAY (toggle with checkbox) ─── */
+  #safe-toggle { display: none; }
+  .toggle-label {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 9999;
+    background: rgba(0,0,0,0.8);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+    font-family: system-ui;
+  }
+  .safe-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  #safe-toggle:checked ~ .viewport .safe-overlay { opacity: 1; }
+
+  .safe-top {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 269px;
+    background: rgba(255,0,0,0.2);
+    border-bottom: 2px dashed rgba(255,0,0,0.6);
+  }
+  .safe-top::after {
+    content: 'TOP UNSAFE – 14% (269px)';
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    font-size: 18px; color: rgba(255,0,0,0.8); font-family: monospace;
+  }
+  .safe-bottom {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 672px;
+    background: rgba(255,0,0,0.2);
+    border-top: 2px dashed rgba(255,0,0,0.6);
+  }
+  .safe-bottom::after {
+    content: 'BOTTOM UNSAFE – 35% (672px)';
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    font-size: 18px; color: rgba(255,0,0,0.8); font-family: monospace;
+  }
+  .safe-left {
+    position: absolute; top: 269px; bottom: 672px; left: 0;
+    width: 65px;
+    background: rgba(255,165,0,0.15);
+    border-right: 1px dashed rgba(255,165,0,0.5);
+  }
+  .safe-right {
+    position: absolute; top: 269px; bottom: 672px; right: 0;
+    width: 65px;
+    background: rgba(255,165,0,0.15);
+    border-left: 1px dashed rgba(255,165,0,0.5);
+  }
+  .safe-square {
+    position: absolute;
+    top: 420px; left: 65px;
+    width: 950px; height: 1080px;
+    border: 2px dashed rgba(0,255,0,0.4);
+  }
+  .safe-square::after {
+    content: 'SAFE SQUARE 950×1080';
+    position: absolute; top: -28px; left: 0;
+    font-size: 16px; color: rgba(0,255,0,0.6); font-family: monospace;
+  }
+
+  /* ─── CONTENT CONTAINER (inside safe square) ─── */
+  .safe-content {
+    position: absolute;
+    top: 420px;
+    left: 65px;
+    width: 950px;
+    height: 1080px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+
+  /* ─── SCENE 1: HOOK (0-3s) ─── */
+  .hook {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 40px;
+    opacity: 0;
+    animation: fade-in 0.3s var(--ease-out) 0.1s forwards,
+               fade-out 0.4s var(--ease-in-out) 4.6s forwards;
+  }
+
+  .hook-text {
+    text-align: center;
+    line-height: 1.15;
+  }
+
+  .hook-word {
+    display: inline-block;
+    font-size: 152px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: -4px;
+    opacity: 0;
+    transform: translateY(50px) scale(0.9);
+  }
+
+  .hook-word:nth-child(1) { animation: hook-word-in 0.5s var(--ease-back) 0.15s forwards; }
+  .hook-word:nth-child(2) { animation: hook-word-in 0.5s var(--ease-back) 0.30s forwards; }
+  .hook-word:nth-child(3) { animation: hook-word-in 0.5s var(--ease-back) 0.45s forwards; }
+  .hook-word:nth-child(4) { animation: hook-word-in 0.5s var(--ease-back) 0.60s forwards; }
+  .hook-word:nth-child(5) { animation: hook-word-in 0.5s var(--ease-back) 0.75s forwards; }
+  .hook-word:nth-child(6) { animation: hook-word-in 0.5s var(--ease-back) 0.90s forwards; }
+
+  .hook-word.mint { color: var(--mint); }
+
+  /* ─── SCENE 2: VALUE (3-8s) ─── */
+  .value {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 50px;
+    opacity: 0;
+    animation: fade-in 0.4s var(--ease-out) 5.1s forwards,
+               fade-out 0.4s var(--ease-in-out) 10.6s forwards;
+  }
+
+  .value-line {
+    font-size: 88px;
+    font-weight: 600;
+    color: var(--white);
+    text-align: center;
+    line-height: 1.25;
+    opacity: 0;
+    transform: translateY(30px);
+  }
+
+  .value-line:nth-child(1) { animation: slide-up 0.5s var(--ease-out) 5.4s forwards; }
+  .value-line:nth-child(2) { animation: slide-up 0.5s var(--ease-out) 5.7s forwards; }
+  .value-line:nth-child(3) { animation: slide-up 0.5s var(--ease-out) 6.0s forwards; }
+
+  .value-line .mint { color: var(--mint); }
+
+  .value-accent {
+    width: 80px;
+    height: 4px;
+    background: var(--mint);
+    border-radius: 2px;
+    margin-top: 40px;
+    opacity: 0;
+    transform: scaleX(0);
+    animation: bar-in 0.6s var(--ease-out) 6.5s forwards;
+  }
+
+  .value-sub {
+    font-size: 56px;
+    font-weight: 400;
+    color: var(--white-70);
+    margin-top: 32px;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(16px);
+    animation: slide-up 0.5s var(--ease-out) 7.0s forwards;
+  }
+
+  /* ─── SCENE 3: PROOF (8-13s) ─── */
+  .proof {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 40px;
+    opacity: 0;
+    animation: fade-in 0.4s var(--ease-out) 11.1s forwards,
+               fade-out 0.4s var(--ease-in-out) 16.6s forwards;
+  }
+
+  .wa-badge {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: var(--wa-green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 44px;
+    opacity: 0;
+    transform: scale(0.5);
+    animation: pop-in 0.5s var(--ease-back) 11.4s forwards;
+    box-shadow: 0 4px 28px rgba(37,211,102,0.35);
+  }
+
+  .wa-badge svg { width: 52px; height: 52px; fill: var(--white); }
+
+  .proof-number {
+    font-size: 108px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 3px;
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+    animation: slide-up-scale 0.6s var(--ease-out) 11.8s forwards,
+               number-pulse 1.8s var(--ease-in-out) 12.6s 2;
+  }
+
+  .proof-credibility {
+    font-size: 80px;
+    font-weight: 600;
+    color: var(--white);
+    text-align: center;
+    margin-top: 40px;
+    line-height: 1.4;
+    opacity: 0;
+    transform: translateY(16px);
+    animation: slide-up 0.5s var(--ease-out) 12.3s forwards;
+  }
+
+  /* ─── SCENE 4: CTA (13-16s) ─── */
+  .cta {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 40px;
+    opacity: 0;
+    animation: fade-in 0.5s var(--ease-out) 17.0s forwards;
+  }
+
+  .cta-action {
+    font-size: 128px;
+    font-weight: 700;
+    color: var(--white);
+    text-align: center;
+    letter-spacing: -3px;
+    line-height: 1.15;
+    opacity: 0;
+    transform: scale(0.85);
+    animation: cta-pop 0.6s var(--ease-back) 17.3s forwards;
+  }
+
+  .cta-action .mint { color: var(--mint); }
+
+  .cta-tagline {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 48px;
+    opacity: 0;
+    animation: fade-in 0.5s var(--ease-out) 18.0s forwards;
+  }
+
+  .cta-tag-icon {
+    width: 56px;
+    height: 56px;
+    background: var(--bg-deep);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .cta-tag-icon span {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--white);
+  }
+
+  .cta-tag-text {
+    font-size: 44px;
+    font-weight: 500;
+    color: var(--white-70);
+  }
+
+  .cta-tag-text em {
+    font-style: normal;
+    color: var(--mint);
+  }
+
+  /* ─── WATERMARK (appears at 3s, persists) ─── */
+  .watermark {
+    position: absolute;
+    top: 290px;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 50;
+    opacity: 0;
+    animation: fade-in 0.5s var(--ease-out) 0.1s forwards;
+  }
+
+  .wm-icon {
+    width: 110px;
+    height: 110px;
+    background: var(--bg-deep);
+    border-radius: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .wm-icon span {
+    font-size: 60px;
+    font-weight: 700;
+    color: var(--white);
+  }
+
+  .wm-text {
+    font-size: 80px;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+
+  .wm-text .r { color: var(--white); }
+  .wm-text .s { color: var(--mint); }
+
+  /* ─── KEYFRAMES ─── */
+  @keyframes fade-in { to { opacity: 1; } }
+  @keyframes fade-out { to { opacity: 0; } }
+
+  @keyframes hook-word-in {
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes slide-up {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slide-up-scale {
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes pop-in {
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes bar-in {
+    to { opacity: 1; transform: scaleX(1); }
+  }
+
+  @keyframes number-pulse {
+    0%, 100% { transform: scale(1); text-shadow: 0 0 0 transparent; }
+    50% { transform: scale(1.05); text-shadow: 0 0 36px rgba(212,168,67,0.45); }
+  }
+
+  @keyframes cta-pop {
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  /* ─── BROWSER PREVIEW SCALING ─── */
+  @media (max-height: 1920px) {
+    .viewport {
+      transform-origin: top center;
+    }
+  }
+</style>
+
+<input type="checkbox" id="safe-toggle">
+<label for="safe-toggle" class="toggle-label">Toggle Safe Zones</label>
+
+<div class="viewport" id="viewport">
+
+  <!-- Safe zone guide overlay -->
+  <div class="safe-overlay">
+    <div class="safe-top"></div>
+    <div class="safe-bottom"></div>
+    <div class="safe-left"></div>
+    <div class="safe-right"></div>
+    <div class="safe-square"></div>
+  </div>
+
+  <!-- All content lives inside the safe square -->
+  <div class="safe-content">
+
+    <!-- Scene 1: HOOK (0-3s) -->
+    <div class="hook">
+      <div class="hook-text">
+        <span class="hook-word">Still&nbsp;</span>
+        <span class="hook-word">doing&nbsp;</span>
+        <span class="hook-word">your&nbsp;</span>
+        <span class="hook-word">own&nbsp;</span>
+        <span class="hook-word">tax&nbsp;</span>
+        <span class="hook-word mint">return?</span>
+      </div>
+    </div>
+
+    <!-- Scene 2: VALUE (3-8s) -->
+    <div class="value">
+      <div class="value-line">Tax season is <span class="mint">open</span></div>
+      <div class="value-line">— let us handle</div>
+      <div class="value-line">the heavy lifting</div>
+      <div class="value-accent"></div>
+      <div class="value-sub">Personal &amp; business returns, sorted</div>
+    </div>
+
+    <!-- Scene 3: PROOF (8-13s) -->
+    <div class="proof">
+      <div class="wa-badge">
+        <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492a.5.5 0 00.612.616l4.524-1.467A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-2.137 0-4.146-.651-5.807-1.867l-.405-.293-2.684.87.893-2.632-.316-.42A9.935 9.935 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+      </div>
+      <div class="proof-number">076 140 8717</div>
+      <div class="proof-credibility">Matthew</div>
+    </div>
+
+    <!-- Scene 4: CTA (13-16s) -->
+    <div class="cta">
+      <div class="cta-action">Message<br>Us <span class="mint">Today</span></div>
+      <div class="cta-tagline">
+        <div class="cta-tag-icon"><span>R</span></div>
+        <div class="cta-tag-text">Make <em>CENTS</em> of it all</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Persistent watermark (inside safe area, from 3s onward) -->
+  <div class="watermark">
+    <div class="wm-icon"><span>R</span></div>
+    <div class="wm-text"><span class="r">Rand</span><span class="s">Sense</span></div>
+  </div>
+
+</div>
+
+<script>
+  function scaleViewport() {
+    const vp = document.getElementById('viewport');
+    const scaleX = window.innerWidth / 1080;
+    const scaleY = window.innerHeight / 1920;
+    const scale = Math.min(scaleX, scaleY, 1);
+    vp.style.transform = `scale(${scale})`;
+    vp.style.transformOrigin = 'top center';
+  }
+  scaleViewport();
+  window.addEventListener('resize', scaleViewport);
+</script>

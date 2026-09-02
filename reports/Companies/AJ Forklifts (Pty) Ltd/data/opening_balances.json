@@ -1,0 +1,173 @@
+[
+  {
+    "id": "c55ca770-9554-4e20-8f46-f43e2800f35f",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2026",
+    "account_code": "1510",
+    "account_name": "Motor Vehicles",
+    "amount": 55400,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "c9c348f7-20c0-4ebb-a610-2ee35c03350f",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2026",
+    "account_code": "1701",
+    "account_name": "Long-term Loans and Investments",
+    "amount": 364704,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "e925cef3-49f3-4bef-af92-357691ee105a",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2026",
+    "account_code": "1100",
+    "account_name": "Trade Debtors",
+    "amount": 261105,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "10830ac4-cc53-490b-85c3-11f0e0ae9a02",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2026",
+    "account_code": "2001",
+    "account_name": "Trade Creditors",
+    "amount": -31135,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "9eef8385-c491-4106-b716-e8e37a24b6ca",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2026",
+    "account_code": "3002",
+    "account_name": "Retained Earnings",
+    "amount": -610933,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "134dcaa3-9bd6-4778-bd12-484a6864efc1",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "4001",
+    "account_name": "Sales / Revenue",
+    "amount": 1031018,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "c29cf4f5-74aa-446e-92da-4b7c4f683a3a",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "5001",
+    "account_name": "Cost of Goods Sold",
+    "amount": -668517,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "5e43428e-4798-49d5-bd9e-a6b1aff423b1",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6001",
+    "account_name": "Accounting Fees",
+    "amount": -3000,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "a9be3bb7-e1d4-4238-9d87-fe9d81637bf3",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6004",
+    "account_name": "Bank Charges",
+    "amount": -24520,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "6e7ed4fb-ed68-4eaa-9156-c9558becfb07",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6006",
+    "account_name": "Depreciation / Wear & Tear",
+    "amount": -17700,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "3dd95925-0f7c-4916-9ef7-52ecbffa90ee",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6020",
+    "account_name": "Utilities",
+    "amount": -10741,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "b137d77c-c4e7-421d-81f5-9d56b66e605e",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6008",
+    "account_name": "Insurance",
+    "amount": -18855,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "df4b0d64-dd40-4d45-9015-36df631b32e5",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6023",
+    "account_name": "Fuel / Petrol",
+    "amount": -42653,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "2caced4e-63ff-49a2-ae3c-267cc0b900f5",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6025",
+    "account_name": "Toll Gate Fees",
+    "amount": -1269,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "e2665de7-6d61-4016-aa0c-200c76e86093",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6026",
+    "account_name": "Security",
+    "amount": -5637,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "8ad7d17a-496b-40e5-b25c-7081b70af4f8",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6027",
+    "account_name": "Small Equipment",
+    "amount": -4932,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "cfb90943-33c8-4d98-bb5a-75a33c2a8e04",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6028",
+    "account_name": "Staff Refreshments",
+    "amount": -1006,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "ce04d95f-a738-4201-a2fb-61259cf84aa5",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2025",
+    "account_code": "6018",
+    "account_name": "Telephone",
+    "amount": -7205,
+    "created_at": "2026-07-20T11:07:17.583235"
+  },
+  {
+    "id": "61fc59ab-2ac0-4ff7-960b-534d0e193dfc",
+    "client_id": "da10d068-da6e-4169-98a5-afbda418ed05",
+    "financial_year": "2026",
+    "account_code": "1001",
+    "account_name": "Bank Account",
+    "amount": -39141,
+    "created_at": "2026-07-22T00:51:29.992699"
+  }
+]
